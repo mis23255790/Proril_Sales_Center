@@ -1,0 +1,31 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --font-sans: 'Noto Sans TC', 'Public Sans', sans-serif;
+
+  /* 深海軍藍（取自 LOGO 文字色 #002237） */
+  --color-navy-50: #eef4f7;
+  --color-navy-100: #d6e4ea;
+  --color-navy-200: #adc9d5;
+  --color-navy-300: #7ea9bc;
+  --color-navy-400: #4c839c;
+  --color-navy-500: #2f6580;
+  --color-navy-600: #1d4d67;
+  --color-navy-700: #133b52;
+  --color-navy-800: #0a2c40;
+  --color-navy-900: #002237;
+  --color-navy-950: #001522;
+
+  /* 品牌橘（取自 LOGO 斜紋色 #e26a23） */
+  --color-brand-50: #fdf3ec;
+  --color-brand-100: #fbe3d1;
+  --color-brand-200: #f6c39e;
+  --color-brand-300: #f0a069;
+  --color-brand-400: #e9853f;
+  --color-brand-500: #e26a23;
+  --color-brand-600: #c1531a;
+  --color-brand-700: #9c4116;
+  --color-brand-800: #7a3313;
+  --color-brand-900: #5c280f;
+}
