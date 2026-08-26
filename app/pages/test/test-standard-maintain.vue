@@ -6,6 +6,7 @@ const toast = useToast()
 const { testTypeOptions, testPlaceOptions, phaseOptions, frequencyOptions } = useTestEnums()
 
 const searchName = ref('')
+const testNameOptions = ref<string[]>([])
 const searching = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
@@ -62,6 +63,17 @@ const resetForm = (name: string) => {
   isFunctionTest.value = true
   found.value = false
 }
+
+const fetchTestNameOptions = async () => {
+  try {
+    const res = await apiFetch<ApiResponse<string[]>>('/TestApi/GetTestStandardList')
+    testNameOptions.value = res?.body ?? []
+  } catch {
+    testNameOptions.value = []
+  }
+}
+
+onMounted(fetchTestNameOptions)
 
 const search = async () => {
   if (!searchName.value.trim()) return
@@ -142,13 +154,22 @@ const remove = async () => {
       variant="subtle"
       class="mb-4"
       title="欄位限制"
-      description="原系統的測試標準清單與測試規則清單是由後端網頁直接輸出，目前 API 沒有提供對應的『清單查詢』端點，故本頁改為輸入完整名稱查詢；測試規則請直接輸入代碼。"
+      description="名稱下拉選單資料來自後端新端點 TestApi/GetTestStandardList；查詢仍須輸入完整名稱，測試規則請直接輸入代碼。"
     />
 
     <UCard class="mb-4">
-      <UFormField label="測試標準名稱" description="輸入完整名稱後查詢，若查無資料可直接建立新標準">
+      <UFormField label="測試標準名稱" description="可從下拉選單挑選既有名稱，或直接輸入完整名稱後查詢；查無資料可直接建立新標準">
         <div class="flex gap-2">
-          <UInput v-model="searchName" class="max-w-md flex-1" placeholder="請輸入測試標準名稱" @keyup.enter="search" />
+          <UInputMenu
+            v-model="searchName"
+            :items="testNameOptions"
+            mode="autocomplete"
+            open-on-click
+            open-on-focus
+            class="max-w-md flex-1"
+            placeholder="請輸入或選擇測試標準名稱"
+            @keyup.enter="search"
+          />
           <UButton icon="i-lucide-search" :loading="searching" @click="search">
             查詢
           </UButton>
