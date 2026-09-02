@@ -22,3 +22,15 @@ logs
 .env
 .env.*
 !.env.example
+
+# SQL 資料庫專案 (database/) 建置輸出
+database/bin
+database/obj
+database/.tmp
+*.dacpac
+
+# .NET API (api/)
+api/bin/
+api/obj/
+api/appsettings.Development.json
+api/appsettings.Production.json

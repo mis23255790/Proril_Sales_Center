@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nuxt-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "sales-issue-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "api/Proril.SalesIssue.Api.csproj", "--urls", "http://localhost:5211"],
+      "port": 5211
+    }
+  ]
+}

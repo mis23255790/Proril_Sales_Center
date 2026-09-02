@@ -1,13 +1,17 @@
 export type AppNavItem = {
   label: string
-  to: string
+  /** 相對於 APP_BASE 的路徑，例如 'sales-issue/issues'。用 itemPath() 取完整路徑。 */
+  path: string
+  icon?: string
+  description?: string
 }
 
 export type AppNavModule = {
   label: string
   labelEn: string
   icon: string
-  to: string
+  /** 相對於 APP_BASE 的模組路徑，例如 'sales-issue'。 */
+  path: string
   enabled: boolean
   groups: {
     groupName: string
@@ -15,271 +19,153 @@ export type AppNavModule = {
   }[]
 }
 
+/**
+ * 站台的根層級。
+ *
+ * 網址結構比照 1.0 多一層：`業務中心 / 模組 / 功能`
+ *   /sales-center/sales-issue/issues
+ *   /sales-center/sales-search/shipping-inquiry
+ *
+ * 頁面檔案的位置要跟著這個結構走（app/pages/sales-center/...），
+ * 改這個常數的話 `app/pages/index.vue` 的 redirect 也要一起改
+ * （definePageMeta 是編譯期巨集，讀不到這裡的值）。
+ */
+export const APP_BASE = '/sales-center'
+
+export const APP_BASE_LABEL = '業務中心'
+
+/**
+ * 業務中心的功能表。
+ *
+ * `enabled: false` 的模組不會出現在側欄，用來佔位標示「已規劃、還沒搬過來」。
+ * `path` 一律**不含** APP_BASE，統一由 modulePath() / itemPath() 補上，
+ * 這樣以後要換根路徑只要改一個地方。
+ */
 const NAV_MODULES: AppNavModule[] = [
   {
-    label: '測試系統',
-    labelEn: 'Test',
-    icon: 'i-lucide-flask-conical',
-    to: '/test',
+    label: '業務議題',
+    labelEn: 'Sales Issue',
+    icon: 'i-lucide-messages-square',
+    path: 'sales-issue',
     enabled: true,
     groups: [
       {
-        groupName: '資料管理',
+        groupName: '議題管理',
         items: [
-          { label: '客戶資料維護', to: '/test/customer-maintain' },
-          { label: '產品資料維護', to: '/test/product-maintain' },
-          { label: '測試標準維護', to: '/test/test-standard-maintain' }
+          {
+            label: '議題維護',
+            path: 'sales-issue/issues',
+            icon: 'i-lucide-clipboard-list',
+            description: '依客戶別追蹤議題進度、附件與結案狀態'
+          }
         ]
       },
       {
-        groupName: '生管作業',
+        groupName: '基本資料',
         items: [
-          { label: '訂單管理', to: '/test/purchase-order-maintain' }
-        ]
-      },
-      {
-        groupName: '測試作業',
-        items: [
-          { label: '測試作業', to: '/test/test-work' },
-          { label: '著托測試', to: '/test/test-work-dragging' },
-          { label: '覆核列表', to: '/test/test-recheck' },
-          { label: '測試歷史', to: '/test/test-history' },
-          { label: '測試歷史(舊版)', to: '/test/test-history-old' }
+          {
+            label: '類別維護',
+            path: 'sales-issue/kind-maintain',
+            icon: 'i-lucide-tags',
+            description: '維護議題的類別與職能主題關鍵字'
+          }
         ]
       }
     ]
   },
   {
-    label: '檢索系統',
-    labelEn: 'Query',
+    label: '業務檢索',
+    labelEn: 'Sales Search',
     icon: 'i-lucide-search',
-    to: '/query',
+    path: 'sales-search',
     enabled: true,
     groups: [
       {
-        groupName: '資料檢索',
+        groupName: '銷貨',
         items: [
-          { label: '品號檢索', to: '/query/product-query' },
-          { label: '文檔檢索', to: '/query/file-query' },
-          { label: 'BOM檢索', to: '/query/bom-query' }
-        ]
-      }
-    ]
-  },
-  {
-    label: '品異單',
-    labelEn: 'Q-Exception',
-    icon: 'i-lucide-triangle-alert',
-    to: '/q-exception',
-    enabled: false,
-    groups: [
-      {
-        groupName: '品質異常管理',
-        items: [
-          { label: '組裝品異單', to: '/q-exception/assembly' }
-        ]
-      }
-    ]
-  },
-  {
-    label: '供應鏈管理',
-    labelEn: 'Supplier Chain',
-    icon: 'i-lucide-network',
-    to: '/supplier-chain',
-    enabled: false,
-    groups: [
-      {
-        groupName: '託工管理',
-        items: [
-          { label: '托工管理', to: '/supplier-chain/sft-schedule' },
-          { label: '預設供應商', to: '/supplier-chain/sft-set-line' },
-          { label: '採購管理', to: '/supplier-chain/purchase-maintain' },
-          { label: '供應鏈群組維護', to: '/supplier-chain/group-line' },
-          { label: '供應鏈看板', to: '/supplier-chain/line-kanban' }
-        ]
-      },
-      {
-        groupName: '用料模擬與預測',
-        items: [
-          { label: '詢問單用料模擬', to: '/supplier-chain/mas-product-query' },
-          { label: '訂單用料模擬', to: '/supplier-chain/order-product-query' },
-          { label: '銷售預測', to: '/supplier-chain/inv-forecast' }
-        ]
-      },
-      {
-        groupName: 'BOM 成本計算',
-        items: [
-          { label: 'BOM 成本計算', to: '/supplier-chain/bom-cost' },
-          { label: '材質維護', to: '/supplier-chain/bom-cost-material-base' },
-          { label: '材質時價維護', to: '/supplier-chain/bom-cost-price-set' },
-          { label: '匯率維護', to: '/supplier-chain/bom-cost-currency' },
-          { label: '品號時價維護', to: '/supplier-chain/bom-cost-product-set' },
-          { label: '組件分類時價維護', to: '/supplier-chain/bom-cost-class-set' },
-          { label: '託工依據材質報價維護', to: '/supplier-chain/bom-cost-manual-tbl' },
-          { label: '關稅比例維護', to: '/supplier-chain/bom-cost-tariff' },
-          { label: '製令加價設定', to: '/supplier-chain/bom-cost-cable-process' }
-        ]
-      }
-    ]
-  },
-  {
-    label: '包裝系統',
-    labelEn: 'Package',
-    icon: 'i-lucide-package',
-    to: '/package',
-    enabled: false,
-    groups: [
-      {
-        groupName: '基本資料維護',
-        items: [
-          { label: '包裝箱維護', to: '/package/carton-maintain' },
-          { label: '品號維護', to: '/package/product-maintain' },
-          { label: '報關行維護', to: '/package/custom-broker' },
-          { label: '特定欄位維護', to: '/package/clm-code' },
-          { label: '客戶格式維護', to: '/package/customer-packing-style' }
-        ]
-      },
-      {
-        groupName: '出貨作業',
-        items: [
-          { label: '出貨批號維護', to: '/package/pack-maintain' },
-          { label: '預覽與編輯', to: '/package/edit-and-preview' },
-          { label: '包裝看板', to: '/package/dashboard' }
-        ]
-      }
-    ]
-  },
-  {
-    label: '組裝BOM表管理',
-    labelEn: 'Assembly BOM',
-    icon: 'i-lucide-git-branch',
-    to: '/assembly-bom',
-    enabled: false,
-    groups: [
-      {
-        groupName: 'BOM 管理',
-        items: [
-          { label: 'BOM爆炸圖形單', to: '/assembly-bom/assembly-list' },
-          { label: '訂單', to: '/assembly-bom/order-module' },
-          { label: '成品BOM表連結', to: '/assembly-bom/product-link' }
-        ]
-      }
-    ]
-  },
-  {
-    label: '銘版及標籤管理',
-    labelEn: 'PBS Label',
-    icon: 'i-lucide-tag',
-    to: '/pbs',
-    enabled: false,
-    groups: [
-      {
-        groupName: '基本資料管理',
-        items: [
-          { label: '項目規格維護', to: '/pbs/pbs-model' },
-          { label: '型號規格維護', to: '/pbs/model' },
-          { label: 'FLA電流表維護', to: '/pbs/fla-base' },
-          { label: '標示基本資料維護', to: '/pbs/label-base' },
-          { label: '銘版及標籤樣版維護', to: '/pbs/label-template' },
-          { label: '特定欄位對照維護', to: '/pbs/special-field' },
-          { label: '產品樣板設定', to: '/pbs/product-setting' },
-          { label: '零件標籤樣版設定', to: '/pbs/part-template' },
-          { label: '編號規則維護', to: '/pbs/auto-no-rule' },
-          { label: '編號使用紀錄', to: '/pbs/auto-no-log' }
-        ]
-      },
-      {
-        groupName: '列印作業',
-        items: [
-          { label: '銘版及標籤列印作業', to: '/pbs/order' }
-        ]
-      }
-    ]
-  },
-  {
-    label: '訂單照片',
-    labelEn: 'App Picture',
-    icon: 'i-lucide-camera',
-    to: '/app-picture',
-    enabled: false,
-    groups: [
-      {
-        groupName: '拍照作業',
-        items: [
-          { label: '成品拍照作業', to: '/app-picture/order-list' },
-          { label: '零件拍照作業', to: '/app-picture/part-list' }
-        ]
-      },
-      {
-        groupName: '條碼列印',
-        items: [
-          { label: '成品條碼列印', to: '/app-picture/print-product-barcode' },
-          { label: '零件條碼列印', to: '/app-picture/print-part-barcode' }
-        ]
-      }
-    ]
-  },
-  {
-    label: '進料檢驗系統',
-    labelEn: 'Inspection',
-    icon: 'i-lucide-clipboard-check',
-    to: '/inspection',
-    enabled: false,
-    groups: [
-      {
-        groupName: '基本資料管理',
-        items: [
-          { label: '郵件與副本設定', to: '/inspection/email-setting' },
-          { label: '部門人員設定', to: '/inspection/department' },
-          { label: '檢驗標準維護', to: '/inspection/qc-product' }
-        ]
-      },
-      {
-        groupName: '進料品質管理',
-        items: [
-          { label: '進料檢驗作業', to: '/inspection/incoming-inspection' },
-          { label: '進料檢驗查詢', to: '/inspection/incoming-inspection-search' },
-          { label: '進料檢驗修改', to: '/inspection/incoming-inspection-edit' },
-          { label: '進料品異單維護', to: '/inspection/abnormal-quality' }
-        ]
-      }
-    ]
-  },
-  {
-    label: '庫存管理',
-    labelEn: 'Warehouse',
-    icon: 'i-lucide-warehouse',
-    to: '/warehouse',
-    enabled: false,
-    groups: [
-      {
-        groupName: '倉儲作業',
-        items: [
-          { label: '倉管', to: '/warehouse/maintain' },
-          { label: '自動倉儲對帳', to: '/warehouse/compare' },
-          { label: '3F 庫存查詢', to: '/warehouse/stock-list' },
-          { label: '3F 庫存調整', to: '/warehouse/stock-transfer' }
+          {
+            label: '銷貨檢索',
+            path: 'sales-search/shipping-inquiry',
+            icon: 'i-lucide-truck',
+            description: '依客戶別、期間、品號查詢銷貨單，含品號/銷貨單細項與統計'
+          }
         ]
       }
     ]
   }
 ]
 
+/** 把相對路徑接上 APP_BASE。傳空字串就是業務中心首頁。 */
+export const appPath = (relative = '') =>
+  relative ? `${APP_BASE}/${relative.replace(/^\/+/, '')}` : APP_BASE
+
 export const useAppNavigation = () => {
   const enabledModules = NAV_MODULES.filter(mod => mod.enabled)
 
+  /** 模組的完整路徑。 */
+  const modulePath = (mod: AppNavModule) => appPath(mod.path)
+
+  /** 功能的完整路徑。 */
+  const itemPath = (item: AppNavItem) => appPath(item.path)
+
+  /**
+   * 用完整路徑反查所屬模組／群組，麵包屑用。
+   * 子路由（例如 /sales-center/sales-issue/issues/000062）請傳父層路徑。
+   */
   const findItemByPath = (path: string) => {
     for (const mod of enabledModules) {
       for (const group of mod.groups) {
-        const item = group.items.find(i => i.to === path)
+        const item = group.items.find(i => itemPath(i) === path)
         if (item) return { module: mod, group, item }
       }
     }
     return null
   }
 
+  /** 用模組代號（網址第 2 段）反查模組，模組首頁用。 */
+  const findModuleBySlug = (slug: string) =>
+    enabledModules.find(mod => mod.path === slug) ?? null
+
+  /** 模組底下的功能總數，卡片上顯示用。 */
+  const countItems = (mod: AppNavModule) =>
+    mod.groups.reduce((n, g) => n + g.items.length, 0)
+
+  /** 麵包屑的第一層，固定是業務中心。 */
+  const rootCrumb = () => ({ label: APP_BASE_LABEL, to: APP_BASE, icon: 'i-lucide-house' })
+
+  /**
+   * 功能頁的麵包屑：業務中心 / 模組 / 功能 [/ extra]。
+   * 模組那一層會連到模組首頁，可以往回退一層。
+   * extra 用來接「議題編號」這種動態層級。
+   */
+  const breadcrumbFor = (path: string, extra?: string) => {
+    const items: { label: string, to?: string, icon?: string }[] = [rootCrumb()]
+    const found = findItemByPath(path)
+    if (found) {
+      items.push({ label: found.module.label, to: modulePath(found.module), icon: found.module.icon })
+      items.push({ label: found.item.label, to: extra ? path : undefined })
+    }
+    if (extra) items.push({ label: extra })
+    return items
+  }
+
+  /** 模組首頁的麵包屑：業務中心 / 模組。 */
+  const breadcrumbForModule = (mod: AppNavModule) => [
+    rootCrumb(),
+    { label: mod.label, icon: mod.icon }
+  ]
+
   return {
+    appBase: APP_BASE,
+    appBaseLabel: APP_BASE_LABEL,
     modules: enabledModules,
-    findItemByPath
+    modulePath,
+    itemPath,
+    appPath,
+    countItems,
+    findItemByPath,
+    findModuleBySlug,
+    breadcrumbFor,
+    breadcrumbForModule
   }
 }

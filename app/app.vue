@@ -8,8 +8,8 @@ useHead({
 })
 
 useSeoMeta({
-  title: 'PRORIL 製造中心',
-  description: 'PRORIL 製造中心 2.0 — 現場作業管理系統'
+  title: 'PRORIL 業務中心',
+  description: 'PRORIL 業務中心 2.0 — 業務議題與客戶往來管理'
 })
 </script>
 

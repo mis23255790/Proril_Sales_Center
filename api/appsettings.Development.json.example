@@ -1,0 +1,33 @@
+{
+  "//": [
+    "複製成 appsettings.Development.json 後填值（該檔已被 .gitignore 擋掉，不會進版控）。",
+    "部署環境請改用環境變數，變數名把 : 換成 __，例如：",
+    "  ConnectionStrings__ProrilWeb, JwtSettings__SignKey, Security__AesKey, Storage__ShareRoot"
+  ],
+
+  "ConnectionStrings": {
+    "//": "PRORIL_WEB。測試區與正式區的資料庫同名，靠 port 區分（測試 ,50002 / 正式 ,51002）。",
+    "ProrilWeb": "Server=<host>,50002;Database=PRORIL_WEB;User Id=<user>;Password=<password>;TrustServerCertificate=True;"
+  },
+
+  "JwtSettings": {
+    "//": "必須與 1.0 PRORIL 的 appsettings.json 完全相同，否則兩邊 token 不互通，所有請求都會 401。",
+    "Issuer": "JwtAuth",
+    "SignKey": "<照抄 1.0 PRORIL/appsettings.json 的 JwtSettings:SignKey>"
+  },
+
+  "Security": {
+    "//": "1.0 AesHelper 硬編在程式裡的那把金鑰。M_User.Password 是用它加密的，不同就永遠登不進去。",
+    "AesKey": "<照抄 1.0 PRORIL/Helper/AesHelper.cs 的 privateKey>"
+  },
+
+  "Storage": {
+    "//": "附件共享根目錄，必須與 1.0 指向同一個位置，否則讀不到既有附件。Linux 下是 /app/ProrilWebFiles。",
+    "ShareRoot": "C:\\Projects\\ProrilWebFiles"
+  },
+
+  "Cors": {
+    "//": "只有『瀏覽器直接打這支 API』才需要。走 Nuxt /api/proxy 是同源，不需要。",
+    "AllowedOrigins": [ "http://localhost:3000" ]
+  }
+}

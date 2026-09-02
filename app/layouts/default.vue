@@ -2,23 +2,27 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
-const { modules } = useAppNavigation()
+const { modules, modulePath, itemPath, appBaseLabel } = useAppNavigation()
 
 const collapsed = ref(false)
 
-const activeModuleSlug = computed(() => route.path.split('/')[1] || '')
+// 路徑是 /sales-center/<模組>/<功能>，模組代號在第 2 段
+// （split('/') 之後 [0] 是空字串、[1] 是 sales-center）
+const activeModuleSlug = computed(() => route.path.split('/')[2] || '')
 
 const items = computed<NavigationMenuItem[][]>(() => [
   [
-    { label: '現場作業', type: 'label' as const },
+    { label: appBaseLabel, type: 'label' as const },
     ...modules.map(mod => ({
       label: mod.label,
       icon: mod.icon,
-      defaultOpen: route.path.startsWith(mod.to),
+      // 點模組名稱進模組首頁（跟首頁卡片同一個目的地），展開則看得到底下的功能
+      to: modulePath(mod),
+      defaultOpen: route.path.startsWith(modulePath(mod)),
       children: mod.groups.map(group => ({
         label: group.groupName,
-        defaultOpen: group.items.some(item => item.to === route.path),
-        children: group.items.map(item => ({ label: item.label, to: item.to }))
+        defaultOpen: group.items.some(item => itemPath(item) === route.path),
+        children: group.items.map(item => ({ label: item.label, to: itemPath(item) }))
       }))
     }))
   ]
@@ -26,7 +30,7 @@ const items = computed<NavigationMenuItem[][]>(() => [
 </script>
 
 <template>
-  <UDashboardGroup storage="local" storage-key="proril-dashboard">
+  <UDashboardGroup storage="local" storage-key="proril-sales-dashboard">
     <UDashboardSidebar
       v-model:collapsed="collapsed"
       collapsible
@@ -65,7 +69,7 @@ const items = computed<NavigationMenuItem[][]>(() => [
 
     <UDashboardPanel :ui="{ body: 'bg-white dark:bg-white' }">
       <template #header>
-        <UDashboardNavbar title="PRORIL 製造中心" :ui="{ root: 'bg-white dark:bg-white' }">
+        <UDashboardNavbar title="PRORIL 業務中心" :ui="{ root: 'bg-white dark:bg-white' }">
           <template #leading>
             <UDashboardSidebarCollapse />
           </template>

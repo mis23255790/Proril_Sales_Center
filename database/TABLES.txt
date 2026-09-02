@@ -1,0 +1,12 @@
+# 業務議題 (SalesIssue / 舊 WorkProcess) 納管的資料表白名單
+# 一行一張表，dbo schema。scripts/*.ps1 都讀這一份，改這裡就好。
+# 來源：docs/modules/SalesIssue/logic.md 的「相關資料表」
+
+D_WorkProcess
+D_WorkProcessDetail
+D_WorkProcessSearch
+D_WorkProcessCustomer
+D_WorkProcessPermission
+M_WorkProcessPhrase
+M_WorkProcessType
+CRM_Customer

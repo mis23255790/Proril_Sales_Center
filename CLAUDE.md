@@ -1,30 +1,56 @@
-# 專案名稱：PRORIL Official 2.0
+# 專案名稱：PRORIL 業務中心 (Sales Center) 2.0
 
 ## 1. 專案架構 (Architecture)
-本專案採用單一倉庫 (Monorepo) 進行 1.0 到 2.0 的重構遷移：
-- `/web`: 2.0 全端專案（Nuxt 4 + Nitro 引擎）。前後端邏輯、API 與網頁皆在此資料夾內。
-- `/legacy_1.0`: 1.0 官網的 .NET 原始碼（唯讀，重構時供 AI 參考業務邏輯與資料來源）。
-- 資料庫定義：位於 `/web/prisma/schema.prisma` (MySQL)，使用 Prisma ORM 管理。
+本專案是 PRORIL 1.0 (.NET MVC) 業務模組往 2.0 遷移的目的地，**前後端都在這裡**：
+- `app/`: Nuxt 4 前端（頁面、元件、composables、型別、utils）。
+- `api/`: .NET 8 後端（`Proril.SalesIssue.Api`，EF Core 8 + SQL Server）。
+  端點名稱與回傳信封與 1.0 一字不差，前端切換只要改 `NUXT_PUBLIC_API_BASE` 一行。
+  **搬了什麼、沒搬什麼、與 1.0 的行為差異一律看 [`api/README.md`](./api/README.md)。**
+- `server/api/proxy/[...path].ts`: 轉發層，把 `/api/proxy/**` 轉到 `NUXT_PUBLIC_API_BASE`
+  （可以是 `api/`，也可以是 1.0 站台，搬移期間兩者都能用）。
+- `server/api/download.get.ts`: 附件下載中繼，把後端根目錄下的 `/ShareRoot/**` 拉回同源。
+- `database/`: schema 版控（DACPAC）與資料正確性檢查。
+- 1.0 原始碼在 `D:\Projects\Source\Proril\PRORIL`（唯讀參考）。已搬過來的模組請改 `api/`，
+  還沒搬的才回 1.0 改。
+
+> `api/` 與 1.0 打**同一個** `PRORIL_WEB`，可以並存。
+> `api/appsettings` 的 `JwtSettings` / `Security:AesKey` / `Storage:ShareRoot`
+> **必須與 1.0 相同**，分別對應 token 互通、密碼驗證、讀得到既有附件。
+> 三者任一不同的症狀都不會直說原因（全 401 / 密碼永遠錯 / 附件讀不到）。
+
+> **不要動資料庫**，包含 View / StoredProcedure。
+>
+> 例外：`database/` 是業務議題資料表的 **schema 版控**（DACPAC），
+> 只管結構、不碰任何資料列，也不納管 View / StoredProcedure。
+> 它管的是 1.0 `PRORIL_WEB` 的表；執行時前端仍然只走 API，不直連 DB。
+> **main branch 的 `database/Tables/*.sql` == 正式區 schema**，未上線欄位放 feature branch。
+> 詳見 `database/README.md`。
 
 ## 2. 技術棧 (Tech Stack)
 - 核心框架：Nuxt 4 (Stable)
-- 包管理器：Yarn
+- 包管理器：npm
 - 樣式系統：Tailwind CSS v4 (全面改用原生 CSS 巢狀語法)
 - UI 元件庫：Nuxt UI v4 (基於 Tailwind v4 生態)
-- 資料庫 ORM：Prisma (搭配 MySQL)
-- 程式語言：TypeScript
-- 語系管理：@nuxtjs/i18n (支援 `zh-TW` 與 `en`)
+- 程式語言：TypeScript（前端）／C# 12（後端）
 - 爬蟲管理：@nuxtjs/robots
+- 後端：ASP.NET Core 8 + EF Core 8（database-first，**不要用 EF Migrations**，schema 走 `database/` 的 DACPAC）
 
 ## 3. 常用開發指令 (Crucial Commands)
-- 安裝套件: `cd web && yarn add <package>` 或 `yarn add -D <package>`
-- 啟動全端本地開發伺服器: `cd web && yarn dev`
-- 專案打包建置: `cd web && yarn build`
-- Prisma 建立/套用資料庫異動 (開發環境，會產生 migration 檔案): `cd web && npx prisma migrate dev --name <變更描述>`
-- Prisma 套用既有 migration (其他電腦/正式環境，不產生新檔案): `cd web && npx prisma migrate deploy`
-- 開啟 Prisma 視覺化後台: `cd web && npx prisma studio`
 
-> 注意：`prisma/migrations` 資料夾必須進 git 版控。多台電腦或多人開發時，異動 schema 一律用 `migrate dev` 產生 migration 檔案並 commit，換電腦後執行 `migrate deploy` 套用，禁止直接對正式或共用資料庫用 `db push`。
+前端：
+- 安裝套件: `npm install <package>` 或 `npm install -D <package>`
+- 啟動本地開發伺服器: `npm run dev`
+- 專案打包建置: `npm run build`
+- 型別檢查: `npm run typecheck`
+- 程式碼檢查: `npm run lint`
+
+後端（`api/`）：
+- 啟動: `dotnet run --project api/Proril.SalesIssue.Api.csproj --urls http://localhost:5211`
+- 建置: `dotnet build api/Proril.SalesIssue.Api.csproj`
+- 設定: `cp api/appsettings.Development.json.example api/appsettings.Development.json` 後填連線字串
+
+> 注意：工具鏈需要 **Node.js 22 以上**（`nuxt build` 會用到 `Set.prototype.difference`，
+> eslint flat config 會用到 `Object.groupBy`）。Node 20 只跑得動 `npm run typecheck`。
 
 ## 4. 全端開發規範與風格 (Guidelines)
 
@@ -40,41 +66,73 @@
 - **語法風格**：前端全面使用 Vue 3 Composition API (`<script setup>`)。
 - **函式宣告**：優先且嚴格使用**箭頭函式 (Arrow Functions)**。
 - **型別規範**：盡可能落實 TypeScript 型別定義，開發效率優先時**允許彈性使用 `any`**。
+- **Try/Catch**： 盡可能有Try/catch包住每一段程式，在catch把原因顯示在Console與log到實體檔案
+- **`api/Controllers` 禁止放一堆檔案在同一層**：新增 Controller 一律依模組/用途分子目錄，
+  不要直接丟在 `api/Controllers/` 底下。目前的分法：
+  - `api/Controllers/{模組名}/`：只給該模組用的 Controller（例如 `SalesIssue/` 底下的
+    `WorkProcessApiController` 系列）。namespace 對齊資料夾，寫成
+    `Proril.SalesIssue.Api.Controllers.{模組名}`。
+  - `api/Controllers/Shared/`：跨模組共用的 Controller（登入、客戶查詢、檔案上傳等），
+    namespace 是 `Proril.SalesIssue.Api.Controllers.Shared`。
+  之後每加一個新模組（例如銷貨檢索的後端），比照 `SalesIssue/` 這樣開新子目錄，
+  不要把新 Controller 加進既有模組的資料夾，也不要全部塞回 `Controllers/` 根目錄。
+- **`app/components` 同樣禁止全部放同一層**，依用途分子目錄：
+  - `app/components/common/`：跨模組共用元件（`AppLogo`、`ConfirmDialog`、
+    `FullPageLoading`、`TablePaginationBar`、`NavCard`…）。
+  - `app/components/{模組名}/`：只給該模組用的元件（例如 `sales-issue/` 底下的
+    `IssueContentView`、`RichTextEditor`）。
+  - `nuxt.config.ts` 已設 `components: [{ path: '~/components', pathPrefix: false }]`，
+    元件標籤名只看檔名、不會因為資料夾改變（`common/AppLogo.vue` 還是 `<AppLogo>`，
+    不會變成 `<CommonAppLogo>`），新增元件時不用管路徑會不會改到呼叫端的標籤名。
+  - 只有單一模組在用的元件才歸進該模組資料夾；哪天第二個模組也要用，再搬進 `common/`。
 
 ### 核心設計原則：
-- **絕對嚴格的多國語系 (i18n)**：
-  - 所有硬編碼文本絕對不允許直接寫在 Template 內，必須抽離至語系檔（如 `zh-TW.json`, `en.json`）。
-  - 畫面上統一使用 `$t('path.to.key')` 進行調用。
+- **語系**：本專案是**內部後台，只有繁體中文**，目前沒有裝 `@nuxtjs/i18n`，
+  文字直接寫在 template 即可。若哪天要支援多語，再整批抽語系檔。
+  （官網專案 PRORIL Official 才需要嚴格 i18n，兩邊規範不同。）
+
+- **各功能詳細邏輯**：
+  - `docs/modules/` 下面是各功能的詳細邏輯，**動到哪個模組就先讀它的文件**。
+    - `SalesIssue/logic.md` — 業務議題：資料表關聯、關鍵字三串對齊規則、
+      客戶別的兩個來源、附件 zip 流程、哪些查詢條件其實沒送到後端
+    - `SalesIssue/update.md` — 業務議題更新紀錄
+  - 改完邏輯請順手更新對應的 md。
+
+- **後端字串常帶尾端空白**：ERP／舊系統同步進來的字串常帶**尾端空白**，
+  前端做比對（客戶編號、SNo…）一定要兩邊都 `trim()`。這是反覆出現的 bug 來源。
 
 - **行動優先與 RWD 響應式設計**：
   - 必須嚴格遵循 Tailwind CSS 的 Mobile-First 規範。
   - 預設樣式為手機版，並善用 `md:` (768px+) 與 `lg:` (1024px+) 的斷點。
 
-- **搜尋引擎最佳化 (SEO) & 爬蟲控制**：
-  - 全站全域 SEO 由 `app.vue` 透過 `useLocaleHead` 自動生成 `canonical` 與 `hreflang`。
-  - 建立任何新頁面時，必須主動加入帶有 i18n 綁定的 `useSeoMeta` 結構。
+- **爬蟲控制**：
+  - 這是內部系統，不需要做 SEO；`useSeoMeta` 只用來設瀏覽器分頁標題。
   - **環境隔離防呆**：非正式環境（如 Staging/測試站）必須透過環境變數 `NUXT_PUBLIC_BLOCK_ROBOTS=true` 封鎖 Google 爬蟲索引。
 
 - **品牌色彩系統**（取自 LOGO 實際取樣）：
   - 深海軍藍 `#002237`（LOGO 文字色）→ Tailwind token `navy-50 ~ navy-950`（900 = 原色）
   - 品牌橘 `#e26a23`（LOGO 斜紋色）→ Tailwind token `brand-50 ~ brand-900`（500 = 原色）
-  - 定義位置：`web/app/assets/css/main.css` 的 `@theme` 區塊
-
-- **後端 API 規範**：
+  - 定義位置：`app/assets/css/main.css` 的 `@theme` 區塊；
+    Nuxt UI 的語意色在 `app/app.config.ts`（`primary: brand` / `neutral: navy`）。
   - **禁止建立 `tailwind.config.js`**。本專案使用 Tailwind v4，任何主題或斷點自訂必須嚴格寫在 CSS 的 `@theme` 區塊中。
-  - 後端 API 回傳格式需保持一致，統一採用以下 JSON 結構：
-    `{ success: boolean, data: any, error: { message: string, code?: number } | null }`
 
-- **檔案上傳 / 私有檔案存取權限**：
-  - `File.visibility`（`PUBLIC` / `PRIVATE`）決定檔案能不能被直接用網址存取，任何「只有登入使用者才能看」的檔案（客戶文件、BOM圖…）一律要標記 `PRIVATE`，禁止沿用舊的固定 `/uploads/<key>` 網址。
-  - 私有檔案下載一律透過 `issueFileDownloadUrl()` 現簽短效期網址，且授權判斷必須對「業務實體」做（例如經銷商是否有權限看這筆 `CustomerDocument`），不能只檢查「使用者有登入」。
-  - 完整設計決策、現況與待辦見 [`docs/file-access-control-architecture.md`](./docs/file-access-control-architecture.md)，開發前務必先讀，避免重工或做出跟既有規則衝突的設計。
+- **API 回傳格式（沿用 1.0，不要改）**：
+  - 所有 API 都是 1.0 .NET 的 `CustomApiViewModel` 信封：
+    `{ isSuccess: boolean, message: string | null, body: any, body2: any }`
+    （型別在 `app/types/api.ts`）。
+  - **`isSuccess: false` 不一定是錯誤**：查無資料時後端也回 false + 說明訊息，
+    這種情況要當成空清單處理，不要跳 error toast。
+
+- **檔案上傳 / 下載**：
+  - 上傳走 1.0 的 `UploadApi/SaveByFileName`（單檔）或 `UploadApi/SaveZipFile`（打包）。
+  - 下載不要直接連 .NET 站台（跨網域），一律經 `server/api/download.get.ts`，
+    它只接受 `/ShareRoot/` 開頭的路徑，避免變成開放轉址。
 
 - **Git 提交規範**：
   - 執行 commit 時，必須遵循 Conventional Commits 規範（例如：`feat:`, `fix:`, `docs:`, `style:`, `refactor:`）。
 
 ## 5. 部署規範 (Deployment)
-- 本專案使用 Docker 進行單一容器化打包（前後端打包在同一個 Image 中）。
-- 部署目標平台為 **GCP Cloud Run**。
+- 本專案使用 Docker 進行單一容器化打包。
 - 撰寫 Dockerfile 時，必須確保容器監聽隨機分配的 `$PORT` 環境變數。
-- 所有環境差異（API 金鑰、資料庫連線字串、是否封鎖爬蟲）一律透過 runtime 環境變數注入。
+- 所有環境差異（後端 API 位址、是否封鎖爬蟲）一律透過 runtime 環境變數注入：
+  `NUXT_PUBLIC_API_BASE`、`NUXT_PUBLIC_BLOCK_ROBOTS`、`NUXT_PUBLIC_DEV_TOKEN`（僅開發用）。

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  業務議題 (SalesIssue) 資料表的 schema 版控專案。
+  SDK 樣式 (Microsoft.Build.Sql)，不需要 Visual Studio SSDT，dotnet build 即可產出 dacpac。
+
+  重要：
+  - main branch 的內容 == 正式區 schema。未上線欄位放在 feature branch，不要進 main。
+  - Tables/*.sql 由 scripts/extract.ps1 產生，不要手動改「已上線」的部分；
+    新欄位才手動加在對應的 CREATE TABLE 裡。
+-->
+<Project Sdk="Microsoft.Build.Sql/2.2.0">
+
+  <PropertyGroup>
+    <Name>Proril.SalesIssue.Database</Name>
+    <RootNamespace>Proril.SalesIssue.Database</RootNamespace>
+    <AssemblyName>Proril.SalesIssue.Database</AssemblyName>
+
+    <!-- 目標為 SQL Server 2022 (實測 16.0.4265.3) -->
+    <DSP>Microsoft.Data.Tools.Schema.Sql.Sql160DatabaseSchemaProvider</DSP>
+
+    <!--
+      PRORIL_WEB 是 case-sensitive collation。1028 = zh-TW，CS = case sensitive。
+      若 scripts/extract.ps1 回報的 collation 與此不符，請依它的提示修正這一行，
+      否則 build 出來的 dacpac 會在部署時把整個 DB 的定序視為差異。
+    -->
+    <ModelCollation>1028,CS</ModelCollation>
+
+    <!-- 只納管白名單裡的表，不設定資料庫層級選項，避免 publish 時去動 DB 本身的設定 -->
+    <TargetDatabaseSet>False</TargetDatabaseSet>
+    <ValidateCasingOnIdentifiers>False</ValidateCasingOnIdentifiers>
+
+    <!-- .tmp 是 extract 的暫存輸出，不可被當成專案內容 -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);.tmp/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+</Project>
