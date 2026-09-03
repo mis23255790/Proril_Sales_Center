@@ -6,24 +6,12 @@
  * 直接解 token 比再打一支 API 便宜。
  */
 export const useAuthAccount = () => {
-  const decodePayload = (token: string): Record<string, any> | null => {
-    try {
-      const payload = token.split('.')[1]
-      if (!payload) return null
-      const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
-      return JSON.parse(decodeURIComponent(escape(json)))
-    } catch (err) {
-      console.log('useAuthAccount decodePayload failed -->', err)
-      return null
-    }
-  }
-
   const account = computed(() => {
     try {
       const config = useRuntimeConfig()
       const token = getAuthToken() || config.public.devToken
       if (!token) return ''
-      const payload = decodePayload(token)
+      const payload = decodeJwtPayload(token)
       return (payload?.sub as string) || ''
     } catch (err) {
       console.log('useAuthAccount account failed -->', err)

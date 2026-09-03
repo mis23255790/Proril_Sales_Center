@@ -29,5 +29,10 @@
   "Cors": {
     "//": "只有『瀏覽器直接打這支 API』才需要。走 Nuxt /api/proxy 是同源，不需要。",
     "AllowedOrigins": [ "http://localhost:3000" ]
+  },
+
+  "Sso": {
+    "//": "MainApi/LoginSso 專用的內部共用密鑰，只有 Nuxt server 端（server/api/auth/sso.post.ts）知道，瀏覽器拿不到。空值時該端點一律拒絕，避免變成免密碼登入的後門。",
+    "InternalSecret": "<跟 Nuxt 環境變數 NUXT_SSO_INTERNAL_SECRET 設成同一組隨機字串>"
   }
 }
