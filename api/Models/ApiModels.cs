@@ -29,6 +29,9 @@ public class LoginModel
 
 public record LoginViewModel(string Account, string Password);
 
+/// <summary>SSO 登入用，帳號已由 PRORIL 通行證驗證過身分，不再帶密碼。</summary>
+public record SsoLoginViewModel(string Account);
+
 /// <summary>
 /// 議題列表／表頭的回傳形狀（1.0 的 DWorkProcessesEx）。
 ///
@@ -116,4 +119,12 @@ public class CrmCustomerViewModel : CrmCustomer
 
     public string ERPCustomShortName { get; set; } = string.Empty;
     public string ERPCustomLongName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// ERP 客戶 + 左併到的內網客戶代碼（同一個 ERP 客戶可能對到一筆 CRM_Customer，也可能還沒建）。
+/// </summary>
+public class VErpcustomerViewModel : VErpcustomer
+{
+    public string CustomerNo { get; set; } = string.Empty;
 }

@@ -41,15 +41,20 @@ dotnet run
 | `WorkProcessApi`（權限） | SetWPNoPermissionEdit / SetWPNoPermissionView / AddWPNoPermissionEdit / GetWPNoPermission |
 | `MainApi` | Login / GetCurrentUser / GetUserInfo / GetUserList |
 | `UploadApi` | SaveByFileName |
-| `CustomQueryApi` | GetCustom |
+| `CustomQueryApi` | GetCustom / GetERPCustom / SaveCustom |
+| `OrderInfoVerifyApi` | GetPOCheckView / GetConditionList / CheckCOPOrderInfo / COPOrderInfoPassCheck / SP_GetCredit / SP_GetCreditCRM / ExportXls |
+| `MainApi`（權限） | CheckUserPermissionLinkType |
 
 **沒搬**：
 - 1.0 `ProrilWebContext` 的另外 335 個 DbSet。這裡只留業務議題碰得到的 12 個
-  （10 張表 + `H_FileLink` 上傳 log + `V_ERPCustomer` 唯讀 View）。
+  （10 張表 + `H_FileLink` 上傳 log + `V_ERPCustomer` 唯讀 View）以及訂單資料檢核碰得到的
+  11 個（見下方「訂單資料檢核」小節）。
 - `PRORILContext`（dsWorkFlowContext）——另一個資料庫，用不到。
 - 版本進版 / 各版本備註 / 調整進度順序 / OrderReview —— 1.0 UI 早已隱藏。
 - reCAPTCHA、首登強制改密碼、登入失敗鎖定 —— 帳號管理仍在 1.0 站台。
 - `UploadApi` 的 SaveZipFile / SaveByPath —— 其他模組在用，搬到那些模組時再補。
+- `OrderInfoVerifyApi.SP_GetCreditCRM` 後端搬了，但前端目前沒有呼叫（比照 1.0，
+  該功能在 1.0 前端本來就沒被實際用到）。
 
 ## 與 1.0 的行為差異
 
@@ -88,6 +93,35 @@ dotnet run
 
 8. **登入不再區分「帳號不存在」與「密碼錯誤」**，避免被用來列舉帳號。
 
+## 訂單資料檢核（`OrderInfoVerifyApi`）
+
+跟業務議題不同，這個模組的資料表不在 `database/` 的 DACPAC 版控範圍內（那批表本來就是
+1.0 唯讀在用的既有表，不是這次搬移新增的），純粹是把 1.0 `OrderInfoVerifyApiController`
+的邏輯搬進來，資料表結構完全比照 1.0 現況。
+
+跟 1.0 的行為差異：
+
+1. **`GetPOCheckView` 不再用 JSON 字串包兩層**
+   1.0 把 `List<VPolistDetailViewModel>` 用 `JsonConvert.SerializeObject` 轉成字串塞進
+   `Body`，前端還要再 `JSON.parse` 一次——那是 1.0 繞路的寫法。這裡 `Body` 直接放物件，
+   前端 `$fetch` 拿到的就是陣列。
+2. **`SP_GetCredit` / `SP_GetCreditCRM` 改參數化 SQL**
+   1.0 直接把 `customNo` 字串插值進 SQL 字串執行，有 SQL injection 風險；這裡改用
+   `FromSqlInterpolated`，讓 EF Core 自己把值轉成參數。
+3. **`CheckUserPermissionLinkType` 用 `.Any()` 不用 `.First()`**
+   1.0 對不存在的帳號會直接丟例外，這裡改成查不到就當非 admin 處理。
+4. **`prc_COPGetCredit`/`prc_COPGetCredit_CRM` 的回傳欄位型別改宣告 `decimal`**
+   1.0 的 model 這裡宣告 `float`，但 SP 實際回傳的欄位是 SQL `decimal`/`numeric`，
+   EF Core 8 對不上型別會直接丟 `InvalidCastException`（本機實測打
+   `SP_GetCredit` 會直接 500；1.0 用的是舊版 EF Core，型別轉換比較寬鬆才沒事）。
+5. **Excel 匯出改寫死格式，不吃 `CMN_XlsFileFormat`**
+   1.0 用資料庫驅動的通用格式引擎（`XlsFormatterApis_Cmn`）決定欄寬/表頭/樣式，那套引擎
+   是給多個「還沒搬」的模組共用的排版基礎設施，這裡直接在 C# 寫死欄位配置，
+   輸出的分頁、欄位、上色規則與 1.0 一致。
+6. **匯出金額欄位權限統一用 `FunctionId.OrderInfoVerify`(425)**
+   1.0 匯出時查的是 `FunctionId.MixSalesShipping`(410) 的權限，但查詢 Excel 格式用的
+   卻是 425——兩個 FunctionId 對不上號，找不到明顯理由，這裡統一用 425。
+
 ## 與 1.0 並存
 
 兩邊打同一個資料庫，可以同時運作，token 也互通（前提是 JwtSettings 相同）。
@@ -99,5 +133,6 @@ dotnet run
 
 - `../docs/modules/SalesIssue/logic.md` — 業務邏輯、欄位語意、附件流程
 - `../docs/modules/SalesIssue/update.md` — 更新紀錄
+- `../docs/modules/OrderInfoVerify/logic.md` — 訂單資料檢核的業務邏輯、檢核欄位語意
 - `../database/README.md` — schema 版控（DACPAC）
 - `../database/checks/README.md` — 資料正確性檢查

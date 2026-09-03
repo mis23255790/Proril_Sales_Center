@@ -23,11 +23,25 @@ public enum EWorkProcessPermission
     Public = 20
 }
 
-/// <summary>M_Permission.FunctionNo。這裡只需要業務議題那一個。</summary>
+/// <summary>M_Permission.FunctionNo。</summary>
 public static class FunctionIds
 {
     /// <summary>流程維護（1.0 的 FunctionId.ProcessMaintain）。上傳 log 也用這個號。</summary>
     public const int ProcessMaintain = 17;
+
+    /// <summary>
+    /// 訂單資料檢核（1.0 FunctionId.OrderInfoVerify）。
+    /// 1.0 enum 註解寫「訂單資料查核」，但畫面標題與 JS top-title 顯示的是「訂單資料檢核」，
+    /// 2.0 沿用畫面上實際看到的字樣。
+    /// </summary>
+    public const int OrderInfoVerify = 425;
+}
+
+/// <summary>訂單資料檢核相關常數。</summary>
+public static class OrderInfoVerifyConst
+{
+    /// <summary>M_Permission.LinkType，金額欄位權限碼。</summary>
+    public const int AmountLinkType = 100;
 }
 
 public static class PermissionConst

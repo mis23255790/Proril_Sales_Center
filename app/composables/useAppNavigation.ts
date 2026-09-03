@@ -81,6 +81,17 @@ const NAV_MODULES: AppNavModule[] = [
     enabled: true,
     groups: [
       {
+        groupName: '客戶',
+        items: [
+          {
+            label: '客戶維護',
+            path: 'sales-search/customer',
+            icon: 'i-lucide-users',
+            description: '查詢內網／ERP客戶，新增或編輯內網客戶資料與 ERP 對應'
+          }
+        ]
+      },
+      {
         groupName: '銷貨',
         items: [
           {
@@ -88,6 +99,23 @@ const NAV_MODULES: AppNavModule[] = [
             path: 'sales-search/shipping-inquiry',
             icon: 'i-lucide-truck',
             description: '依客戶別、期間、品號查詢銷貨單，含品號/銷貨單細項與統計'
+          }
+        ]
+      },
+      {
+        groupName: '訂單',
+        items: [
+          {
+            label: '未完成訂單檢索',
+            path: 'sales-search/unfinished-orders',
+            icon: 'i-lucide-package-search',
+            description: '依客戶別、訂單日期、預交日期、品號查詢尚未出貨的訂單，含品號/訂單細項與統計'
+          },
+          {
+            label: '訂單資料檢核',
+            path: 'sales-search/order-info-verify',
+            icon: 'i-lucide-shield-check',
+            description: '對訂單金額、信用額度等項目執行檢核，支援特規覆核與 Excel 匯出'
           }
         ]
       }

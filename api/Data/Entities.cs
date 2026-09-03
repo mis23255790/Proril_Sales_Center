@@ -303,4 +303,13 @@ public class VErpcustomer
     public string? Ma001 { get; set; }
     public string? Ma002 { get; set; }
     public string? Ma003 { get; set; }
+    public string? Ma005 { get; set; }
+    public string? Ma006 { get; set; }
+    public string? Ma007 { get; set; }
+    public string? Ma008 { get; set; }
+    public string? Ma009 { get; set; }
+    public string? Ma019 { get; set; }
+    public string? Ma023 { get; set; }
+    public string? Ma024 { get; set; }
+    public string? ErpheadCustomer { get; set; }
 }
