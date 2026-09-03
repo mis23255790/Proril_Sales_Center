@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "api: 偵錯 (localhost:5211)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-api",
+      "program": "${workspaceFolder}/api/bin/Debug/net8.0/Proril.SalesIssue.Api.dll",
+      "cwd": "${workspaceFolder}/api",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5211"
+      }
+    }
+  ]
+}

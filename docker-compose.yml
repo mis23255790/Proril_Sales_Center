@@ -1,0 +1,34 @@
+# 測試區單機部署：docker compose up -d --build
+#
+# 事前準備：
+#   cp .env.example docker.env           # 前端，NUXT_PUBLIC_API_BASE 記得改成 http://api:8080
+#   cp api/docker.env.example api/docker.env   # 後端，照 api/README.md 填 1.0 對齊值
+#
+# ShareRoot volumes 的左邊路徑要改成測試主機上實際的附件共享目錄，
+# 必須跟 1.0 PRORIL 指向同一處，否則讀不到既有附件。
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+    env_file:
+      - docker.env
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "5211:8080"
+    env_file:
+      - api/docker.env
+    volumes:
+      - ./api/ShareRoot:/app/ProrilWebFiles
+    restart: unless-stopped

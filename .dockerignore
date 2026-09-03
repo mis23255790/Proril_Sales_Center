@@ -1,0 +1,22 @@
+node_modules
+.output
+.nuxt
+.nitro
+.cache
+.data
+dist
+.git
+.vs
+.idea
+.fleet
+
+# 本機環境檔，不進 image；容器一律靠 compose/平台注入的環境變數
+.env
+.env.*
+!.env.example
+docker.env
+
+# api/ 是獨立 build context（api/Dockerfile），不用一起塞進前端 image
+api
+database
+docs

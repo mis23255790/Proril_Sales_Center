@@ -17,6 +17,7 @@ logs
 .DS_Store
 .fleet
 .idea
+.vs/
 
 # Local env files
 .env
@@ -34,3 +35,7 @@ api/bin/
 api/obj/
 api/appsettings.Development.json
 api/appsettings.Production.json
+
+# docker-compose 本機/測試區用環境檔（依 *.docker.env.example 複製出來，不進版控）
+docker.env
+api/docker.env
