@@ -10,8 +10,9 @@
   （可以是 `api/`，也可以是 1.0 站台，搬移期間兩者都能用）。
 - `server/api/download.get.ts`: 附件下載中繼，把後端根目錄下的 `/ShareRoot/**` 拉回同源。
 - `database/`: schema 版控（DACPAC）與資料正確性檢查。
-- 1.0 原始碼在 `D:\Projects\Source\Proril\PRORIL`（唯讀參考）。已搬過來的模組請改 `api/`，
-  還沒搬的才回 1.0 改。
+- 1.0 原始碼在 `D:\Projects\Source\Proril\PRORIL`。已搬過來的模組請改 `api/`；
+  還沒搬的模組，一律先把邏輯從 1.0 搬過來 `Proril_Sales_Center`（`api/` 對應模組資料夾）
+  再繼續開發，不要留在 1.0 那邊直接改。
 
 > `api/` 與 1.0 打**同一個** `PRORIL_WEB`，可以並存。
 > `api/appsettings` 的 `JwtSettings` / `Security:AesKey` / `Storage:ShareRoot`
@@ -66,7 +67,20 @@
 - **語法風格**：前端全面使用 Vue 3 Composition API (`<script setup>`)。
 - **函式宣告**：優先且嚴格使用**箭頭函式 (Arrow Functions)**。
 - **型別規範**：盡可能落實 TypeScript 型別定義，開發效率優先時**允許彈性使用 `any`**。
-- **Try/Catch**： 盡可能有Try/catch包住每一段程式，在catch把原因顯示在Console與log到實體檔案
+- **Try/Catch（後端 API Action 不用再手寫）**：`api/` 的例外處理與進入點 log 已經是全域機制，
+  新增/修改 Controller Action **不用**自己包 try/catch，也不用手動印 log：
+  - 例外：`api/Filters/ApiExceptionFilter.cs`（在 `Program.cs` 註冊為全域 MVC filter），
+    未捕捉的例外會統一被攔截、寫 log，並轉成該 Action 宣告的回傳型別
+    （`CustomApiViewModel` 或 `LoginModel` 皆可，靠 reflection 塞 `Message` 屬性），
+    前端拿到的錯誤回傳格式不變。
+  - Log：`api/Middleware/RequestLoggingMiddleware.cs`（掛在 `UseRouting()` 之前），
+    每個進來的 request 自動記錄方法/路徑/狀態碼，不用在 Action 裡加任何呼叫碼。
+  - 例外情況（這兩支不算「boilerplate」，仍保留各自的 try/catch，不要拿掉）：
+    - `BaseApiController` 的 `GetAccountByToken` / `GetUserNameByToken` / `IsAdmin`：
+      token 解析失敗時刻意當「匿名／非管理員」處理並繼續往下走，不是單純記錄後 rethrow。
+    - `UploadApiController.AddFileLog`：檔案已經存檔成功，只是記錄 `H_FileLink` 失敗，
+      要讓呼叫端知道「上傳成功但記錄失敗」這種部分失敗語意，不能被全域 filter 蓋掉。
+  - 前端（Nuxt/Vue）目前沒有對應機制，該包還是要包，這條只適用後端 `api/`。
 - **`api/Controllers` 禁止放一堆檔案在同一層**：新增 Controller 一律依模組/用途分子目錄，
   不要直接丟在 `api/Controllers/` 底下。目前的分法：
   - `api/Controllers/{模組名}/`：只給該模組用的 Controller（例如 `SalesIssue/` 底下的
