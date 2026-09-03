@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Proril.SalesIssue.Api.Data;
+using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Helpers;
+using Proril.SalesIssue.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,7 +29,7 @@ builder.Services.AddDbContext<SalesIssueDbContext>(options =>
 builder.Services.AddSingleton<JwtHelper>();
 builder.Services.AddSingleton<AesHelper>();
 builder.Services.AddSingleton<StoragePaths>();
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());
 
 /*
  * CORS。
@@ -94,6 +96,7 @@ app.UseStaticFiles(new StaticFileOptions
     DefaultContentType = "application/octet-stream"
 });
 
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseRouting();
 app.UseCors("SalesCenter");
 app.UseAuthentication();

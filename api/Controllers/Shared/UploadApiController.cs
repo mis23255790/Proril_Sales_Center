@@ -38,55 +38,47 @@ public class UploadApiController : BaseApiController
     public CustomApiViewModel SaveByFileName(List<IFormFile> files, string saveByFileName, int linkFuncNo, string linkNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(SaveByFileName), $"saveByFileName:{saveByFileName}, linkFuncNo:{linkFuncNo}, linkNo:{linkNo}");
+
+        var check = CheckFiles(files);
+        if (check.Length > 0)
         {
-            WriteStepLog(nameof(SaveByFileName), $"saveByFileName:{saveByFileName}, linkFuncNo:{linkFuncNo}, linkNo:{linkNo}");
-
-            var check = CheckFiles(files);
-            if (check.Length > 0)
-            {
-                ca.Message = check;
-                return ca;
-            }
-
-            var fullPath = ResolveInsideShareRoot(saveByFileName);
-            if (fullPath is null)
-            {
-                ca.Message = $"儲存路徑不合法:{saveByFileName}";
-                return ca;
-            }
-
-            var dir = Path.GetDirectoryName(fullPath);
-            if (string.IsNullOrWhiteSpace(dir))
-            {
-                ca.Message = $"{saveByFileName} 無法解析出目錄";
-                return ca;
-            }
-
-            Directory.CreateDirectory(dir);
-
-            using (var source = files[0].OpenReadStream())
-            using (var writer = new FileStream(fullPath, FileMode.Create))
-            {
-                source.CopyTo(writer);
-            }
-
-            var logError = AddFileLog(saveByFileName, linkFuncNo, linkNo);
-            if (logError.Length > 0)
-            {
-                ca.Message = $"{files[0].FileName} 上傳成功，但 H_FileLink 記錄失敗-->{logError}";
-                return ca;
-            }
-
-            ca.IsSuccess = true;
-            ca.Message = $"{files[0].FileName}上傳成功!";
+            ca.Message = check;
             return ca;
         }
-        catch (Exception ex)
+
+        var fullPath = ResolveInsideShareRoot(saveByFileName);
+        if (fullPath is null)
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            ca.Message = $"儲存路徑不合法:{saveByFileName}";
+            return ca;
         }
+
+        var dir = Path.GetDirectoryName(fullPath);
+        if (string.IsNullOrWhiteSpace(dir))
+        {
+            ca.Message = $"{saveByFileName} 無法解析出目錄";
+            return ca;
+        }
+
+        Directory.CreateDirectory(dir);
+
+        using (var source = files[0].OpenReadStream())
+        using (var writer = new FileStream(fullPath, FileMode.Create))
+        {
+            source.CopyTo(writer);
+        }
+
+        var logError = AddFileLog(saveByFileName, linkFuncNo, linkNo);
+        if (logError.Length > 0)
+        {
+            ca.Message = $"{files[0].FileName} 上傳成功，但 H_FileLink 記錄失敗-->{logError}";
+            return ca;
+        }
+
+        ca.IsSuccess = true;
+        ca.Message = $"{files[0].FileName}上傳成功!";
         return ca;
     }
 

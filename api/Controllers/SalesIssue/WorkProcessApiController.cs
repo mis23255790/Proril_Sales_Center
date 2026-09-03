@@ -43,53 +43,45 @@ public partial class WorkProcessApiController : BaseApiController
         bool pub_only, string? startDate, string? endDate)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(GetSOPList_Edit),
+            $"type2:{type2_phrase_name}, type3:{type3_phrase_name}, caption:{caption_name}, content:{content_name}, pub_only:{pub_only}");
+
+        var account = GetAccountByToken();
+        var isAdmin = IsAdmin(account);
+
+        // 有「公開」層級的功能權限就看得到全部
+        var isPublic = db.MPermissions.Any(p =>
+            p.LinkNumber == account
+            && p.FunctionNo == FunctionIds.ProcessMaintain
+            && p.LinkType == (byte)EWorkProcessPermission.Public);
+
+        ca = GetSopListCore(type2_phrase_name, type3_phrase_name, caption_name, content_name, pub_only);
+        if (!ca.IsSuccess) return ca;
+
+        if (isAdmin || isPublic) return ca;
+        if (ca.Body is not List<DWorkProcessesEx> sopList)
         {
-            WriteStepLog(nameof(GetSOPList_Edit),
-                $"type2:{type2_phrase_name}, type3:{type3_phrase_name}, caption:{caption_name}, content:{content_name}, pub_only:{pub_only}");
-
-            var account = GetAccountByToken();
-            var isAdmin = IsAdmin(account);
-
-            // 有「公開」層級的功能權限就看得到全部
-            var isPublic = db.MPermissions.Any(p =>
-                p.LinkNumber == account
-                && p.FunctionNo == FunctionIds.ProcessMaintain
-                && p.LinkType == (byte)EWorkProcessPermission.Public);
-
-            ca = GetSopListCore(type2_phrase_name, type3_phrase_name, caption_name, content_name, pub_only);
-            if (!ca.IsSuccess) return ca;
-
-            if (isAdmin || isPublic) return ca;
-            if (ca.Body is not List<DWorkProcessesEx> sopList)
-            {
-                ca.IsSuccess = true;
-                return ca;
-            }
-
-            // 逐議題的權限過濾：本人或全體帳號，且為「編輯」或「公開」層級
-            var permissions = db.DWorkProcessPermissions
-                .Where(p => p.EnableType == (byte)EWorkProcessPermission.Edit
-                         || p.EnableType == (byte)EWorkProcessPermission.Public)
-                .ToList()
-                .Where(p => (p.Account ?? "").Trim() == account
-                         || (p.Account ?? "").Trim() == PermissionConst.AccountForAll)
-                .Select(p => (p.Wpno ?? "").Trim())
-                .ToHashSet();
-
-            ca.Body = sopList
-                .Where(wp => permissions.Contains((wp.Wpno ?? "").Trim()))
-                .GroupBy(wp => wp.Wpno)
-                .Select(g => g.First())
-                .ToList();
             ca.IsSuccess = true;
             return ca;
         }
-        catch (Exception ex)
-        {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
-        }
+
+        // 逐議題的權限過濾：本人或全體帳號，且為「編輯」或「公開」層級
+        var permissions = db.DWorkProcessPermissions
+            .Where(p => p.EnableType == (byte)EWorkProcessPermission.Edit
+                     || p.EnableType == (byte)EWorkProcessPermission.Public)
+            .ToList()
+            .Where(p => (p.Account ?? "").Trim() == account
+                     || (p.Account ?? "").Trim() == PermissionConst.AccountForAll)
+            .Select(p => (p.Wpno ?? "").Trim())
+            .ToHashSet();
+
+        ca.Body = sopList
+            .Where(wp => permissions.Contains((wp.Wpno ?? "").Trim()))
+            .GroupBy(wp => wp.Wpno)
+            .Select(g => g.First())
+            .ToList();
+        ca.IsSuccess = true;
         return ca;
     }
 
@@ -111,179 +103,171 @@ public partial class WorkProcessApiController : BaseApiController
         string? captionName, string? contentName, bool pubOnly)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
-        {
-            var processes = db.DWorkProcesses.Where(o => o.AStatus == ActiveStatus.Active).ToList();
 
-            // 內文很大，列表不需要，撈的時候就跳過（1.0 也是這樣）
-            var details = db.DWorkProcessDetails
-                .Where(d => d.AStatus == ActiveStatus.Active)
-                .Select(d => new DWorkProcessDetail
-                {
-                    Id = d.Id,
-                    Wpno = d.Wpno,
-                    Sno = d.Sno,
-                    ProcessCaption = d.ProcessCaption,
-                    ProcessCaption2 = d.ProcessCaption2,
-                    Worker = d.Worker,
-                    AStatus = d.AStatus,
-                    UploadFile = d.UploadFile,
-                    RenameFile = d.RenameFile,
-                    ZipFile = d.ZipFile,
-                    Creator = d.Creator,
-                    CreateTime = d.CreateTime,
-                    Modifier = d.Modifier,
-                    ModiTime = d.ModiTime
-                })
-                .ToList();
+        var processes = db.DWorkProcesses.Where(o => o.AStatus == ActiveStatus.Active).ToList();
 
-            var phrases = db.MWorkProcessPhrases.Where(o => o.AStatus == ActiveStatus.Active).ToList();
-            var searches = db.DWorkProcessSearches.Where(o => o.AStatus == ActiveStatus.Active).ToList();
-            var wpCustomers = db.DWorkProcessCustomers.Where(o => o.AStatus == ActiveStatus.Active).ToList();
-            var crmCustomers = db.CrmCustomers.Where(o => o.AStatus == ActiveStatus.Active).ToList();
-            var users = db.MUsers.ToList();
-
-            var userNameByAccount = users
-                .GroupBy(u => (u.Account ?? "").Trim())
-                .ToDictionary(g => g.Key, g => g.First().UserName ?? "");
-
-            var latestDetailByWpno = details
-                .GroupBy(d => (d.Wpno ?? "").Trim())
-                .ToDictionary(g => g.Key, g => g.OrderByDescending(d => d.ModiTime).ThenByDescending(d => d.Id).First());
-
-            var searchesByWpno = searches
-                .GroupBy(s => (s.Wpno ?? "").Trim())
-                .ToDictionary(g => g.Key, g => g.GroupBy(s => (s.PhraseCode ?? "").Trim()).Select(x => x.First()).ToList());
-
-            var customerByWpno = wpCustomers
-                .GroupBy(c => (c.Wpno ?? "").Trim())
-                .ToDictionary(g => g.Key, g => g.First());
-
-            var crmByNo = crmCustomers
-                .GroupBy(c => (c.CustomerNo ?? "").Trim())
-                .ToDictionary(g => g.Key, g => g.First());
-
-            var phraseNameByKey = phrases
-                .GroupBy(p => ((p.PhraseType ?? "").Trim(), (p.PhraseCode ?? "").Trim()))
-                .ToDictionary(g => g.Key, g => g.First().PhraseName);
-
-            var list = processes.Select(wp =>
+        // 內文很大，列表不需要，撈的時候就跳過（1.0 也是這樣）
+        var details = db.DWorkProcessDetails
+            .Where(d => d.AStatus == ActiveStatus.Active)
+            .Select(d => new DWorkProcessDetail
             {
-                var wpno = (wp.Wpno ?? "").Trim();
-                latestDetailByWpno.TryGetValue(wpno, out var latest);
-                customerByWpno.TryGetValue(wpno, out var wpCustomer);
-
-                CrmCustomer? crm = null;
-                var customerNo = (wpCustomer?.CustomerNo ?? "").Trim();
-                if (customerNo.Length > 0) crmByNo.TryGetValue(customerNo, out crm);
-
-                var wpSearches = searchesByWpno.TryGetValue(wpno, out var s) ? s : new List<DWorkProcessSearch>();
-
-                return new DWorkProcessesEx(wp)
-                {
-                    ProcessCaption = latest?.ProcessCaption ?? "",
-                    ProcessCaption2 = latest?.ProcessCaption2 ?? "",
-                    ProcessContent = "",
-                    Account = (wp.Creator ?? "").Trim(),
-                    UserName = userNameByAccount.TryGetValue((wp.Creator ?? "").Trim(), out var cn) ? cn : "",
-                    LastModifierName = userNameByAccount.TryGetValue((latest?.Modifier ?? "").Trim(), out var mn) ? mn : "",
-                    LastModiTime = latest?.ModiTime,
-                    EnableType = (byte)'0',
-                    PotentialCustom = crm?.PotentialCustom ?? "",
-                    CustomerNo = customerNo,
-                    CustomerName = crm?.ShortName ?? "",
-                    PhraseTypeList = string.Join(";", wpSearches.Select(x => (x.PhraseType ?? "").Trim())),
-                    PhraseCodeList = string.Join(";", wpSearches.Select(x => (x.PhraseCode ?? "").Trim())),
-                    PhraseNameList = string.Join(";", wpSearches.Select(x =>
-                        phraseNameByKey.TryGetValue(((x.PhraseType ?? "").Trim(), (x.PhraseCode ?? "").Trim()), out var pn) ? pn : "")),
-                    PhraseList = string.Join(";", wpSearches.Select(x =>
-                        phraseNameByKey.TryGetValue(((x.PhraseType ?? "").Trim(), (x.PhraseCode ?? "").Trim()), out var pn) ? pn : ""))
-                };
+                Id = d.Id,
+                Wpno = d.Wpno,
+                Sno = d.Sno,
+                ProcessCaption = d.ProcessCaption,
+                ProcessCaption2 = d.ProcessCaption2,
+                Worker = d.Worker,
+                AStatus = d.AStatus,
+                UploadFile = d.UploadFile,
+                RenameFile = d.RenameFile,
+                ZipFile = d.ZipFile,
+                Creator = d.Creator,
+                CreateTime = d.CreateTime,
+                Modifier = d.Modifier,
+                ModiTime = d.ModiTime
             })
-            .OrderByDescending(x => x.LastModiTime)
             .ToList();
 
-            if (list.Count == 0)
+        var phrases = db.MWorkProcessPhrases.Where(o => o.AStatus == ActiveStatus.Active).ToList();
+        var searches = db.DWorkProcessSearches.Where(o => o.AStatus == ActiveStatus.Active).ToList();
+        var wpCustomers = db.DWorkProcessCustomers.Where(o => o.AStatus == ActiveStatus.Active).ToList();
+        var crmCustomers = db.CrmCustomers.Where(o => o.AStatus == ActiveStatus.Active).ToList();
+        var users = db.MUsers.ToList();
+
+        var userNameByAccount = users
+            .GroupBy(u => (u.Account ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.First().UserName ?? "");
+
+        var latestDetailByWpno = details
+            .GroupBy(d => (d.Wpno ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(d => d.ModiTime).ThenByDescending(d => d.Id).First());
+
+        var searchesByWpno = searches
+            .GroupBy(s => (s.Wpno ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.GroupBy(s => (s.PhraseCode ?? "").Trim()).Select(x => x.First()).ToList());
+
+        var customerByWpno = wpCustomers
+            .GroupBy(c => (c.Wpno ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var crmByNo = crmCustomers
+            .GroupBy(c => (c.CustomerNo ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var phraseNameByKey = phrases
+            .GroupBy(p => ((p.PhraseType ?? "").Trim(), (p.PhraseCode ?? "").Trim()))
+            .ToDictionary(g => g.Key, g => g.First().PhraseName);
+
+        var list = processes.Select(wp =>
+        {
+            var wpno = (wp.Wpno ?? "").Trim();
+            latestDetailByWpno.TryGetValue(wpno, out var latest);
+            customerByWpno.TryGetValue(wpno, out var wpCustomer);
+
+            CrmCustomer? crm = null;
+            var customerNo = (wpCustomer?.CustomerNo ?? "").Trim();
+            if (customerNo.Length > 0) crmByNo.TryGetValue(customerNo, out crm);
+
+            var wpSearches = searchesByWpno.TryGetValue(wpno, out var s) ? s : new List<DWorkProcessSearch>();
+
+            return new DWorkProcessesEx(wp)
             {
-                ca.Message = "查無工作流程項目類別資料!!!";
-                return ca;
-            }
+                ProcessCaption = latest?.ProcessCaption ?? "",
+                ProcessCaption2 = latest?.ProcessCaption2 ?? "",
+                ProcessContent = "",
+                Account = (wp.Creator ?? "").Trim(),
+                UserName = userNameByAccount.TryGetValue((wp.Creator ?? "").Trim(), out var cn) ? cn : "",
+                LastModifierName = userNameByAccount.TryGetValue((latest?.Modifier ?? "").Trim(), out var mn) ? mn : "",
+                LastModiTime = latest?.ModiTime,
+                EnableType = (byte)'0',
+                PotentialCustom = crm?.PotentialCustom ?? "",
+                CustomerNo = customerNo,
+                CustomerName = crm?.ShortName ?? "",
+                PhraseTypeList = string.Join(";", wpSearches.Select(x => (x.PhraseType ?? "").Trim())),
+                PhraseCodeList = string.Join(";", wpSearches.Select(x => (x.PhraseCode ?? "").Trim())),
+                PhraseNameList = string.Join(";", wpSearches.Select(x =>
+                    phraseNameByKey.TryGetValue(((x.PhraseType ?? "").Trim(), (x.PhraseCode ?? "").Trim()), out var pn) ? pn : "")),
+                PhraseList = string.Join(";", wpSearches.Select(x =>
+                    phraseNameByKey.TryGetValue(((x.PhraseType ?? "").Trim(), (x.PhraseCode ?? "").Trim()), out var pn) ? pn : ""))
+            };
+        })
+        .OrderByDescending(x => x.LastModiTime)
+        .ToList();
 
-            if (!string.IsNullOrWhiteSpace(captionName))
-            {
-                list = list.Where(wp =>
-                        (wp.ProcessCaption ?? "").Contains(captionName)
-                     || (wp.SopTitle ?? "").Contains(captionName)).ToList();
-                if (list.Count == 0)
-                {
-                    ca.Message = $"查無工作流程項目 大綱關鍵字:{captionName} 資料!!!";
-                    return ca;
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(contentName))
-            {
-                // 列表沒有載入 ProcessContent，所以內文關鍵字要回資料庫查一次
-                var matched = db.DWorkProcessDetails
-                    .Where(d => d.AStatus == ActiveStatus.Active
-                             && ((d.ProcessContent != null && d.ProcessContent.Contains(contentName))
-                              || (d.ProcessCaption2 != null && d.ProcessCaption2.Contains(contentName))))
-                    .Select(d => d.Wpno)
-                    .ToList()
-                    .Select(w => (w ?? "").Trim())
-                    .ToHashSet();
-
-                list = list.Where(wp => matched.Contains((wp.Wpno ?? "").Trim())).ToList();
-                if (list.Count == 0)
-                {
-                    ca.Message = $"查無工作流程項目 內文關鍵字:{contentName} 資料!!!";
-                    return ca;
-                }
-            }
-
-            if (pubOnly)
-            {
-                list = list.Where(wp => wp.PubFlag == true).ToList();
-                if (list.Count == 0)
-                {
-                    ca.Message = "查無工作流程項目 pub_only: true 資料!!!";
-                    return ca;
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(type2PhraseName))
-            {
-                list = list.Where(wp => (wp.PhraseNameList ?? "").Contains(type2PhraseName)).ToList();
-                if (list.Count == 0)
-                {
-                    ca.Message = $"查無工作流程項目 Type 類別:{type2PhraseName} 資料!!!";
-                    return ca;
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(type3PhraseName))
-            {
-                list = list.Where(wp => (wp.CustomerName ?? "").Contains(type3PhraseName)).ToList();
-                if (list.Count == 0)
-                {
-                    ca.Message = $"查無工作流程項目 Job 類別:{type3PhraseName} 資料!!!";
-                    return ca;
-                }
-            }
-
-            ca.Body = list
-                .GroupBy(wp => wp.Wpno)
-                .Select(g => g.First())
-                .OrderBy(wp => wp.CustomerName)
-                .ToList();
-            ca.IsSuccess = true;
+        if (list.Count == 0)
+        {
+            ca.Message = "查無工作流程項目類別資料!!!";
             return ca;
         }
-        catch (Exception ex)
+
+        if (!string.IsNullOrWhiteSpace(captionName))
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            list = list.Where(wp =>
+                    (wp.ProcessCaption ?? "").Contains(captionName)
+                 || (wp.SopTitle ?? "").Contains(captionName)).ToList();
+            if (list.Count == 0)
+            {
+                ca.Message = $"查無工作流程項目 大綱關鍵字:{captionName} 資料!!!";
+                return ca;
+            }
         }
+
+        if (!string.IsNullOrWhiteSpace(contentName))
+        {
+            // 列表沒有載入 ProcessContent，所以內文關鍵字要回資料庫查一次
+            var matched = db.DWorkProcessDetails
+                .Where(d => d.AStatus == ActiveStatus.Active
+                         && ((d.ProcessContent != null && d.ProcessContent.Contains(contentName))
+                          || (d.ProcessCaption2 != null && d.ProcessCaption2.Contains(contentName))))
+                .Select(d => d.Wpno)
+                .ToList()
+                .Select(w => (w ?? "").Trim())
+                .ToHashSet();
+
+            list = list.Where(wp => matched.Contains((wp.Wpno ?? "").Trim())).ToList();
+            if (list.Count == 0)
+            {
+                ca.Message = $"查無工作流程項目 內文關鍵字:{contentName} 資料!!!";
+                return ca;
+            }
+        }
+
+        if (pubOnly)
+        {
+            list = list.Where(wp => wp.PubFlag == true).ToList();
+            if (list.Count == 0)
+            {
+                ca.Message = "查無工作流程項目 pub_only: true 資料!!!";
+                return ca;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(type2PhraseName))
+        {
+            list = list.Where(wp => (wp.PhraseNameList ?? "").Contains(type2PhraseName)).ToList();
+            if (list.Count == 0)
+            {
+                ca.Message = $"查無工作流程項目 Type 類別:{type2PhraseName} 資料!!!";
+                return ca;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(type3PhraseName))
+        {
+            list = list.Where(wp => (wp.CustomerName ?? "").Contains(type3PhraseName)).ToList();
+            if (list.Count == 0)
+            {
+                ca.Message = $"查無工作流程項目 Job 類別:{type3PhraseName} 資料!!!";
+                return ca;
+            }
+        }
+
+        ca.Body = list
+            .GroupBy(wp => wp.Wpno)
+            .Select(g => g.First())
+            .OrderBy(wp => wp.CustomerName)
+            .ToList();
+        ca.IsSuccess = true;
         return ca;
     }
 
@@ -292,24 +276,16 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel GetSOPListAll()
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
-        {
-            var list = db.DWorkProcesses.OrderByDescending(wp => wp.CreateTime).ToList();
-            if (list.Count == 0)
-            {
-                ca.Message = "查無工作流程項目類別資料!!!";
-                return ca;
-            }
 
-            ca.IsSuccess = true;
-            ca.Body = list;
+        var list = db.DWorkProcesses.OrderByDescending(wp => wp.CreateTime).ToList();
+        if (list.Count == 0)
+        {
+            ca.Message = "查無工作流程項目類別資料!!!";
             return ca;
         }
-        catch (Exception ex)
-        {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
-        }
+
+        ca.IsSuccess = true;
+        ca.Body = list;
         return ca;
     }
 
@@ -319,55 +295,47 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel GetSOPOrder(string wpno)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(GetSOPOrder), $"wpno:{wpno}");
+
+        var padded = StoragePaths.PadWpno(wpno);
+        if (padded.Length == 0)
         {
-            WriteStepLog(nameof(GetSOPOrder), $"wpno:{wpno}");
-
-            var padded = StoragePaths.PadWpno(wpno);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpno:{wpno} 有誤!!!";
-                return ca;
-            }
-
-            var wp = db.DWorkProcesses.FirstOrDefault(o => o.AStatus == ActiveStatus.Active && o.Wpno == padded);
-            if (wp is null)
-            {
-                ca.Message = $"查無工作流程項目資料:{padded}!!!";
-                return ca;
-            }
-
-            var result = new DWorkProcessesEx(wp);
-
-            var wpCustomer = db.DWorkProcessCustomers
-                .FirstOrDefault(c => c.Wpno == padded && c.AStatus == ActiveStatus.Active);
-            if (wpCustomer is not null)
-            {
-                var customerNo = (wpCustomer.CustomerNo ?? "").Trim();
-                result.CustomerNo = customerNo;
-                result.CustomerName = db.CrmCustomers
-                    .Where(c => c.AStatus == ActiveStatus.Active)
-                    .ToList()
-                    .FirstOrDefault(c => (c.CustomerNo ?? "").Trim() == customerNo)?.ShortName ?? "";
-            }
-
-            var searchResult = GetWPOrderPhrase(padded);
-            if (searchResult.IsSuccess && searchResult.Body is List<DWorkProcessSearchEx> searches)
-            {
-                result.PhraseTypeList = string.Join(";", searches.Select(s => (s.PhraseType ?? "").Trim()));
-                result.PhraseCodeList = string.Join(";", searches.Select(s => (s.PhraseCode ?? "").Trim()));
-                result.PhraseNameList = string.Join(";", searches.Select(s => s.PhraseName ?? ""));
-            }
-
-            ca.IsSuccess = true;
-            ca.Body = result;
+            ca.Message = $"wpno:{wpno} 有誤!!!";
             return ca;
         }
-        catch (Exception ex)
+
+        var wp = db.DWorkProcesses.FirstOrDefault(o => o.AStatus == ActiveStatus.Active && o.Wpno == padded);
+        if (wp is null)
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            ca.Message = $"查無工作流程項目資料:{padded}!!!";
+            return ca;
         }
+
+        var result = new DWorkProcessesEx(wp);
+
+        var wpCustomer = db.DWorkProcessCustomers
+            .FirstOrDefault(c => c.Wpno == padded && c.AStatus == ActiveStatus.Active);
+        if (wpCustomer is not null)
+        {
+            var customerNo = (wpCustomer.CustomerNo ?? "").Trim();
+            result.CustomerNo = customerNo;
+            result.CustomerName = db.CrmCustomers
+                .Where(c => c.AStatus == ActiveStatus.Active)
+                .ToList()
+                .FirstOrDefault(c => (c.CustomerNo ?? "").Trim() == customerNo)?.ShortName ?? "";
+        }
+
+        var searchResult = GetWPOrderPhrase(padded);
+        if (searchResult.IsSuccess && searchResult.Body is List<DWorkProcessSearchEx> searches)
+        {
+            result.PhraseTypeList = string.Join(";", searches.Select(s => (s.PhraseType ?? "").Trim()));
+            result.PhraseCodeList = string.Join(";", searches.Select(s => (s.PhraseCode ?? "").Trim()));
+            result.PhraseNameList = string.Join(";", searches.Select(s => s.PhraseName ?? ""));
+        }
+
+        ca.IsSuccess = true;
+        ca.Body = result;
         return ca;
     }
 
@@ -381,80 +349,72 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel SaveOrder([FromQuery] DWorkProcess wpOrder)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(SaveOrder), $"wpno:{wpOrder?.Wpno}");
+
+        if (wpOrder is null || string.IsNullOrWhiteSpace(wpOrder.Wpno))
         {
-            WriteStepLog(nameof(SaveOrder), $"wpno:{wpOrder?.Wpno}");
-
-            if (wpOrder is null || string.IsNullOrWhiteSpace(wpOrder.Wpno))
-            {
-                ca.Message = "wpno為空!!!";
-                return ca;
-            }
-
-            var padded = StoragePaths.PadWpno(wpOrder.Wpno);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpOrder. wpNo:{wpOrder.Wpno} 有誤!!!";
-                return ca;
-            }
-            wpOrder.Wpno = padded;
-
-            if (string.IsNullOrWhiteSpace(wpOrder.SopTitle))
-            {
-                ca.Message = "SopTitle 為空!!!";
-                return ca;
-            }
-
-            if (wpOrder.SopTitle.Length > SopTitleMaxLength)
-            {
-                ca.Message = "Sop標題超過長度!!!";
-                return ca;
-            }
-
-            if (wpOrder.PubDate is null && wpOrder.PubFlag == true)
-            {
-                wpOrder.PubDate = DateTime.Now;
-            }
-
-            var account = GetAccountByToken();
-            var existing = db.DWorkProcesses.FirstOrDefault(wp => wp.Wpno == padded);
-
-            if (existing is null)
-            {
-                wpOrder.PhraseList ??= "";
-                wpOrder.FinFlag ??= false;
-                wpOrder.AStatus = ActiveStatus.Active;
-                wpOrder.Creator = account;
-                wpOrder.CreateTime = DateTime.Now;
-                wpOrder.Modifier = account;
-                wpOrder.ModiTime = DateTime.Now;
-
-                db.DWorkProcesses.Add(wpOrder);
-            }
-            else
-            {
-                existing.SopTitle = wpOrder.SopTitle;
-                existing.PhraseList = wpOrder.PhraseList ?? "";
-                existing.Descript = wpOrder.Descript;
-                existing.VerNo = wpOrder.VerNo;
-                existing.PubDate = wpOrder.PubDate;
-                existing.PubFlag = wpOrder.PubFlag;
-                existing.FinFlag = wpOrder.FinFlag;
-                existing.Modifier = account;
-                existing.ModiTime = DateTime.Now;
-
-                db.DWorkProcesses.Update(existing);
-            }
-
-            db.SaveChanges();
-            ca.IsSuccess = true;
+            ca.Message = "wpno為空!!!";
             return ca;
         }
-        catch (Exception ex)
+
+        var padded = StoragePaths.PadWpno(wpOrder.Wpno);
+        if (padded.Length == 0)
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            ca.Message = $"wpOrder. wpNo:{wpOrder.Wpno} 有誤!!!";
+            return ca;
         }
+        wpOrder.Wpno = padded;
+
+        if (string.IsNullOrWhiteSpace(wpOrder.SopTitle))
+        {
+            ca.Message = "SopTitle 為空!!!";
+            return ca;
+        }
+
+        if (wpOrder.SopTitle.Length > SopTitleMaxLength)
+        {
+            ca.Message = "Sop標題超過長度!!!";
+            return ca;
+        }
+
+        if (wpOrder.PubDate is null && wpOrder.PubFlag == true)
+        {
+            wpOrder.PubDate = DateTime.Now;
+        }
+
+        var account = GetAccountByToken();
+        var existing = db.DWorkProcesses.FirstOrDefault(wp => wp.Wpno == padded);
+
+        if (existing is null)
+        {
+            wpOrder.PhraseList ??= "";
+            wpOrder.FinFlag ??= false;
+            wpOrder.AStatus = ActiveStatus.Active;
+            wpOrder.Creator = account;
+            wpOrder.CreateTime = DateTime.Now;
+            wpOrder.Modifier = account;
+            wpOrder.ModiTime = DateTime.Now;
+
+            db.DWorkProcesses.Add(wpOrder);
+        }
+        else
+        {
+            existing.SopTitle = wpOrder.SopTitle;
+            existing.PhraseList = wpOrder.PhraseList ?? "";
+            existing.Descript = wpOrder.Descript;
+            existing.VerNo = wpOrder.VerNo;
+            existing.PubDate = wpOrder.PubDate;
+            existing.PubFlag = wpOrder.PubFlag;
+            existing.FinFlag = wpOrder.FinFlag;
+            existing.Modifier = account;
+            existing.ModiTime = DateTime.Now;
+
+            db.DWorkProcesses.Update(existing);
+        }
+
+        db.SaveChanges();
+        ca.IsSuccess = true;
         return ca;
     }
 
@@ -463,38 +423,30 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel DisableOrder(string wpNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(DisableOrder), $"wpNo:{wpNo}");
+
+        var padded = StoragePaths.PadWpno(wpNo);
+        if (padded.Length == 0)
         {
-            WriteStepLog(nameof(DisableOrder), $"wpNo:{wpNo}");
-
-            var padded = StoragePaths.PadWpno(wpNo);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpNo:{wpNo} 有誤!!!";
-                return ca;
-            }
-
-            var wp = db.DWorkProcesses.FirstOrDefault(o => o.Wpno == padded);
-            if (wp is null)
-            {
-                ca.Message = $"查無工作流程單:{padded}!!!";
-                return ca;
-            }
-
-            wp.AStatus = ActiveStatus.Inactive;
-            wp.Modifier = GetAccountByToken();
-            wp.ModiTime = DateTime.Now;
-            db.DWorkProcesses.Update(wp);
-            db.SaveChanges();
-
-            ca.IsSuccess = true;
+            ca.Message = $"wpNo:{wpNo} 有誤!!!";
             return ca;
         }
-        catch (Exception ex)
+
+        var wp = db.DWorkProcesses.FirstOrDefault(o => o.Wpno == padded);
+        if (wp is null)
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            ca.Message = $"查無工作流程單:{padded}!!!";
+            return ca;
         }
+
+        wp.AStatus = ActiveStatus.Inactive;
+        wp.Modifier = GetAccountByToken();
+        wp.ModiTime = DateTime.Now;
+        db.DWorkProcesses.Update(wp);
+        db.SaveChanges();
+
+        ca.IsSuccess = true;
         return ca;
     }
 
@@ -508,46 +460,38 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel GetSOPDetail(string wpNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(GetSOPDetail), $"wpNo:{wpNo}");
+
+        var padded = StoragePaths.PadWpno(wpNo);
+        if (padded.Length == 0)
         {
-            WriteStepLog(nameof(GetSOPDetail), $"wpNo:{wpNo}");
+            ca.Message = $"wpno:{wpNo} 有誤!!!";
+            return ca;
+        }
 
-            var padded = StoragePaths.PadWpno(wpNo);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpno:{wpNo} 有誤!!!";
-                return ca;
-            }
+        var details = db.DWorkProcessDetails
+            .Where(d => d.Wpno == padded)
+            .OrderBy(d => d.ProcessCaption)
+            .ToList();
 
-            var details = db.DWorkProcessDetails
-                .Where(d => d.Wpno == padded)
-                .OrderBy(d => d.ProcessCaption)
-                .ToList();
-
-            if (details.Count == 0)
-            {
-                ca.Message = $"查無工作流程項目細項資料:{padded}!!!";
-                ca.IsSuccess = true;
-                return ca;
-            }
-
-            var userNameByAccount = db.MUsers.ToList()
-                .GroupBy(u => (u.Account ?? "").Trim())
-                .ToDictionary(g => g.Key, g => g.First().UserName);
-
-            ca.Body = details.Select(d => new DWorkProcessDetailViewModel(d)
-            {
-                CreatorName = userNameByAccount.TryGetValue((d.Creator ?? "").Trim(), out var c) ? c : null,
-                ModifierName = userNameByAccount.TryGetValue((d.Modifier ?? "").Trim(), out var m) ? m : null
-            }).ToList();
+        if (details.Count == 0)
+        {
+            ca.Message = $"查無工作流程項目細項資料:{padded}!!!";
             ca.IsSuccess = true;
             return ca;
         }
-        catch (Exception ex)
+
+        var userNameByAccount = db.MUsers.ToList()
+            .GroupBy(u => (u.Account ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.First().UserName);
+
+        ca.Body = details.Select(d => new DWorkProcessDetailViewModel(d)
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
-        }
+            CreatorName = userNameByAccount.TryGetValue((d.Creator ?? "").Trim(), out var c) ? c : null,
+            ModifierName = userNameByAccount.TryGetValue((d.Modifier ?? "").Trim(), out var m) ? m : null
+        }).ToList();
+        ca.IsSuccess = true;
         return ca;
     }
 
@@ -556,31 +500,23 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel GetSOPDetailWSNo(string wpNo, string sNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(GetSOPDetailWSNo), $"wpNo:{wpNo}, sNo:{sNo}");
+
+        var padded = StoragePaths.PadWpno(wpNo);
+        if (padded.Length == 0)
         {
-            WriteStepLog(nameof(GetSOPDetailWSNo), $"wpNo:{wpNo}, sNo:{sNo}");
-
-            var padded = StoragePaths.PadWpno(wpNo);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpno:{wpNo} 有誤!!!";
-                return ca;
-            }
-
-            var paddedSno = StoragePaths.PadSno(sNo);
-            var detail = db.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
-
-            // 新增中的進度還不存在，這不是錯誤
-            ca.IsSuccess = true;
-            ca.Body = detail;
-            if (detail is null) ca.Message = $"{padded}:{paddedSno} 尚未建立";
+            ca.Message = $"wpno:{wpNo} 有誤!!!";
             return ca;
         }
-        catch (Exception ex)
-        {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
-        }
+
+        var paddedSno = StoragePaths.PadSno(sNo);
+        var detail = db.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
+
+        // 新增中的進度還不存在，這不是錯誤
+        ca.IsSuccess = true;
+        ca.Body = detail;
+        if (detail is null) ca.Message = $"{padded}:{paddedSno} 尚未建立";
         return ca;
     }
 
@@ -595,34 +531,26 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel GetEditorText(string WPNo, string SNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(GetEditorText), $"WPNo:{WPNo}, SNo:{SNo}");
+
+        var padded = StoragePaths.PadWpno(WPNo);
+        if (padded.Length == 0)
         {
-            WriteStepLog(nameof(GetEditorText), $"WPNo:{WPNo}, SNo:{SNo}");
-
-            var padded = StoragePaths.PadWpno(WPNo);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"{WPNo} 有誤!!!";
-                return ca;
-            }
-
-            var paddedSno = StoragePaths.PadSno(SNo);
-            var detail = db.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
-            if (detail is null)
-            {
-                ca.Message = $"{padded}:{paddedSno} 查無資料!!!";
-                return ca;
-            }
-
-            ca.IsSuccess = true;
-            ca.Body = detail;
+            ca.Message = $"{WPNo} 有誤!!!";
             return ca;
         }
-        catch (Exception ex)
+
+        var paddedSno = StoragePaths.PadSno(SNo);
+        var detail = db.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
+        if (detail is null)
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            ca.Message = $"{padded}:{paddedSno} 查無資料!!!";
+            return ca;
         }
+
+        ca.IsSuccess = true;
+        ca.Body = detail;
         return ca;
     }
 
@@ -634,66 +562,58 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel SaveDetail([FromForm] DWorkProcessDetail wpDetail)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        if (wpDetail is null)
         {
-            if (wpDetail is null)
-            {
-                ca.Message = "wpDetail is null";
-                return ca;
-            }
-
-            WriteStepLog(nameof(SaveDetail), $"wpNo:{wpDetail.Wpno}, sNo:{wpDetail.Sno}");
-
-            var padded = StoragePaths.PadWpno(wpDetail.Wpno);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpNo:{wpDetail.Wpno} 有誤!!!";
-                return ca;
-            }
-            wpDetail.Wpno = padded;
-
-            if (!int.TryParse((wpDetail.Sno ?? "").Trim(), out var sno) || sno <= 0)
-            {
-                ca.Message = "Sno 為0 !!!";
-                return ca;
-            }
-            wpDetail.Sno = sno.ToString("D4");
-            wpDetail.ProcessContent = (wpDetail.ProcessContent ?? "").Trim();
-
-            var account = GetAccountByToken();
-            var existing = db.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == wpDetail.Wpno && d.Sno == wpDetail.Sno);
-
-            if (existing is null)
-            {
-                wpDetail.AStatus = ActiveStatus.Active;
-                wpDetail.Creator = account;
-                wpDetail.CreateTime = DateTime.Now;
-                wpDetail.Modifier = account;
-                wpDetail.ModiTime = DateTime.Now;
-                db.DWorkProcessDetails.Add(wpDetail);
-            }
-            else
-            {
-                existing.ProcessCaption = wpDetail.ProcessCaption;
-                existing.ProcessCaption2 = wpDetail.ProcessCaption2;
-                existing.ProcessContent = wpDetail.ProcessContent;
-                existing.Worker = wpDetail.Worker;
-                existing.UploadFile = wpDetail.UploadFile;
-                existing.RenameFile = wpDetail.RenameFile;
-                existing.Modifier = account;
-                existing.ModiTime = DateTime.Now;
-                db.DWorkProcessDetails.Update(existing);
-            }
-
-            db.SaveChanges();
-            ca.IsSuccess = true;
+            ca.Message = "wpDetail is null";
             return ca;
         }
-        catch (Exception ex)
+
+        WriteStepLog(nameof(SaveDetail), $"wpNo:{wpDetail.Wpno}, sNo:{wpDetail.Sno}");
+
+        var padded = StoragePaths.PadWpno(wpDetail.Wpno);
+        if (padded.Length == 0)
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            ca.Message = $"wpNo:{wpDetail.Wpno} 有誤!!!";
+            return ca;
         }
+        wpDetail.Wpno = padded;
+
+        if (!int.TryParse((wpDetail.Sno ?? "").Trim(), out var sno) || sno <= 0)
+        {
+            ca.Message = "Sno 為0 !!!";
+            return ca;
+        }
+        wpDetail.Sno = sno.ToString("D4");
+        wpDetail.ProcessContent = (wpDetail.ProcessContent ?? "").Trim();
+
+        var account = GetAccountByToken();
+        var existing = db.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == wpDetail.Wpno && d.Sno == wpDetail.Sno);
+
+        if (existing is null)
+        {
+            wpDetail.AStatus = ActiveStatus.Active;
+            wpDetail.Creator = account;
+            wpDetail.CreateTime = DateTime.Now;
+            wpDetail.Modifier = account;
+            wpDetail.ModiTime = DateTime.Now;
+            db.DWorkProcessDetails.Add(wpDetail);
+        }
+        else
+        {
+            existing.ProcessCaption = wpDetail.ProcessCaption;
+            existing.ProcessCaption2 = wpDetail.ProcessCaption2;
+            existing.ProcessContent = wpDetail.ProcessContent;
+            existing.Worker = wpDetail.Worker;
+            existing.UploadFile = wpDetail.UploadFile;
+            existing.RenameFile = wpDetail.RenameFile;
+            existing.Modifier = account;
+            existing.ModiTime = DateTime.Now;
+            db.DWorkProcessDetails.Update(existing);
+        }
+
+        db.SaveChanges();
+        ca.IsSuccess = true;
         return ca;
     }
 
@@ -702,42 +622,34 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel DeleteSno(string wpNo, string sNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(DeleteSno), $"wpNo:{wpNo}, sNo:{sNo}");
+
+        var padded = StoragePaths.PadWpno(wpNo);
+        if (padded.Length == 0)
         {
-            WriteStepLog(nameof(DeleteSno), $"wpNo:{wpNo}, sNo:{sNo}");
-
-            var padded = StoragePaths.PadWpno(wpNo);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpNo:{wpNo} 有誤!!!";
-                return ca;
-            }
-
-            if (string.IsNullOrWhiteSpace(sNo))
-            {
-                ca.Message = "sNo 為空!!!";
-                return ca;
-            }
-
-            var paddedSno = StoragePaths.PadSno(sNo);
-            var details = db.DWorkProcessDetails.Where(d => d.Wpno == padded && d.Sno == paddedSno).ToList();
-            if (details.Count != 1)
-            {
-                ca.Message = $"文件{padded}:{paddedSno} 不存在或個數不為1 !!!";
-                return ca;
-            }
-
-            db.DWorkProcessDetails.Remove(details.First());
-            db.SaveChanges();
-
-            ca.IsSuccess = true;
+            ca.Message = $"wpNo:{wpNo} 有誤!!!";
             return ca;
         }
-        catch (Exception ex)
+
+        if (string.IsNullOrWhiteSpace(sNo))
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            ca.Message = "sNo 為空!!!";
+            return ca;
         }
+
+        var paddedSno = StoragePaths.PadSno(sNo);
+        var details = db.DWorkProcessDetails.Where(d => d.Wpno == padded && d.Sno == paddedSno).ToList();
+        if (details.Count != 1)
+        {
+            ca.Message = $"文件{padded}:{paddedSno} 不存在或個數不為1 !!!";
+            return ca;
+        }
+
+        db.DWorkProcessDetails.Remove(details.First());
+        db.SaveChanges();
+
+        ca.IsSuccess = true;
         return ca;
     }
 
@@ -748,30 +660,22 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel GetKindList(string typeCode)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(GetKindList), $"typeCode:{typeCode}");
+
+        var list = db.MWorkProcessPhrases
+            .Where(p => p.PhraseType == typeCode && p.AStatus == ActiveStatus.Active)
+            .OrderBy(p => p.PhraseCode)
+            .ToList();
+
+        if (list.Count == 0)
         {
-            WriteStepLog(nameof(GetKindList), $"typeCode:{typeCode}");
-
-            var list = db.MWorkProcessPhrases
-                .Where(p => p.PhraseType == typeCode && p.AStatus == ActiveStatus.Active)
-                .OrderBy(p => p.PhraseCode)
-                .ToList();
-
-            if (list.Count == 0)
-            {
-                ca.Message = "查無工作流程項目類別資料!!!";
-                return ca;
-            }
-
-            ca.IsSuccess = true;
-            ca.Body = list;
+            ca.Message = "查無工作流程項目類別資料!!!";
             return ca;
         }
-        catch (Exception ex)
-        {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
-        }
+
+        ca.IsSuccess = true;
+        ca.Body = list;
         return ca;
     }
 
@@ -784,52 +688,44 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel SaveKindData([FromQuery] MWorkProcessPhrase mPhrase)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(SaveKindData), $"PhraseType:{mPhrase.PhraseType}, PhraseCode:{mPhrase.PhraseCode}");
+
+        mPhrase.PubFlag ??= true;
+
+        var existing = db.MWorkProcessPhrases
+            .FirstOrDefault(p => p.PhraseType == mPhrase.PhraseType && p.PhraseCode == mPhrase.PhraseCode);
+
+        if (existing is not null)
         {
-            WriteStepLog(nameof(SaveKindData), $"PhraseType:{mPhrase.PhraseType}, PhraseCode:{mPhrase.PhraseCode}");
-
-            mPhrase.PubFlag ??= true;
-
-            var existing = db.MWorkProcessPhrases
-                .FirstOrDefault(p => p.PhraseType == mPhrase.PhraseType && p.PhraseCode == mPhrase.PhraseCode);
-
-            if (existing is not null)
-            {
-                existing.PhraseName = mPhrase.PhraseName;
-                existing.PubFlag = mPhrase.PubFlag;
-                existing.Principal = mPhrase.Principal;
-                existing.PotentialCustom = mPhrase.PotentialCustom;
-                db.MWorkProcessPhrases.Update(existing);
-            }
-            else
-            {
-                // Directions 沿用 1.0：存放所屬分類的名稱，方便人工看 DB
-                var type = db.MWorkProcessTypes.FirstOrDefault(t => t.TypeCode == mPhrase.PhraseType);
-
-                db.MWorkProcessPhrases.Add(new MWorkProcessPhrase
-                {
-                    PhraseType = mPhrase.PhraseType,
-                    PhraseCode = mPhrase.PhraseCode,
-                    PhraseName = mPhrase.PhraseName,
-                    PubFlag = mPhrase.PubFlag,
-                    Principal = mPhrase.Principal,
-                    PotentialCustom = mPhrase.PotentialCustom,
-                    Directions = type?.TypeName,
-                    AStatus = ActiveStatus.Active,
-                    Creator = GetAccountByToken(),
-                    CreateTime = DateTime.Now
-                });
-            }
-
-            db.SaveChanges();
-            ca.IsSuccess = true;
-            return ca;
+            existing.PhraseName = mPhrase.PhraseName;
+            existing.PubFlag = mPhrase.PubFlag;
+            existing.Principal = mPhrase.Principal;
+            existing.PotentialCustom = mPhrase.PotentialCustom;
+            db.MWorkProcessPhrases.Update(existing);
         }
-        catch (Exception ex)
+        else
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            // Directions 沿用 1.0：存放所屬分類的名稱，方便人工看 DB
+            var type = db.MWorkProcessTypes.FirstOrDefault(t => t.TypeCode == mPhrase.PhraseType);
+
+            db.MWorkProcessPhrases.Add(new MWorkProcessPhrase
+            {
+                PhraseType = mPhrase.PhraseType,
+                PhraseCode = mPhrase.PhraseCode,
+                PhraseName = mPhrase.PhraseName,
+                PubFlag = mPhrase.PubFlag,
+                Principal = mPhrase.Principal,
+                PotentialCustom = mPhrase.PotentialCustom,
+                Directions = type?.TypeName,
+                AStatus = ActiveStatus.Active,
+                Creator = GetAccountByToken(),
+                CreateTime = DateTime.Now
+            });
         }
+
+        db.SaveChanges();
+        ca.IsSuccess = true;
         return ca;
     }
 
@@ -840,47 +736,39 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel GetWPOrderPhrase(string wpno)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(GetWPOrderPhrase), $"wpno:{wpno}");
+
+        var padded = StoragePaths.PadWpno(wpno);
+        if (padded.Length == 0)
         {
-            WriteStepLog(nameof(GetWPOrderPhrase), $"wpno:{wpno}");
-
-            var padded = StoragePaths.PadWpno(wpno);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpNo:{wpno} 有誤!!!";
-                return ca;
-            }
-
-            var searches = db.DWorkProcessSearches
-                .Where(s => s.AStatus == ActiveStatus.Active && s.Wpno == padded).ToList();
-            var phrases = db.MWorkProcessPhrases
-                .Where(p => p.AStatus == ActiveStatus.Active).ToList();
-
-            var phraseByCode = phrases
-                .GroupBy(p => (p.PhraseCode ?? "").Trim())
-                .ToDictionary(g => g.Key, g => g.First());
-
-            var result = searches
-                .Where(s => phraseByCode.ContainsKey((s.PhraseCode ?? "").Trim()))
-                .Select(s => new DWorkProcessSearchEx(s)
-                {
-                    PhraseName = phraseByCode[(s.PhraseCode ?? "").Trim()].PhraseName
-                })
-                .GroupBy(s => (s.PhraseCode ?? "").Trim())
-                .Select(g => g.First())
-                .ToList();
-
-            // 沒掛關鍵字不是錯誤
-            ca.IsSuccess = true;
-            ca.Body = result;
-            if (result.Count == 0) ca.Message = $"查無關鍵字項目資料:{padded} !!!";
+            ca.Message = $"wpNo:{wpno} 有誤!!!";
             return ca;
         }
-        catch (Exception ex)
-        {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
-        }
+
+        var searches = db.DWorkProcessSearches
+            .Where(s => s.AStatus == ActiveStatus.Active && s.Wpno == padded).ToList();
+        var phrases = db.MWorkProcessPhrases
+            .Where(p => p.AStatus == ActiveStatus.Active).ToList();
+
+        var phraseByCode = phrases
+            .GroupBy(p => (p.PhraseCode ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var result = searches
+            .Where(s => phraseByCode.ContainsKey((s.PhraseCode ?? "").Trim()))
+            .Select(s => new DWorkProcessSearchEx(s)
+            {
+                PhraseName = phraseByCode[(s.PhraseCode ?? "").Trim()].PhraseName
+            })
+            .GroupBy(s => (s.PhraseCode ?? "").Trim())
+            .Select(g => g.First())
+            .ToList();
+
+        // 沒掛關鍵字不是錯誤
+        ca.IsSuccess = true;
+        ca.Body = result;
+        if (result.Count == 0) ca.Message = $"查無關鍵字項目資料:{padded} !!!";
         return ca;
     }
 
@@ -893,69 +781,61 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel SetWPOrderPhrase(string wpno, string? strPhraseTypeList, string? strPhraseCodeList, string? strPhraseNameList)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(SetWPOrderPhrase), $"wpno:{wpno}, types:{strPhraseTypeList}, codes:{strPhraseCodeList}");
+
+        var padded = StoragePaths.PadWpno(wpno);
+        if (padded.Length == 0)
         {
-            WriteStepLog(nameof(SetWPOrderPhrase), $"wpno:{wpno}, types:{strPhraseTypeList}, codes:{strPhraseCodeList}");
-
-            var padded = StoragePaths.PadWpno(wpno);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpNo:{wpno} 有誤!!!";
-                return ca;
-            }
-
-            var types = SplitList(strPhraseTypeList);
-            var codes = SplitList(strPhraseCodeList);
-            if (types.Count != codes.Count)
-            {
-                ca.Message = "strPhraseTypeList 與 strPhraseCodeList 個數不一致，兩者必須同索引對齊!!!";
-                return ca;
-            }
-
-            var account = GetAccountByToken();
-            var existing = db.DWorkProcessSearches
-                .Where(s => s.Wpno == padded && s.AStatus == ActiveStatus.Active).ToList();
-
-            // 不在新清單裡的移除
-            foreach (var row in existing.Where(r => !codes.Contains((r.PhraseCode ?? "").Trim())))
-            {
-                db.DWorkProcessSearches.Remove(row);
-            }
-
-            // 新的加入，既有的沿用
-            for (var i = 0; i < codes.Count; i++)
-            {
-                var match = existing.FirstOrDefault(r => (r.PhraseCode ?? "").Trim() == codes[i]);
-                if (match is null)
-                {
-                    db.DWorkProcessSearches.Add(new DWorkProcessSearch
-                    {
-                        Wpno = padded,
-                        PhraseType = types[i],
-                        PhraseCode = codes[i],
-                        AStatus = ActiveStatus.Active,
-                        Creator = account,
-                        CreateTime = DateTime.Now
-                    });
-                }
-                else
-                {
-                    match.AStatus = ActiveStatus.Active;
-                    match.PhraseType = types[i];
-                    match.Modifier = account;
-                    match.ModiTime = DateTime.Now;
-                }
-            }
-
-            db.SaveChanges();
-            ca.IsSuccess = true;
+            ca.Message = $"wpNo:{wpno} 有誤!!!";
             return ca;
         }
-        catch (Exception ex)
+
+        var types = SplitList(strPhraseTypeList);
+        var codes = SplitList(strPhraseCodeList);
+        if (types.Count != codes.Count)
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            ca.Message = "strPhraseTypeList 與 strPhraseCodeList 個數不一致，兩者必須同索引對齊!!!";
+            return ca;
         }
+
+        var account = GetAccountByToken();
+        var existing = db.DWorkProcessSearches
+            .Where(s => s.Wpno == padded && s.AStatus == ActiveStatus.Active).ToList();
+
+        // 不在新清單裡的移除
+        foreach (var row in existing.Where(r => !codes.Contains((r.PhraseCode ?? "").Trim())))
+        {
+            db.DWorkProcessSearches.Remove(row);
+        }
+
+        // 新的加入，既有的沿用
+        for (var i = 0; i < codes.Count; i++)
+        {
+            var match = existing.FirstOrDefault(r => (r.PhraseCode ?? "").Trim() == codes[i]);
+            if (match is null)
+            {
+                db.DWorkProcessSearches.Add(new DWorkProcessSearch
+                {
+                    Wpno = padded,
+                    PhraseType = types[i],
+                    PhraseCode = codes[i],
+                    AStatus = ActiveStatus.Active,
+                    Creator = account,
+                    CreateTime = DateTime.Now
+                });
+            }
+            else
+            {
+                match.AStatus = ActiveStatus.Active;
+                match.PhraseType = types[i];
+                match.Modifier = account;
+                match.ModiTime = DateTime.Now;
+            }
+        }
+
+        db.SaveChanges();
+        ca.IsSuccess = true;
         return ca;
     }
 
@@ -964,46 +844,38 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel GetWPOrderCustom(string wpno)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(GetWPOrderCustom), $"wpno:{wpno}");
+
+        var padded = StoragePaths.PadWpno(wpno);
+        if (padded.Length == 0)
         {
-            WriteStepLog(nameof(GetWPOrderCustom), $"wpno:{wpno}");
-
-            var padded = StoragePaths.PadWpno(wpno);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpNo:{wpno} 有誤!!!";
-                return ca;
-            }
-
-            var wpCustomers = db.DWorkProcessCustomers
-                .Where(c => c.AStatus == ActiveStatus.Active && c.Wpno == padded).ToList();
-            var crmByNo = db.CrmCustomers
-                .Where(c => c.AStatus == ActiveStatus.Active).ToList()
-                .GroupBy(c => (c.CustomerNo ?? "").Trim())
-                .ToDictionary(g => g.Key, g => g.First());
-
-            var result = wpCustomers.Select(c =>
-            {
-                crmByNo.TryGetValue((c.CustomerNo ?? "").Trim(), out var crm);
-                return new DWorkProcessCustomerEx(c)
-                {
-                    ShortName = crm?.ShortName ?? "",
-                    LongName = crm?.LongName ?? "",
-                    ContactName = crm?.ContactName ?? "",
-                    ContactTEL1 = crm?.ContactTel1 ?? ""
-                };
-            }).ToList();
-
-            ca.IsSuccess = true;
-            ca.Body = result;
-            if (result.Count == 0) ca.Message = $"查無客戶項目資料:{padded} !!!";
+            ca.Message = $"wpNo:{wpno} 有誤!!!";
             return ca;
         }
-        catch (Exception ex)
+
+        var wpCustomers = db.DWorkProcessCustomers
+            .Where(c => c.AStatus == ActiveStatus.Active && c.Wpno == padded).ToList();
+        var crmByNo = db.CrmCustomers
+            .Where(c => c.AStatus == ActiveStatus.Active).ToList()
+            .GroupBy(c => (c.CustomerNo ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var result = wpCustomers.Select(c =>
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
-        }
+            crmByNo.TryGetValue((c.CustomerNo ?? "").Trim(), out var crm);
+            return new DWorkProcessCustomerEx(c)
+            {
+                ShortName = crm?.ShortName ?? "",
+                LongName = crm?.LongName ?? "",
+                ContactName = crm?.ContactName ?? "",
+                ContactTEL1 = crm?.ContactTel1 ?? ""
+            };
+        }).ToList();
+
+        ca.IsSuccess = true;
+        ca.Body = result;
+        if (result.Count == 0) ca.Message = $"查無客戶項目資料:{padded} !!!";
         return ca;
     }
 
@@ -1016,62 +888,54 @@ public partial class WorkProcessApiController : BaseApiController
     public CustomApiViewModel SetWPOrderCustom(string wpno, string? strCustomNoList, string? strCustomNo2List)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
-        try
+
+        WriteStepLog(nameof(SetWPOrderCustom), $"wpno:{wpno}, customNos:{strCustomNoList}");
+
+        var padded = StoragePaths.PadWpno(wpno);
+        if (padded.Length == 0)
         {
-            WriteStepLog(nameof(SetWPOrderCustom), $"wpno:{wpno}, customNos:{strCustomNoList}");
-
-            var padded = StoragePaths.PadWpno(wpno);
-            if (padded.Length == 0)
-            {
-                ca.Message = $"wpNo:{wpno} 有誤!!!";
-                return ca;
-            }
-
-            var customNos = SplitList(strCustomNoList);
-            var account = GetAccountByToken();
-            var existing = db.DWorkProcessCustomers
-                .Where(c => c.Wpno == padded && c.AStatus == ActiveStatus.Active).ToList();
-
-            // 不在新清單裡的失效（客戶關聯是軟刪除，與關鍵字不同）
-            foreach (var row in existing.Where(r => !customNos.Contains((r.CustomerNo ?? "").Trim())))
-            {
-                row.AStatus = ActiveStatus.Inactive;
-                row.Modifier = account;
-                row.ModiTime = DateTime.Now;
-            }
-
-            foreach (var customNo in customNos)
-            {
-                var match = existing.FirstOrDefault(r => (r.CustomerNo ?? "").Trim() == customNo);
-                if (match is null)
-                {
-                    db.DWorkProcessCustomers.Add(new DWorkProcessCustomer
-                    {
-                        Wpno = padded,
-                        CustomerNo = customNo,
-                        CustomerType = CustomerTypeConst.Primary,
-                        AStatus = ActiveStatus.Active,
-                        Creator = account,
-                        CreateTime = DateTime.Now
-                    });
-                }
-                else
-                {
-                    match.AStatus = ActiveStatus.Active;
-                    match.Modifier = account;
-                    match.ModiTime = DateTime.Now;
-                }
-            }
-
-            db.SaveChanges();
-            ca.IsSuccess = true;
+            ca.Message = $"wpNo:{wpno} 有誤!!!";
             return ca;
         }
-        catch (Exception ex)
+
+        var customNos = SplitList(strCustomNoList);
+        var account = GetAccountByToken();
+        var existing = db.DWorkProcessCustomers
+            .Where(c => c.Wpno == padded && c.AStatus == ActiveStatus.Active).ToList();
+
+        // 不在新清單裡的失效（客戶關聯是軟刪除，與關鍵字不同）
+        foreach (var row in existing.Where(r => !customNos.Contains((r.CustomerNo ?? "").Trim())))
         {
-            WriteExceptionLog(ex);
-            ca.Message = ex.InnerException?.Message ?? ex.Message;
+            row.AStatus = ActiveStatus.Inactive;
+            row.Modifier = account;
+            row.ModiTime = DateTime.Now;
         }
+
+        foreach (var customNo in customNos)
+        {
+            var match = existing.FirstOrDefault(r => (r.CustomerNo ?? "").Trim() == customNo);
+            if (match is null)
+            {
+                db.DWorkProcessCustomers.Add(new DWorkProcessCustomer
+                {
+                    Wpno = padded,
+                    CustomerNo = customNo,
+                    CustomerType = CustomerTypeConst.Primary,
+                    AStatus = ActiveStatus.Active,
+                    Creator = account,
+                    CreateTime = DateTime.Now
+                });
+            }
+            else
+            {
+                match.AStatus = ActiveStatus.Active;
+                match.Modifier = account;
+                match.ModiTime = DateTime.Now;
+            }
+        }
+
+        db.SaveChanges();
+        ca.IsSuccess = true;
         return ca;
     }
 

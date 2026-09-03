@@ -82,4 +82,11 @@ public class StoragePaths
     /// </summary>
     public static string DownloadUrl(string account, string wpNo, string editPath, string uploadFile)
         => $"/ShareRoot/Temp/{account}/Doc_SOP/{DcuLayer(wpNo)}/{editPath}/{uploadFile}";
+
+    /// <summary>
+    /// Excel 匯出的暫存目錄（相對於 ShareRoot 的絕對路徑）。
+    /// 各模組共用這個慣例，回給前端的 <c>Body</c> 是相對 ShareRoot 的路徑
+    /// （<c>Temp/{account}/Export/...</c>），前端補 <c>/ShareRoot/</c> 前綴下載。
+    /// </summary>
+    public string ExportDir(string account) => $"{ShareRoot}/Temp/{account}/Export";
 }
