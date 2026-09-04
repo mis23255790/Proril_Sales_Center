@@ -1,0 +1,42 @@
+CREATE TABLE [dbo].[COP_PoCheck] (
+    [ID]               INT             IDENTITY (1, 1) NOT NULL,
+    [OrderChkNo]       VARCHAR (20)    NULL,
+    [ChkTime]          DATETIME        NULL,
+    [COP_Source]       NVARCHAR (20)   NULL,
+    [PoNo]             NVARCHAR (20)   NULL,
+    [SumAmt]           NUMERIC (16, 3) NULL,
+    [SumQty]           NUMERIC (16, 3) NULL,
+    [CustAmt]          NUMERIC (16, 3) NULL,
+    [AvailableAmt]     NUMERIC (16, 3) NULL,
+    [DepChk]           NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_DepChk] DEFAULT ('Y') NULL,
+    [DepBlankChk]      NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_DepChk1] DEFAULT ('Y') NULL,
+    [PackListBlankChk] NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_CustPOChk1] DEFAULT ('Y') NULL,
+    [PriceBlankChk]    NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_PreDateChk1] DEFAULT ('Y') NULL,
+    [PreDateChk]       NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_PreDateChk] DEFAULT ('Y') NULL,
+    [CustSumAmtChk]    NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_CustSumAmtChk] DEFAULT ('Y') NULL,
+    [CustAmtZeroChk]   NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_CustSumAmtChk1] DEFAULT ('Y') NULL,
+    [CustPOChk]        NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_CustPOChk] DEFAULT ('Y') NULL,
+    [TransChk]         NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_TransChk] DEFAULT ('Y') NULL,
+    [TradeChk]         NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_TradeChk] DEFAULT ('Y') NULL,
+    [OutPortChk]       NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_OutPortChk] DEFAULT ('Y') NULL,
+    [InPortChk]        NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_InPortChk] DEFAULT ('Y') NULL,
+    [UpFileChk]        NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_UpFileChk] DEFAULT ('Y') NULL,
+    [DetailChk]        NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_DetailChk] DEFAULT ('Y') NULL,
+    [RateChk]          NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_DetailChk1] DEFAULT ('Y') NULL,
+    [PaidChk]          NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_RateChk1] DEFAULT ('Y') NULL,
+    [AvailableChk]     NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_CreditChk] DEFAULT ('Y') NULL,
+    [Credit30WChk]     NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_Credit30WChk] DEFAULT ('Y') NULL,
+    [ProcessCodeChk]   NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_Credit30WChk1] DEFAULT ('Y') NULL,
+    [FinChk]           NVARCHAR (20)   CONSTRAINT [DF_COP_PoCheck_FinChk] DEFAULT ('Y') NULL,
+    [Memo]             NVARCHAR (500)  NULL,
+    [aStatus]          VARCHAR (1)     NULL,
+    [Creator]          NVARCHAR (40)   NULL,
+    [CreateTime]       DATETIME        NULL,
+    [Modifier]         NVARCHAR (40)   NULL,
+    [ModiTime]         DATETIME        NULL,
+    CONSTRAINT [PK_COP_PoCheck] PRIMARY KEY CLUSTERED ([ID] ASC)
+);
+
+
+GO
+

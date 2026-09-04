@@ -10,7 +10,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('test', 'prod')][string]$Environment = 'prod'
+    [ValidateSet('test', 'prod', 'snapshot', 'snapshot-prod')][string]$Environment = 'prod'
 )
 
 . "$PSScriptRoot\_common.ps1"

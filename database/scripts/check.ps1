@@ -33,7 +33,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('test', 'prod')][string]$Environment = 'test',
+    [ValidateSet('test', 'prod', 'snapshot', 'snapshot-prod')][string]$Environment = 'test',
     [int]$Sample = 5,
     [string]$Check = '',
     [switch]$UpdateBaseline,

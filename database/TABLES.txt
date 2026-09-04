@@ -13,3 +13,14 @@ CRM_Customer
 
 # 訂單資料檢核 (OrderInfoVerify)。來源：docs/modules/OrderInfoVerify/logic.md
 COP_CheckRule
+COP_DepData
+COP_PassCheck
+COP_PoCheck
+COP_PoDetailCheck
+
+# 跨模組共用的帳號/權限/附件 log。
+# 注意：M_User / M_Permission 只管結構（schema），不代表 2.0 可以對它們加寫入邏輯——
+# CLAUDE.md 明訂這兩張表的寫入仍留在 1.0，2.0 只讀。詳見 CLAUDE.md「不要動資料庫」那段。
+H_FileLink
+M_Permission
+M_User

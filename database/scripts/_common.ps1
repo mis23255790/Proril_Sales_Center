@@ -33,12 +33,21 @@ function Import-DotEnv {
 }
 
 function Get-ConnectionString {
-    # $Environment: 'test' | 'prod'
-    param([Parameter(Mandatory = $true)][ValidateSet('test', 'prod')][string]$Environment)
+    # $Environment: 'test' | 'prod' | 'snapshot' | 'snapshot-prod'
+    # snapshot      = 獨立資料庫 Proril_Sales_Center 在測試區 instance 上的那一份（已存在）。
+    # snapshot-prod = 同一個獨立資料庫，未來在正式區 instance 上的那一份（CLAUDE.md 說的
+    #                 「正式上線後也會從 51002 搬一份」——目前還沒建，PRORIL_DB_SNAPSHOT_PROD
+    #                 要等資料庫建好、真的可以連了才填進 .env，之前呼叫這個環境會直接報錯。
+    param([Parameter(Mandatory = $true)][ValidateSet('test', 'prod', 'snapshot', 'snapshot-prod')][string]$Environment)
     try {
         Import-DotEnv
 
-        $varName = if ($Environment -eq 'prod') { 'PRORIL_DB_PROD' } else { 'PRORIL_DB_TEST' }
+        $varName = switch ($Environment) {
+            'prod' { 'PRORIL_DB_PROD' }
+            'snapshot' { 'PRORIL_DB_SNAPSHOT' }
+            'snapshot-prod' { 'PRORIL_DB_SNAPSHOT_PROD' }
+            default { 'PRORIL_DB_TEST' }
+        }
         $cs = [Environment]::GetEnvironmentVariable($varName)
 
         if ([string]::IsNullOrWhiteSpace($cs)) {

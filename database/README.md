@@ -16,13 +16,16 @@
 | 建基線/校準 | DB → git | `extract.ps1` | 全自動，整批 |
 | 看兩環境差多少 | DB → 畫面 | `drift.ps1` | 全自動，唯讀 |
 | 欄位加完後同步 EF Model | git（schema）→ C# | `sync-model.ps1` | 手動把提示的差異貼進 `Entities.cs` |
+| 快照庫建好後灌資料 | PRORIL_WEB → Proril_Sales_Center | `copy-snapshot-data.ps1` | 半自動，dry-run 預覽 + `-Execute` 確認 |
 
 ## 這個目錄管什麼、不管什麼
 
-**管**：`TABLES.txt` 白名單裡的 8 張表的**結構**（欄位、型別、索引、條件約束）。
+**管**：`TABLES.txt` 白名單裡的表的**結構**（欄位、型別、索引、條件約束）——目前是業務議題
+8 張 + 訂單資料檢核 5 張 + 跨模組共用的帳號/權限/附件 log 3 張，共 16 張。
 
 **不管**：
-- 資料列。所有 extract / publish 都帶 `ExtractAllTableData=false`，不會碰到任何一筆資料。
+- 資料列。所有 extract / publish 都帶 `ExtractAllTableData=false`，不會碰到任何一筆資料
+  （資料列的搬移是 `copy-snapshot-data.ps1` 的事，見下面「快照庫資料複製」）。
 - View、Stored Procedure。專案規範明訂不動這些。
 - 白名單以外的表。`PRORIL_WEB` 有 400+ 張表（含鼎新 ERP 的），這裡只收業務議題用到的。
 
@@ -76,6 +79,14 @@ Copy-Item .env.example .env
 
 列出測試區有、正式區沒有的欄位 —— 也就是目前累積的未上線變更。
 `-Detailed` 會多印完整型別定義。
+
+`-From` / `-To` 可以換成任兩個環境（`test` / `prod` / `snapshot`），不是只能比測試區跟正式區。
+`snapshot` 是獨立資料庫 `Proril_Sales_Center`（CLAUDE.md 說的那個「快照，還沒真的切連線」的庫），
+用來查它跟 `PRORIL_WEB` 是不是真的長一樣、有沒有漏複製欄位/整張表：
+
+```powershell
+.\scripts\drift.ps1 -From snapshot -To prod
+```
 
 ### 2. 初始化：從正式區建立基線
 
@@ -139,6 +150,32 @@ DACPAC 只做「擷取 + 差異部署」，可以精準只納管白名單那幾�
 
 只列出「資料庫多了/少了哪些欄位」，不動任何檔案，新增屬性跟 fluent 對映仍要
 自己手動加進 `api/Data/`。細節、跟 scaffold 相比的取捨看 script 開頭的註解。
+
+## 快照庫（Proril_Sales_Center）資料複製
+
+CLAUDE.md 說的「18 張表一次性複製」是指把 `PRORIL_WEB` 白名單表的**資料列**搬到
+同一個 instance 上的獨立資料庫 `Proril_Sales_Center`。這跟上面整套 DACPAC 機制
+是兩件事——DACPAC 只管結構，這裡才是真的搬資料：
+
+```powershell
+.\scripts\copy-snapshot-data.ps1 -Environment test           # dry-run，列出來源/目標列數對照
+.\scripts\copy-snapshot-data.ps1 -Environment test -Execute  # 確認後真的複製（整批覆蓋，不是增量）
+```
+
+前置條件（缺一步就會被腳本擋下來，不會半吊子跑一半）：
+
+1. **目標資料庫要先存在**。這支腳本、以及本專案任何工具都**不會、也不能建資料庫本身**——
+   建空庫需要比部署帳號更高的權限（`CREATE DATABASE`），本專案的 `PRORIL_DB_PROD`/`PRORIL_DB_TEST`
+   帳號刻意不給，要建的話找 DBA 或有權限的帳號手動建一個空的 `Proril_Sales_Center`。
+2. **目標資料庫要先有白名單表的結構**：`.\publish.ps1 -Environment snapshot -Execute`
+   （正式區則是 `-Environment snapshot-prod`，要先在 `.env` 填 `PRORIL_DB_SNAPSHOT_PROD`）。
+3. `.env` 要有對應的連線字串：測試區已經有 `PRORIL_DB_SNAPSHOT`；正式區的
+   `PRORIL_DB_SNAPSHOT_PROD` 要等 51002 上的 `Proril_Sales_Center` 真的建好才填，
+   `.env.example` 裡先留著註解示範格式。
+
+`-Environment test` / `prod` 選的是**來源** `PRORIL_WEB` 在哪個 instance，目標會自動對到
+同一個 instance 上的快照庫（`test` → `snapshot`，`prod` → `snapshot-prod`），因為腳本假設
+來源跟目標永遠在同一台 SQL Server 上，用三段式命名跨資料庫查詢，不用設 linked server。
 
 ## 相關文件
 

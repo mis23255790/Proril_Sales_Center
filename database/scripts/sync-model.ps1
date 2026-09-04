@@ -37,7 +37,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Table,
-    [ValidateSet('test', 'prod')][string]$Environment = 'test',
+    [ValidateSet('test', 'prod', 'snapshot', 'snapshot-prod')][string]$Environment = 'test',
     [string]$ClassName
 )
 
