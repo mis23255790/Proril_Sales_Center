@@ -27,8 +27,12 @@ try {
     $tmpDir     = Join-Path $dbRoot '.tmp\extract'
     $tablesDir  = Join-Path $dbRoot 'Tables'
 
+    # SqlPackage 在 ExtractTarget=ObjectType 模式下，TargetFile 是輸出資料夾，
+    # 但它要求這個資料夾在執行前**不能已經存在**（它自己建），所以這裡只清掉舊的，
+    # 不能像 dacpac 模式那樣預先 New-Item 建好——建了就會直接報錯。
     if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
-    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+    $tmpParent = Split-Path -Parent $tmpDir
+    if (-not (Test-Path $tmpParent)) { New-Item -ItemType Directory -Path $tmpParent -Force | Out-Null }
     if (-not (Test-Path $tablesDir)) { New-Item -ItemType Directory -Path $tablesDir -Force | Out-Null }
 
     Write-Host "從 [$Environment] 擷取 schema..." -ForegroundColor Cyan

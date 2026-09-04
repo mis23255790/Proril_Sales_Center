@@ -118,6 +118,19 @@ git switch -c feature/issue-xxx
 EF Migrations 會想要管理整個 model，對不歸自己的表很難處理。
 DACPAC 只做「擷取 + 差異部署」，可以精準只納管白名單那幾張表。
 
+## 欄位改完之後：同步回 EF Model
+
+`Tables/*.sql` 只管資料庫結構，`api/Data/Entities.cs` + `SalesIssueDbContext.cs`
+的 EF Model 是**手寫維護**的（不是 `dotnet ef dbcontext scaffold` 的產物，
+不要拿 scaffold 整份覆蓋，會把手動修正的型別/註解/白名單一起洗掉）。
+
+```powershell
+.\scripts\sync-model.ps1 -Table D_WorkProcess
+```
+
+只列出「資料庫多了/少了哪些欄位」，不動任何檔案，新增屬性跟 fluent 對映仍要
+自己手動加進 `api/Data/`。細節、跟 scaffold 相比的取捨看 script 開頭的註解。
+
 ## 相關文件
 
 - `../docs/modules/SalesIssue/logic.md` — 業務議題的資料表關聯與欄位語意
