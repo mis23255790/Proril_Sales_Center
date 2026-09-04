@@ -27,6 +27,34 @@
 > **main branch 的 `database/Tables/*.sql` == 正式區 schema**，未上線欄位放 feature branch。
 > 詳見 `database/README.md`。
 
+> **獨立資料庫 `Proril_Sales_Center` 只是快照，連線還沒真的切過去**：
+> `database/PortingNotes.md` 記錄了把 18 張表（業務議題白名單 8 張 + `M_User` /
+> `M_Permission` / `H_FileLink` / `COP_CheckRule` / `COP_DepData` 5 張 + 訂單資料檢核
+> SP 寫入目標 5 張）從 `PRORIL_WEB` **一次性複製**到獨立資料庫 `Proril_Sales_Center`。
+> `api/appsettings*.json` 目前仍然連 `PRORIL_WEB`，之後兩邊資料不會自動同步。
+>
+> **下列表在 1.0 有業務議題／訂單資料檢核以外的其他功能在寫，不能只切連線就當作遷移完成**
+> （已用 grep 逐一核對 1.0 全部 Controller，非只查已知模組）：
+> - `M_User`（帳號主檔）—— `Controllers/MainApiController.cs`（登入失敗鎖定、建帳號、
+>   改密碼、刪帳號）在寫。
+> - `M_Permission`（權限主檔）—— `Controllers/System/MainApiController_SystemSetting.cs`
+>   （後台系統設定／權限維護）在寫。
+>
+> 這兩張表要嘛連同上述兩支 1.0 controller 一起搬過來寫新 DB，要嘛 2.0 對它們維持唯讀、
+> 寫入仍留在 1.0 打 `PRORIL_WEB`——否則登入鎖定/新建帳號/權限異動不會反映到
+> `Proril_Sales_Center`，會造成兩邊帳號權限狀態分岔。**新增功能一律不要對這兩張表加寫入邏輯。**
+>
+> 已核對「單一擁有者、之後可以放心切」的表：業務議題 7 張（不含 `CRM_Customer`，
+> 只有 `WorkProcessApiController.cs`）、`CRM_Customer`（只有
+> `CustomQueryApiController.SaveCustom`）、`H_FileLink`（只有 `UploadApiController`
+> 內的 `AddSqlLog`）。`COP_PoCheck`/`COP_PoDetailCheck`/`COP_PassCheck`/
+> `COP_AvailableAmt`/`COP_ProductCheck` 應用層完全沒有直寫，只有預存程序
+> （`prc_COPOrderChk`/`prc_COPPassCheck`/`prc_ProductChk`）在寫，但呼叫入口分散在
+> `ErpImportApiController.cs`／`BomQueryApiController.cs`／`OrderInfoVerifyApiController.cs`
+> 三支 controller，之後切連線要三支都一併確認能連到新 DB 執行對應 SP。
+> `COP_CheckRule`/`COP_DepData` 應用層目前完全查不到任何寫入路徑（含維護畫面），
+> 可能是直接維護在 DB，遷移時沒有既有 CRUD 邏輯可搬。
+
 ## 2. 技術棧 (Tech Stack)
 - 核心框架：Nuxt 4 (Stable)
 - 包管理器：npm
