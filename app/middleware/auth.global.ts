@@ -7,7 +7,7 @@
  * NUXT_PUBLIC_DEV_TOKEN 有值時視同已登入（見 useApi.ts 的 getAuthToken），
  * 本機開發/測試設好這個環境變數就能整個跳過 SSO 流程直接進主畫面。
  */
-const PUBLIC_PATHS = ['/login', '/callback']
+const PUBLIC_PATHS = ['/login']
 
 export default defineNuxtRouteMiddleware((to) => {
   if (import.meta.server) return
