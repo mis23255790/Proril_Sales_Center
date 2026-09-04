@@ -1,7 +1,7 @@
-# 業務議題 (SalesIssue / 舊 WorkProcess) 納管的資料表白名單
+# 業務中心 2.0 各模組納管的資料表白名單
 # 一行一張表，dbo schema。scripts/*.ps1 都讀這一份，改這裡就好。
-# 來源：docs/modules/SalesIssue/logic.md 的「相關資料表」
 
+# 業務議題 (SalesIssue / 舊 WorkProcess)。來源：docs/modules/SalesIssue/logic.md 的「相關資料表」
 D_WorkProcess
 D_WorkProcessDetail
 D_WorkProcessSearch
@@ -10,3 +10,6 @@ D_WorkProcessPermission
 M_WorkProcessPhrase
 M_WorkProcessType
 CRM_Customer
+
+# 訂單資料檢核 (OrderInfoVerify)。來源：docs/modules/OrderInfoVerify/logic.md
+COP_CheckRule

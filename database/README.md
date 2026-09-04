@@ -8,6 +8,15 @@
 > 以及「議題在 DB 裡好好的但列表看不到它」這類問題。
 > 見 [checks/README.md](./checks/README.md)。
 
+## 情境速查表
+
+| 情境 | 方向 | 工具 | 手動程度 |
+|---|---|---|---|
+| 日常加欄位 | git → DB | `publish.ps1` | 手改一個 .sql 檔案裡的欄位定義 |
+| 建基線/校準 | DB → git | `extract.ps1` | 全自動，整批 |
+| 看兩環境差多少 | DB → 畫面 | `drift.ps1` | 全自動，唯讀 |
+| 欄位加完後同步 EF Model | git（schema）→ C# | `sync-model.ps1` | 手動把提示的差異貼進 `Entities.cs` |
+
 ## 這個目錄管什麼、不管什麼
 
 **管**：`TABLES.txt` 白名單裡的 8 張表的**結構**（欄位、型別、索引、條件約束）。
