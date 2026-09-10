@@ -113,13 +113,26 @@ onMounted(async () => {
 
 // ------------------------------------------------------------------ 衍生
 
+/**
+ * USelectMenu（Reka UI Combobox）保留空字串代表「清空選取、顯示 placeholder」，
+ * item 的 value 不能是空字串，否則 mount 就丟例外、整個下拉選單渲染失敗（畫面上看起來像
+ * 選項是空的）。「未指定客戶」用這個哨兵值，實際存到 form.customerNo 的還是空字串，
+ * 透過下面的 customerSelectValue 轉換，不影響其他讀寫 form.customerNo 的邏輯。
+ */
+const NO_CUSTOMER = '__no_customer__'
+
 const customerOptions = computed(() => [
-  { label: '（未指定客戶）', value: '' },
+  { label: '（未指定客戶）', value: NO_CUSTOMER },
   ...customers.value.map(c => ({
     label: `${c.shortName || c.customerNo}${c.longName ? ` · ${c.longName}` : ''}`,
     value: String(c.customerNo ?? '').trim()
   }))
 ])
+
+const customerSelectValue = computed({
+  get: () => form.customerNo || NO_CUSTOMER,
+  set: (v: string) => { form.customerNo = v === NO_CUSTOMER ? '' : v }
+})
 
 const categoryOptions = computed(() =>
   categories.value.map(c => ({ label: c.phraseName, value: c.phraseCode }))
@@ -331,7 +344,7 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
 
             <UFormField label="客戶別">
               <USelectMenu
-                v-model="form.customerNo"
+                v-model="customerSelectValue"
                 :items="customerOptions"
                 value-key="value"
                 label-key="label"

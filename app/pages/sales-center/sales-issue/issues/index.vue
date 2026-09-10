@@ -72,10 +72,22 @@ onMounted(() => {
   loadCategories()
 })
 
+/**
+ * USelectMenu（Reka UI Combobox）不允許 item 的 value 是空字串（保留給「清空選取」），
+ * 用這個哨兵值代表「全部類別」，實際存到 filters.category 的還是空字串，
+ * 透過下面的 categorySelectValue 轉換。
+ */
+const ALL_CATEGORY = '__all_category__'
+
 const categoryOptions = computed(() => [
-  { label: '全部類別', value: '' },
+  { label: '全部類別', value: ALL_CATEGORY },
   ...categories.value.map(c => ({ label: c.phraseName, value: c.phraseName }))
 ])
+
+const categorySelectValue = computed({
+  get: () => filters.category || ALL_CATEGORY,
+  set: (v: string) => { filters.category = v === ALL_CATEGORY ? '' : v }
+})
 
 const resetFilters = () => {
   filters.category = ''
@@ -222,7 +234,7 @@ const removeIssue = async (row: SalesIssueRow) => {
       <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UFormField label="類別" size="sm">
           <USelectMenu
-            v-model="filters.category"
+            v-model="categorySelectValue"
             :items="categoryOptions"
             value-key="value"
             label-key="label"

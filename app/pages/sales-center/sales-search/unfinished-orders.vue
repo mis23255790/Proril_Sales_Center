@@ -53,13 +53,25 @@ const soDetailRows = computed(() => toUnfinishSoDetailRows(soRows.value))
 const soGroupRows = computed(() => toUnfinishSoGroupRows(soRows.value))
 const totalAmount = computed(() => sumUnfinishTotalAmount(productRows.value))
 
+/**
+ * USelectMenu（Reka UI Combobox）不允許 item 的 value 是空字串（保留給「清空選取」），
+ * 用這個哨兵值代表「全部客戶」，實際存到 filters.customerNo 的還是空字串，
+ * 透過下面的 customerNoSelectValue 轉換。
+ */
+const ALL_CUSTOMER = '__all_customer__'
+
 const customerOptions = computed(() => [
-  { label: '全部客戶', value: '' },
+  { label: '全部客戶', value: ALL_CUSTOMER },
   ...customers.value.map(c => ({
     label: `${c.customerNo}-${c.longName ?? ''}(${c.shortName ?? ''})`,
     value: c.customerNo
   }))
 ])
+
+const customerNoSelectValue = computed({
+  get: () => filters.customerNo || ALL_CUSTOMER,
+  set: (v: string) => { filters.customerNo = v === ALL_CUSTOMER ? '' : v }
+})
 
 const loadCustomers = async () => {
   try {
@@ -417,7 +429,7 @@ const openSoDetail = async (row: UnfinOrderRow) => {
       <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UFormField label="客戶別" size="sm">
           <USelectMenu
-            v-model="filters.customerNo"
+            v-model="customerNoSelectValue"
             :items="customerOptions"
             value-key="value"
             label-key="label"

@@ -21,8 +21,16 @@ const filters = reactive({
   erpCustomerNo: ''
 })
 
+/**
+ * USelectMenu（Reka UI Combobox）不允許 item 的 value 是空字串（保留給「清空選取」），
+ * 用這兩個哨兵值代表「全部」，實際存到 filters.* 的還是空字串，
+ * 透過下面的 customerNoSelectValue / erpCustomerNoSelectValue 轉換。
+ */
+const ALL_CUSTOMER = '__all_customer__'
+const ALL_ERP_CUSTOMER = '__all_erp_customer__'
+
 const customerOptions = computed(() => [
-  { label: '-- 選擇內網客戶 --', value: '' },
+  { label: '-- 選擇內網客戶 --', value: ALL_CUSTOMER },
   ...customers.value.map(c => ({
     label: `${c.customerNo}-${c.shortName ?? ''}`,
     value: c.customerNo ?? ''
@@ -30,12 +38,22 @@ const customerOptions = computed(() => [
 ])
 
 const erpCustomerOptions = computed(() => [
-  { label: '-- 選擇ERP客戶 --', value: '' },
+  { label: '-- 選擇ERP客戶 --', value: ALL_ERP_CUSTOMER },
   ...erpCustomers.value.map(e => ({
     label: `${(e.ma001 ?? '').trim()}-${(e.ma002 ?? '').trim()}`,
     value: (e.ma001 ?? '').trim()
   }))
 ])
+
+const customerNoSelectValue = computed({
+  get: () => filters.customerNo || ALL_CUSTOMER,
+  set: (v: string) => { filters.customerNo = v === ALL_CUSTOMER ? '' : v }
+})
+
+const erpCustomerNoSelectValue = computed({
+  get: () => filters.erpCustomerNo || ALL_ERP_CUSTOMER,
+  set: (v: string) => { filters.erpCustomerNo = v === ALL_ERP_CUSTOMER ? '' : v }
+})
 
 const salesOptions = computed(() => userList.value.map(u => ({ label: u.userName, value: u.account })))
 
@@ -274,7 +292,7 @@ const onSave = async () => {
       <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UFormField label="內網客戶代碼" size="sm">
           <USelectMenu
-            v-model="filters.customerNo"
+            v-model="customerNoSelectValue"
             :items="customerOptions"
             value-key="value"
             label-key="label"
@@ -286,7 +304,7 @@ const onSave = async () => {
 
         <UFormField label="ERP客戶代碼" size="sm">
           <USelectMenu
-            v-model="filters.erpCustomerNo"
+            v-model="erpCustomerNoSelectValue"
             :items="erpCustomerOptions"
             value-key="value"
             label-key="label"
