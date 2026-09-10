@@ -54,10 +54,35 @@ CREATE VIEW 開頭寫的是舊名字 `V_Produce_English_All`（`sp_rename` 只�
 不會更新已儲存的定義文字，SQL Server 已知行為），腳本裡已經手動修正成正確名稱，
 不是謄寫錯誤，這點不要在之後「校對」時誤改回去。
 
-腳本執行完之後，`SalesIssueDbContext` 用到的全部物件（業務議題 13 張表 + 訂單資料檢核
-7 View/5 SP/1 函式/5 表）在 `Proril_Sales_Center` 就會齊全，`api/` 要不要把
-`ConnectionStrings:ProrilWeb` 真的切過去（或拆成雙 DbContext）是下一步的決定，
-這次只確保「換過去時東西都在」。
+腳本執行完之後，`ProrilWebDbContext` 用到的全部物件（業務議題 13 張表 + 訂單資料檢核
+7 View/5 SP/1 函式/5 表）在 `Proril_Sales_Center` 就會齊全。`api/` 現在已經拆成
+`ProrilWebDbContext`（連 `ConnectionStrings:ProrilWeb`）與 `SalesCenterDbContext`
+（連 `ConnectionStrings:SalesCenter`，見 `Program.cs`）兩個 DbContext；哪個表真的確定
+可以安全切連線，才把對應 Entity 從前者搬過去，不要整批搬（見下面「已切連線」段落）。
+
+## 已切連線：業務議題本體 + CRM_Customer + H_FileLink（2026-09-10）
+
+`WorkProcessApiController`（含 `.Attach.cs`/`.Permission.cs`）、
+`CustomQueryApiController.SaveCustom`、`UploadApiController.AddFileLog` 已改注入
+`SalesCenterDbContext`，實際讀寫 `Proril_Sales_Center`（不再只是快照）：
+
+- `D_WorkProcess`/`D_WorkProcessDetail`/`D_WorkProcessSearch`/`D_WorkProcessCustomer`/
+  `D_WorkProcessPermission`/`M_WorkProcessPhrase`/`M_WorkProcessType`（業務議題 7 張，
+  唯一寫入者是 `WorkProcessApiController`）
+- `CRM_Customer`（唯一寫入者是 `CustomQueryApiController.SaveCustom`；
+  `WorkProcessApiController` 也會讀它組客戶顯示欄位，同樣改讀 `_scDb`）
+- `H_FileLink`（唯一寫入者是 `UploadApiController.AddFileLog`）
+
+對應的實體改用 `api/Data/SalesCenter/`（`dotnet ef dbcontext scaffold` 產生，
+不要手改欄位對映，要改就跑 `database/scripts/scaffold-sales-center.ps1` 重新產生）；
+`api/Data/Entities.cs`、`ProrilWebDbContext` 裡這幾張表原本手寫的對映已一併移除，
+避免兩套 DbContext 同時對映同一張表、之後有人手滑寫錯庫。`ApiModels.cs` 裡
+`DWorkProcessesEx`/`DWorkProcessDetailViewModel`/`DWorkProcessSearchEx`/
+`DWorkProcessCustomerEx`/`CrmCustomerViewModel` 的基底型別也跟著換成
+`Data.SalesCenter` 命名空間的實體。
+
+`M_User`/`M_Permission`（1.0 還在寫，維持唯讀）、`V_ERPCustomer`（ERP 唯讀 view）、
+`COP_*`（無應用層 CRUD 可搬）維持不動，繼續留在 `ProrilWebDbContext` 打 `PRORIL_WEB`。
 
 ## 為什麼有 7 個欄位型別跟來源不一樣
 
@@ -103,10 +128,14 @@ CREATE VIEW 開頭寫的是舊名字 `V_Produce_English_All`（`sp_rename` 只�
   **記得把上面這 7 個欄位重新改回 `nvarchar`**——直接照抄 `PRORIL_WEB` 的 `varchar` 定義
   會重新踩到同一個 collation 問題。
 - `database/` 目前的 DACPAC 版控（`Tables/*.sql`、`scripts/*.ps1`、`TABLES.txt`）納管的
-  仍然只是 `PRORIL_WEB` 的業務議題 8 張表（見 `README.md`「本 repo 沒有自己的資料庫」），
-  這次額外複製的 `M_User`/`M_Permission`/`H_FileLink`/`COP_CheckRule`/`COP_DepData`
-  **不在** `TABLES.txt` 白名單、也不受 DACPAC drift 檢查涵蓋。跟 `Proril_Sales_Center`
-  要不要／怎麼整合進這套 schema 版控機制，還沒有規劃，需要另外決定。
+  是業務議題 8 張 + 訂單資料檢核 5 張 + `H_FileLink`，共 14 張（見 `README.md`）。
+  `M_User`/`M_Permission` **刻意排除在外**：這兩張表的帳號鎖定/建帳號/改密碼/權限維護
+  仍是 1.0 Controller 在寫（見 `CLAUDE.md`「不要動資料庫」那段），2.0 不接手也不切連線，
+  整張表（結構 + 資料）留在 `PRORIL_WEB` 由 1.0 完全控管，不受這裡的 DACPAC drift
+  檢查、也不會被 `copy-snapshot-data.ps1` 再複製進 `Proril_Sales_Center`。
+  這一輪之前已經複製進 `Proril_Sales_Center` 的 `M_User`/`M_Permission`
+  結構與資料**尚未從那個快照庫實際刪除**——這屬於動到既有資料庫的操作，
+  不是改 repo 設定檔能完成的，需要另外找有權限的人手動處理。
 - 訂單資料檢核相關的 7 View/5 SP/1 函式/5 表不在這一段（13 張表）的複製範圍內，
   腳本另外放在 `database/OrderCheckObjectsMigration.sql`，見上面「訂單資料檢核相關的
   View / 預存程序 / 函式」小節。

@@ -7,7 +7,10 @@
 
   "ConnectionStrings": {
     "//": "PRORIL_WEB。測試區與正式區的資料庫同名，靠 port 區分（測試 ,50002 / 正式 ,51002）。",
-    "ProrilWeb": "Server=<host>,50002;Database=PRORIL_WEB;User Id=<user>;Password=<password>;TrustServerCertificate=True;"
+    "ProrilWeb": "Server=<host>,50002;Database=PRORIL_WEB;User Id=<user>;Password=<password>;TrustServerCertificate=True;",
+
+    "//SalesCenter": "獨立資料庫 Proril_Sales_Center（目前只是快照，見 CLAUDE.md）。SalesCenterDbContext 現階段還沒有任何 Entity 對映，這裡先能連上即可。",
+    "SalesCenter": "Server=<host>,50002;Database=Proril_Sales_Center;User Id=<user>;Password=<password>;TrustServerCertificate=True;"
   },
 
   "JwtSettings": {

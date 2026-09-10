@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Proril.SalesIssue.Api.Data;
+using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
 
@@ -10,6 +10,8 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 /// 檔案上傳。只搬業務議題會用到的 SaveByFileName（單檔存到指定路徑）。
 ///
 /// 1.0 還有 SaveZipFile / SaveByPath 等，那些是別的模組在用，等搬到那些模組再補。
+/// H_FileLink 打 <see cref="_scDb"/>（Proril_Sales_Center，已確認單一擁有者，
+/// 只有這支的 AddFileLog 在寫）。
 /// </summary>
 [Authorize]
 public class UploadApiController : BaseApiController
@@ -17,14 +19,17 @@ public class UploadApiController : BaseApiController
     private const int MaxMb = 10;
     private const long MaxUploadSize = MaxMb * 1024L * 1024L;
 
+    private readonly SalesCenterDbContext _scDb;
     private readonly StoragePaths _paths;
 
     public UploadApiController(
-        SalesIssueDbContext db,
+        Proril.SalesIssue.Api.Data.ProrilWebDbContext db,
+        SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
         ILogger<UploadApiController> logger) : base(db, jwtHelper, logger)
     {
+        _scDb = scDb;
         _paths = paths;
     }
 
@@ -119,7 +124,7 @@ public class UploadApiController : BaseApiController
         try
         {
             var ext = Path.GetExtension(destSaveFile);
-            db.HFileLinks.Add(new HFileLink
+            _scDb.HFileLinks.Add(new HFileLink
             {
                 FilePath = destSaveFile[..^ext.Length],
                 FileType = ext,
@@ -128,7 +133,7 @@ public class UploadApiController : BaseApiController
                 UpdateTime = DateTime.Now,
                 UpdateUser = GetAccountByToken()
             });
-            db.SaveChanges();
+            _scDb.SaveChanges();
             return "";
         }
         catch (Exception ex)

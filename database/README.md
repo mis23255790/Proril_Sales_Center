@@ -21,7 +21,8 @@
 ## 這個目錄管什麼、不管什麼
 
 **管**：`TABLES.txt` 白名單裡的表的**結構**（欄位、型別、索引、條件約束）——目前是業務議題
-8 張 + 訂單資料檢核 5 張 + 跨模組共用的帳號/權限/附件 log 3 張，共 16 張。
+8 張 + 訂單資料檢核 5 張 + 跨模組共用的附件 log 1 張，共 14 張。
+`M_User`/`M_Permission` 刻意不在白名單內，見 `TABLES.txt` 的註解與 `CLAUDE.md`。
 
 **不管**：
 - 資料列。所有 extract / publish 都帶 `ExtractAllTableData=false`，不會碰到任何一筆資料
@@ -140,7 +141,7 @@ DACPAC 只做「擷取 + 差異部署」，可以精準只納管白名單那幾�
 
 ## 欄位改完之後：同步回 EF Model
 
-`Tables/*.sql` 只管資料庫結構，`api/Data/Entities.cs` + `SalesIssueDbContext.cs`
+`Tables/*.sql` 只管資料庫結構，`api/Data/Entities.cs` + `ProrilWebDbContext.cs`
 的 EF Model 是**手寫維護**的（不是 `dotnet ef dbcontext scaffold` 的產物，
 不要拿 scaffold 整份覆蓋，會把手動修正的型別/註解/白名單一起洗掉）。
 

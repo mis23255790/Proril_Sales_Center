@@ -12,7 +12,7 @@
     而且需要額外裝 dotnet-ef 工具。這支改用 INFORMATION_SCHEMA.COLUMNS
     （跟 drift.ps1 同一招），只需要 sqlcmd。
 
-    class 名稱怎麼找：預設從 api/Data/SalesIssueDbContext.cs 的
+    class 名稱怎麼找：預設從 api/Data/ProrilWebDbContext.cs 的
     `modelBuilder.Entity<T>(entity => { entity.ToTable("表名") ... })`
     反查對映的類別，並讀該區塊裡的 `HasColumnName(...)` 處理欄位改名
     （例如 DB 的 `WPNo` 對到 C# 屬性 `Wpno`）。如果這張表還沒被 EF Model
@@ -25,9 +25,9 @@
     要連哪個環境查欄位，test 或 prod，預設 test（新欄位通常先進測試區）。
 
 .PARAMETER ClassName
-    手動指定要比對的 C# 類別名稱。這張表還沒被 SalesIssueDbContext.cs
+    手動指定要比對的 C# 類別名稱。這張表還沒被 ProrilWebDbContext.cs
     收錄時才需要 —— 這支只負責「比對」，收錄仍要自己在 Entities.cs /
-    SalesIssueDbContext.cs 補上最基本的 class + modelBuilder.Entity<T>() 區塊。
+    ProrilWebDbContext.cs 補上最基本的 class + modelBuilder.Entity<T>() 區塊。
 
 .EXAMPLE
     .\sync-model.ps1 -Table D_WorkProcess
@@ -44,7 +44,7 @@ param(
 . "$PSScriptRoot\_common.ps1"
 
 $script:ApiDataDir = Join-Path (Split-Path -Parent $script:DbRoot) 'api\Data'
-$script:DbContextFile = Join-Path $script:ApiDataDir 'SalesIssueDbContext.cs'
+$script:DbContextFile = Join-Path $script:ApiDataDir 'ProrilWebDbContext.cs'
 
 # SQL 型別家族 -> 建議的 C# 型別，只用來給軟性提示，不是精確判斷
 # （nvarchar/varchar 等長度、IsUnicode、money vs decimal 這種細節本來就該人工核對）。
@@ -123,7 +123,7 @@ ORDER BY c.ORDINAL_POSITION;
 }
 
 function Find-EntityMapping {
-    # 在 SalesIssueDbContext.cs 找 ToTable("表名") 對到的 class 名稱與該區塊原始內容。
+    # 在 ProrilWebDbContext.cs 找 ToTable("表名") 對到的 class 名稱與該區塊原始內容。
     param([Parameter(Mandatory = $true)][string]$Table)
     try {
         if (-not (Test-Path $script:DbContextFile)) {
@@ -207,14 +207,14 @@ try {
 
     $renameMap = @{}
     if ($ClassName) {
-        Write-Host "手動指定類別 $ClassName，不從 SalesIssueDbContext.cs 反查欄位改名對映。" -ForegroundColor Yellow
+        Write-Host "手動指定類別 $ClassName，不從 ProrilWebDbContext.cs 反查欄位改名對映。" -ForegroundColor Yellow
     }
     else {
         $mapping = Find-EntityMapping -Table $Table
         if (-not $mapping) {
             throw @"
 在 $script:DbContextFile 找不到 ToTable("$Table") 的對映，這張表可能還沒被納入 EF Model。
-請先在 api/Data/Entities.cs 加一個最基本的 class、在 SalesIssueDbContext.cs
+請先在 api/Data/Entities.cs 加一個最基本的 class、在 ProrilWebDbContext.cs
 加一段 modelBuilder.Entity<T>(entity => { entity.ToTable("$Table"); ... })，
 或改用 -ClassName 手動指定要比對的既有類別。
 "@
@@ -302,7 +302,7 @@ try {
         Write-Host ""
     }
 
-    Write-Host "提醒：這支只列差異，新增/修改屬性跟 SalesIssueDbContext.cs 的 fluent 對映仍要自己動手加。" -ForegroundColor Cyan
+    Write-Host "提醒：這支只列差異，新增/修改屬性跟 ProrilWebDbContext.cs 的 fluent 對映仍要自己動手加。" -ForegroundColor Cyan
     exit 0
 }
 catch {

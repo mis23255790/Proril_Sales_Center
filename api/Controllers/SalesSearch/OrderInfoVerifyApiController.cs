@@ -20,7 +20,7 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 public partial class OrderInfoVerifyApiController : BaseApiController
 {
     public OrderInfoVerifyApiController(
-        SalesIssueDbContext db,
+        ProrilWebDbContext db,
         JwtHelper jwtHelper,
         StoragePaths paths,
         ILogger<OrderInfoVerifyApiController> logger) : base(db, jwtHelper, logger)

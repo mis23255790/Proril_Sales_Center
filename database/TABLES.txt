@@ -18,9 +18,8 @@ COP_PassCheck
 COP_PoCheck
 COP_PoDetailCheck
 
-# 跨模組共用的帳號/權限/附件 log。
-# 注意：M_User / M_Permission 只管結構（schema），不代表 2.0 可以對它們加寫入邏輯——
-# CLAUDE.md 明訂這兩張表的寫入仍留在 1.0，2.0 只讀。詳見 CLAUDE.md「不要動資料庫」那段。
+# 跨模組共用的附件 log。
+# 注意：M_User / M_Permission 刻意不放進這份白名單——CLAUDE.md 明訂這兩張表的帳號鎖定/
+# 建帳號/改密碼/權限維護仍是 1.0 Controller 在寫，2.0 不接手也不切連線，
+# 整張表（結構 + 資料）留在 PRORIL_WEB 由 1.0 控管。詳見 CLAUDE.md「不要動資料庫」那段。
 H_FileLink
-M_Permission
-M_User

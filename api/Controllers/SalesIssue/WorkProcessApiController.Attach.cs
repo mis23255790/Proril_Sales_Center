@@ -2,7 +2,7 @@ using System.IO.Compression;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
-using Proril.SalesIssue.Api.Data;
+using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
 
@@ -76,7 +76,7 @@ public partial class WorkProcessApiController
         }
 
         var paddedSno = StoragePaths.PadSno(sNo);
-        var detail = db.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
+        var detail = _scDb.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
         if (detail is null)
         {
             // 新建的進度還沒有 zip，這不是錯誤
@@ -239,7 +239,7 @@ public partial class WorkProcessApiController
         var paddedSno = StoragePaths.PadSno(sNo);
         var account = GetAccountByToken();
 
-        var detail = db.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
+        var detail = _scDb.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
         var isNew = detail is null;
         detail ??= new DWorkProcessDetail
         {
@@ -276,10 +276,10 @@ public partial class WorkProcessApiController
         detail.Modifier = account;
         detail.ModiTime = DateTime.Now;
 
-        if (isNew) db.DWorkProcessDetails.Add(detail);
-        else db.DWorkProcessDetails.Update(detail);
+        if (isNew) _scDb.DWorkProcessDetails.Add(detail);
+        else _scDb.DWorkProcessDetails.Update(detail);
 
-        db.SaveChanges();
+        _scDb.SaveChanges();
 
         ca.IsSuccess = true;
         ca.Body = detail;
@@ -397,14 +397,14 @@ public partial class WorkProcessApiController
         }
 
         var paddedSno = StoragePaths.PadSno(sNo);
-        var detail = db.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
+        var detail = _scDb.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
         if (detail is null)
         {
             ca.Message = $"查無工作流程單:{padded} / {paddedSno} !!!";
             return ca;
         }
 
-        var wp = db.DWorkProcesses.FirstOrDefault(o => o.Wpno == padded);
+        var wp = _scDb.DWorkProcesses.FirstOrDefault(o => o.Wpno == padded);
         var verNo = wp?.VerNo ?? "1.0";
 
         // 解到 temp/{dcu}/{sNo}，與編輯流程同一個位置

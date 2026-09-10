@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Proril.SalesIssue.Api.Data;
+using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
 
@@ -8,15 +8,23 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 
 /// <summary>
 /// 客戶查詢。議題編輯頁的「客戶別」下拉就是打這支。
+///
+/// CRM_Customer 打 <see cref="_scDb"/>（Proril_Sales_Center，已確認單一擁有者，
+/// 只有這支的 SaveCustom 在寫）；V_ERPCustomer 是唯讀 ERP 對照 view，
+/// 不在搬遷白名單裡，繼續留在 <c>db</c>（PRORIL_WEB）。
 /// </summary>
 [Authorize]
 public class CustomQueryApiController : BaseApiController
 {
+    private readonly SalesCenterDbContext _scDb;
+
     public CustomQueryApiController(
-        SalesIssueDbContext db,
+        Proril.SalesIssue.Api.Data.ProrilWebDbContext db,
+        SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         ILogger<CustomQueryApiController> logger) : base(db, jwtHelper, logger)
     {
+        _scDb = scDb;
     }
 
     /// <summary>
@@ -34,7 +42,7 @@ public class CustomQueryApiController : BaseApiController
 
         WriteStepLog(nameof(GetCustom), $"customNo:{customNo}, erpCustomNo:{erpCustomNo}, includeErp:{includeErpCustom}");
 
-        var customers = db.CrmCustomers.Where(c => c.AStatus == ActiveStatus.Active).ToList();
+        var customers = _scDb.CrmCustomers.Where(c => c.AStatus == ActiveStatus.Active).ToList();
         var erpCustomers = db.VErpcustomers.ToList();
 
         var erpByNo = erpCustomers
@@ -86,7 +94,7 @@ public class CustomQueryApiController : BaseApiController
 
         WriteStepLog(nameof(GetERPCustom), $"erpCustomNo:{erpCustomNo}");
 
-        var customerByErpNo = db.CrmCustomers
+        var customerByErpNo = _scDb.CrmCustomers
             .Where(c => !string.IsNullOrWhiteSpace(c.ErpcustomerNo))
             .ToList()
             .GroupBy(c => (c.ErpcustomerNo ?? "").Trim())
@@ -141,7 +149,7 @@ public class CustomQueryApiController : BaseApiController
         WriteStepLog(nameof(SaveCustom),
             $"customerNo:{crmCustom.CustomerNo}, erpCustomNo:{crmCustom.ErpcustomerNo}, shortName:{crmCustom.ShortName}, longName:{crmCustom.LongName}");
 
-        var allCustomers = db.CrmCustomers.Where(c => c.AStatus == ActiveStatus.Active).ToList();
+        var allCustomers = _scDb.CrmCustomers.Where(c => c.AStatus == ActiveStatus.Active).ToList();
 
         if (!string.IsNullOrWhiteSpace(crmCustom.ErpcustomerNo))
         {
@@ -182,7 +190,7 @@ public class CustomQueryApiController : BaseApiController
                 Creator = GetAccountByToken(),
                 CreateTime = DateTime.Now
             };
-            db.CrmCustomers.Add(target);
+            _scDb.CrmCustomers.Add(target);
         }
         else
         {
@@ -204,7 +212,7 @@ public class CustomQueryApiController : BaseApiController
         target.SalesName = crmCustom.SalesName;
         target.PotentialCustom = crmCustom.PotentialCustom;
 
-        db.SaveChanges();
+        _scDb.SaveChanges();
 
         ca.IsSuccess = true;
         ca.Body = target.CustomerNo;

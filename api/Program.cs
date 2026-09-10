@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Proril.SalesIssue.Api.Data;
+using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Middleware;
@@ -12,8 +13,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------- 設定檢查
 
-var connectionString = builder.Configuration.GetConnectionString("ProrilWeb");
-if (string.IsNullOrWhiteSpace(connectionString))
+var prorilWebConnectionString = builder.Configuration.GetConnectionString("ProrilWeb");
+if (string.IsNullOrWhiteSpace(prorilWebConnectionString))
 {
     // 早點爆比之後每支 API 都回 500 好追
     throw new InvalidOperationException(
@@ -21,10 +22,25 @@ if (string.IsNullOrWhiteSpace(connectionString))
         + "或環境變數 ConnectionStrings__ProrilWeb（部署）填入 PRORIL_WEB 的連線字串。");
 }
 
+var salesCenterConnectionString = builder.Configuration.GetConnectionString("SalesCenter");
+if (string.IsNullOrWhiteSpace(salesCenterConnectionString))
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:SalesCenter 未設定。請在 appsettings.Development.json（本機）"
+        + "或環境變數 ConnectionStrings__SalesCenter（部署）填入 Proril_Sales_Center 的連線字串。");
+}
+
 // ---------------------------------------------------------------- 服務
 
-builder.Services.AddDbContext<SalesIssueDbContext>(options =>
-    options.UseSqlServer(connectionString));
+// PRORIL_WEB 舊庫：M_User / M_Permission（1.0 還在寫，2.0 唯讀）+ 尚未搬遷的檢核表/ERP view。
+builder.Services.AddDbContext<ProrilWebDbContext>(options =>
+    options.UseSqlServer(prorilWebConnectionString));
+
+// Proril_Sales_Center 獨立庫：業務議題本體 + CRM_Customer + H_FileLink，已確認單一擁有者，
+// WorkProcessApiController / CustomQueryApiController.SaveCustom / UploadApiController.AddFileLog
+// 都打這裡讀寫，見 CLAUDE.md 「已核對」段落。
+builder.Services.AddDbContext<SalesCenterDbContext>(options =>
+    options.UseSqlServer(salesCenterConnectionString));
 
 builder.Services.AddSingleton<JwtHelper>();
 builder.Services.AddSingleton<AesHelper>();

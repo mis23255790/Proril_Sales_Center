@@ -27,11 +27,17 @@
 > **main branch 的 `database/Tables/*.sql` == 正式區 schema**，未上線欄位放 feature branch。
 > 詳見 `database/README.md`。
 
-> **獨立資料庫 `Proril_Sales_Center` 只是快照，連線還沒真的切過去**：
+> **獨立資料庫 `Proril_Sales_Center`：業務議題本體 + `CRM_Customer` + `H_FileLink` 已切連線，其餘仍是快照**：
 > `database/PortingNotes.md` 記錄了把 18 張表（業務議題白名單 8 張 + `M_User` /
 > `M_Permission` / `H_FileLink` / `COP_CheckRule` / `COP_DepData` 5 張 + 訂單資料檢核
 > SP 寫入目標 5 張）從 `PRORIL_WEB` **一次性複製**到獨立資料庫 `Proril_Sales_Center`。
-> `api/appsettings*.json` 目前仍然連 `PRORIL_WEB`，之後兩邊資料不會自動同步。
+> `api/` 現在同時注入 `ProrilWebDbContext`（連 `ConnectionStrings:ProrilWeb`）與
+> `SalesCenterDbContext`（連 `ConnectionStrings:SalesCenter`）：
+> `WorkProcessApiController`（含 `.Attach.cs`/`.Permission.cs`）、
+> `CustomQueryApiController.SaveCustom`、`UploadApiController.AddFileLog`
+> 已改讀寫 `SalesCenterDbContext`，這幾張表**已經是真的切連線，不再只是快照**；
+> 其餘表（`M_User`/`M_Permission`/`COP_*`）維持只在 `PRORIL_WEB` 有效，
+> 兩邊之後不會自動同步。
 >
 > **下列表在 1.0 有業務議題／訂單資料檢核以外的其他功能在寫，不能只切連線就當作遷移完成**
 > （已用 grep 逐一核對 1.0 全部 Controller，非只查已知模組）：
@@ -43,17 +49,19 @@
 > 這兩張表要嘛連同上述兩支 1.0 controller 一起搬過來寫新 DB，要嘛 2.0 對它們維持唯讀、
 > 寫入仍留在 1.0 打 `PRORIL_WEB`——否則登入鎖定/新建帳號/權限異動不會反映到
 > `Proril_Sales_Center`，會造成兩邊帳號權限狀態分岔。**新增功能一律不要對這兩張表加寫入邏輯。**
+> 目前 2.0 對這兩張表維持唯讀（`db.MUsers`/`db.MPermissions`，仍打 `ProrilWebDbContext`）。
 >
-> 已核對「單一擁有者、之後可以放心切」的表：業務議題 7 張（不含 `CRM_Customer`，
-> 只有 `WorkProcessApiController.cs`）、`CRM_Customer`（只有
-> `CustomQueryApiController.SaveCustom`）、`H_FileLink`（只有 `UploadApiController`
-> 內的 `AddSqlLog`）。`COP_PoCheck`/`COP_PoDetailCheck`/`COP_PassCheck`/
+> 已核對「單一擁有者、之後可以放心切」且**已完成切連線**的表：業務議題 7 張（不含
+> `CRM_Customer`，只有 `WorkProcessApiController.cs`）、`CRM_Customer`（只有
+> `CustomQueryApiController.SaveCustom`；`WorkProcessApiController` 讀它組客戶顯示欄位，
+> 一併改讀 `SalesCenterDbContext`）、`H_FileLink`（只有 `UploadApiController` 內的
+> `AddFileLog`）。`COP_PoCheck`/`COP_PoDetailCheck`/`COP_PassCheck`/
 > `COP_AvailableAmt`/`COP_ProductCheck` 應用層完全沒有直寫，只有預存程序
 > （`prc_COPOrderChk`/`prc_COPPassCheck`/`prc_ProductChk`）在寫，但呼叫入口分散在
 > `ErpImportApiController.cs`／`BomQueryApiController.cs`／`OrderInfoVerifyApiController.cs`
-> 三支 controller，之後切連線要三支都一併確認能連到新 DB 執行對應 SP。
+> 三支 controller，之後切連線要三支都一併確認能連到新 DB 執行對應 SP，**這幾張還沒切**。
 > `COP_CheckRule`/`COP_DepData` 應用層目前完全查不到任何寫入路徑（含維護畫面），
-> 可能是直接維護在 DB，遷移時沒有既有 CRUD 邏輯可搬。
+> 可能是直接維護在 DB，遷移時沒有既有 CRUD 邏輯可搬，**同樣還沒切**。
 
 ## 2. 技術棧 (Tech Stack)
 - 核心框架：Nuxt 4 (Stable)

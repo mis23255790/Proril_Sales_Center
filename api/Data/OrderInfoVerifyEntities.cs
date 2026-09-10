@@ -5,7 +5,7 @@ namespace Proril.SalesIssue.Api.Data;
  *
  * 這批表跟 Entities.cs 的業務議題表無關，開獨立檔案。命名沿用英文駝峰
  * （不照抄 1.0 scaffold 的 VPolist / CopDepDatum 這種怪名字），實際 DB 對映
- * 在 SalesIssueDbContext.OnModelCreating 裡用 Fluent API 明確指定，
+ * 在 ProrilWebDbContext.OnModelCreating 裡用 Fluent API 明確指定，
  * 欄位名稱大小寫務必跟 DB 一致（collation 是 case-sensitive）。
  */
 

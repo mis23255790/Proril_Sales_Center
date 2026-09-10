@@ -1,4 +1,5 @@
 using Proril.SalesIssue.Api.Data;
+using SC = Proril.SalesIssue.Api.Data.SalesCenter;
 
 namespace Proril.SalesIssue.Api.Models;
 
@@ -39,11 +40,11 @@ public record SsoLoginViewModel(string Account);
 /// PhraseTypeList / PhraseCodeList / PhraseNameList 是三串分號字串，
 /// **靠索引對齊**，不是 key-value —— 任何一串被過濾或排序，對應關係就整個錯開。
 /// </summary>
-public class DWorkProcessesEx : DWorkProcess
+public class DWorkProcessesEx : SC.DWorkProcess
 {
     public DWorkProcessesEx() { }
 
-    public DWorkProcessesEx(DWorkProcess source)
+    public DWorkProcessesEx(SC.DWorkProcess source)
     {
         Id = source.Id;
         Wpno = source.Wpno;
@@ -85,26 +86,69 @@ public class DWorkProcessesEx : DWorkProcess
 }
 
 /// <summary>進度明細 + 建立者／修改者姓名。</summary>
-public class DWorkProcessDetailViewModel : DWorkProcessDetail
+public class DWorkProcessDetailViewModel : SC.DWorkProcessDetail
 {
-    public DWorkProcessDetailViewModel(DWorkProcessDetail src) : base(src) { }
+    /// <summary>
+    /// SC 的實體是 dotnet ef scaffold 產生的純 POCO，沒有複製建構子（重新 scaffold 會整個
+    /// 檔案被蓋掉，寫在那邊會消失），所以複製建構子放在這裡手動逐欄位複製。
+    /// </summary>
+    public DWorkProcessDetailViewModel(SC.DWorkProcessDetail src)
+    {
+        Id = src.Id;
+        Wpno = src.Wpno;
+        Sno = src.Sno;
+        ProcessCaption = src.ProcessCaption;
+        ProcessCaption2 = src.ProcessCaption2;
+        ProcessContent = src.ProcessContent;
+        Worker = src.Worker;
+        AStatus = src.AStatus;
+        UploadFile = src.UploadFile;
+        RenameFile = src.RenameFile;
+        ZipFile = src.ZipFile;
+        Creator = src.Creator;
+        Modifier = src.Modifier;
+        CreateTime = src.CreateTime;
+        ModiTime = src.ModiTime;
+    }
 
     public string? CreatorName { get; set; }
     public string? ModifierName { get; set; }
 }
 
 /// <summary>議題掛的關鍵字 + 關鍵字名稱。</summary>
-public class DWorkProcessSearchEx : DWorkProcessSearch
+public class DWorkProcessSearchEx : SC.DWorkProcessSearch
 {
-    public DWorkProcessSearchEx(DWorkProcessSearch src) : base(src) { }
+    public DWorkProcessSearchEx(SC.DWorkProcessSearch src)
+    {
+        Id = src.Id;
+        Wpno = src.Wpno;
+        PhraseType = src.PhraseType;
+        PhraseCode = src.PhraseCode;
+        AStatus = src.AStatus;
+        Creator = src.Creator;
+        Modifier = src.Modifier;
+        CreateTime = src.CreateTime;
+        ModiTime = src.ModiTime;
+    }
 
     public string? PhraseName { get; set; }
 }
 
 /// <summary>議題掛的客戶 + 客戶顯示資料。</summary>
-public class DWorkProcessCustomerEx : DWorkProcessCustomer
+public class DWorkProcessCustomerEx : SC.DWorkProcessCustomer
 {
-    public DWorkProcessCustomerEx(DWorkProcessCustomer src) : base(src) { }
+    public DWorkProcessCustomerEx(SC.DWorkProcessCustomer src)
+    {
+        Id = src.Id;
+        Wpno = src.Wpno;
+        CustomerNo = src.CustomerNo;
+        CustomerType = src.CustomerType;
+        AStatus = src.AStatus;
+        Creator = src.Creator;
+        Modifier = src.Modifier;
+        CreateTime = src.CreateTime;
+        ModiTime = src.ModiTime;
+    }
 
     public string ShortName { get; set; } = string.Empty;
     public string LongName { get; set; } = string.Empty;
@@ -113,9 +157,37 @@ public class DWorkProcessCustomerEx : DWorkProcessCustomer
 }
 
 /// <summary>客戶主檔 + ERP 端名稱。</summary>
-public class CrmCustomerViewModel : CrmCustomer
+public class CrmCustomerViewModel : SC.CrmCustomer
 {
-    public CrmCustomerViewModel(CrmCustomer src) : base(src) { }
+    public CrmCustomerViewModel(SC.CrmCustomer src)
+    {
+        Id = src.Id;
+        CustomerNo = src.CustomerNo;
+        CustomerSource = src.CustomerSource;
+        ErpcustomerNo = src.ErpcustomerNo;
+        LongName = src.LongName;
+        ShortName = src.ShortName;
+        ContactName = src.ContactName;
+        ContactTel1 = src.ContactTel1;
+        ContactTel2 = src.ContactTel2;
+        ContactFax = src.ContactFax;
+        ContactEmail = src.ContactEmail;
+        Addr1 = src.Addr1;
+        Addr2 = src.Addr2;
+        AreaCode = src.AreaCode;
+        CountryCode = src.CountryCode;
+        SalesNo = src.SalesNo;
+        SalesName = src.SalesName;
+        PotentialCustom = src.PotentialCustom;
+        ErpheadCustomer = src.ErpheadCustomer;
+        Erpsource = src.Erpsource;
+        Memo = src.Memo;
+        AStatus = src.AStatus;
+        Creator = src.Creator;
+        CreateTime = src.CreateTime;
+        Modifier = src.Modifier;
+        ModiTime = src.ModiTime;
+    }
 
     public string ERPCustomShortName { get; set; } = string.Empty;
     public string ERPCustomLongName { get; set; } = string.Empty;

@@ -6,6 +6,7 @@
 #
 # ShareRoot volumes 的左邊路徑要改成測試主機上實際的附件共享目錄，
 # 必須跟 1.0 PRORIL 指向同一處，否則讀不到既有附件。
+name: intranet_sales_center
 services:
   app:
     build:
@@ -26,9 +27,9 @@ services:
       context: ./api
       dockerfile: Dockerfile
     ports:
-      - "5211:8080"
+      - "50021:8080"
     env_file:
       - api/docker.env
     volumes:
-      - ./api/ShareRoot:/app/ProrilWebFiles
+      - C:/Projects/ProrilWebFiles:/app/ProrilWebFiles
     restart: unless-stopped

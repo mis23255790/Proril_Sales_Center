@@ -19,7 +19,7 @@ public class MainApiController : BaseApiController
     private readonly string _ssoInternalSecret;
 
     public MainApiController(
-        SalesIssueDbContext db,
+        ProrilWebDbContext db,
         JwtHelper jwtHelper,
         AesHelper aes,
         IConfiguration configuration,

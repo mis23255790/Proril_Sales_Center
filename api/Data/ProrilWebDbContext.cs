@@ -3,7 +3,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Proril.SalesIssue.Api.Data;
 
 /// <summary>
-/// 業務議題的 DbContext。
+/// 1.0 舊庫 PRORIL_WEB 的 DbContext。
+///
+/// 業務議題本體（D_WorkProcess* / M_WorkProcessPhrase / M_WorkProcessType）、
+/// CRM_Customer、H_FileLink 已確認單一擁有者、切到 <see cref="SalesCenter.SalesCenterDbContext"/>
+/// 打 Proril_Sales_Center，不再對映在這裡。M_User / M_Permission 因為 1.0 的
+/// 登入鎖定/建帳號/權限維護還在寫 PRORIL_WEB，維持唯讀留在這裡，見 CLAUDE.md 「已核對」段落。
 ///
 /// 這是 database-first：schema 由 <c>database/</c> 的 DACPAC 管，這裡只做對映，
 /// **不要**用 EF Migrations 去改 DB。PRORIL_WEB 裡混著鼎新 ERP 的表，
@@ -12,21 +17,12 @@ namespace Proril.SalesIssue.Api.Data;
 /// 欄位名一律明確寫出來，不靠慣例推導。DB 是 case-sensitive collation，
 /// 例如 <c>aStatus</c> 是小寫 a、<c>zipFile</c> 是小寫 z，猜錯會噴 Invalid column name。
 /// </summary>
-public class SalesIssueDbContext : DbContext
+public class ProrilWebDbContext : DbContext
 {
-    public SalesIssueDbContext(DbContextOptions<SalesIssueDbContext> options) : base(options) { }
+    public ProrilWebDbContext(DbContextOptions<ProrilWebDbContext> options) : base(options) { }
 
-    public virtual DbSet<DWorkProcess> DWorkProcesses { get; set; } = null!;
-    public virtual DbSet<DWorkProcessDetail> DWorkProcessDetails { get; set; } = null!;
-    public virtual DbSet<DWorkProcessSearch> DWorkProcessSearches { get; set; } = null!;
-    public virtual DbSet<DWorkProcessCustomer> DWorkProcessCustomers { get; set; } = null!;
-    public virtual DbSet<DWorkProcessPermission> DWorkProcessPermissions { get; set; } = null!;
-    public virtual DbSet<MWorkProcessPhrase> MWorkProcessPhrases { get; set; } = null!;
-    public virtual DbSet<MWorkProcessType> MWorkProcessTypes { get; set; } = null!;
-    public virtual DbSet<CrmCustomer> CrmCustomers { get; set; } = null!;
     public virtual DbSet<MUser> MUsers { get; set; } = null!;
     public virtual DbSet<MPermission> MPermissions { get; set; } = null!;
-    public virtual DbSet<HFileLink> HFileLinks { get; set; } = null!;
     public virtual DbSet<VErpcustomer> VErpcustomers { get; set; } = null!;
 
     // ---- 訂單資料檢核（OrderInfoVerify），見 OrderInfoVerifyEntities.cs ----
@@ -42,139 +38,14 @@ public class SalesIssueDbContext : DbContext
     public virtual DbSet<CopGetCredit> CopGetCredits { get; set; } = null!;
     public virtual DbSet<CopGetCreditCrm> CopGetCreditCrms { get; set; } = null!;
 
+    // ---- 客戶資料維護 + 任務信件往來記錄（Customer），見 CustomerEntities.cs ----
+    public virtual DbSet<MCustomer> MCustomers { get; set; } = null!;
+    public virtual DbSet<VCopCustomer> VCopCustomers { get; set; } = null!;
+    public virtual DbSet<DCustormerOrder> DCustormerOrders { get; set; } = null!;
+    public virtual DbSet<DMailDetail> DMailDetails { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<DWorkProcess>(entity =>
-        {
-            entity.ToTable("D_WorkProcess");
-            entity.HasKey(e => e.Id).HasName("PK_M_WorkProcess");
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.Wpno).HasColumnName("WPNo").HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.AStatus).HasColumnName("aStatus").HasMaxLength(1).IsUnicode(false);
-            entity.Property(e => e.SopTitle).HasMaxLength(200).HasDefaultValue("");
-            entity.Property(e => e.PhraseList).HasMaxLength(500);
-            entity.Property(e => e.VerNo).HasMaxLength(40).IsUnicode(false);
-            entity.Property(e => e.Creator).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Leader).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Authorize).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Modifier).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.ProgressStatus).HasDefaultValue(10);
-            entity.Property(e => e.PubDate).HasColumnType("datetime");
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-            entity.Property(e => e.ModiTime).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<DWorkProcessDetail>(entity =>
-        {
-            entity.ToTable("D_WorkProcessDetail");
-            entity.HasKey(e => e.Id);
-            // 1.0 的 NonClusteredIndex-20231221-145816，(WPNo, SNo) 唯一
-            entity.HasIndex(e => new { e.Wpno, e.Sno }).IsUnique();
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.Wpno).HasColumnName("WPNo").HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Sno).HasColumnName("SNo").HasMaxLength(4).IsUnicode(false);
-            entity.Property(e => e.ZipFile).HasColumnName("zipFile").HasMaxLength(200).IsUnicode(false);
-            entity.Property(e => e.AStatus).HasColumnName("aStatus").HasMaxLength(1).IsUnicode(false);
-            entity.Property(e => e.ProcessCaption).HasMaxLength(200);
-            entity.Property(e => e.UploadFile).HasMaxLength(200).IsUnicode(false);
-            entity.Property(e => e.RenameFile).HasMaxLength(200).IsUnicode(false);
-            entity.Property(e => e.Worker).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Creator).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Modifier).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-            entity.Property(e => e.ModiTime).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<DWorkProcessSearch>(entity =>
-        {
-            entity.ToTable("D_WorkProcessSearch");
-            entity.HasKey(e => e.Id);
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.Wpno).HasColumnName("WPNo").HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.AStatus).HasColumnName("aStatus").HasMaxLength(1).IsUnicode(false);
-            entity.Property(e => e.PhraseType).HasMaxLength(4).IsUnicode(false);
-            entity.Property(e => e.PhraseCode).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Creator).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Modifier).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-            entity.Property(e => e.ModiTime).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<DWorkProcessCustomer>(entity =>
-        {
-            entity.ToTable("D_WorkProcessCustomer");
-            entity.HasKey(e => e.Id);
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.Wpno).HasColumnName("WPNo").HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.AStatus).HasColumnName("aStatus").HasMaxLength(1).IsUnicode(false).HasDefaultValue("Y");
-            entity.Property(e => e.CustomerNo).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.CustomerType).HasMaxLength(10).IsUnicode(false).HasDefaultValue("1");
-            entity.Property(e => e.Creator).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Modifier).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-            entity.Property(e => e.ModiTime).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<DWorkProcessPermission>(entity =>
-        {
-            entity.ToTable("D_WorkProcessPermission");
-            entity.HasKey(e => e.Id).HasName("PK__D_WorkPr__3214EC277D1A598F");
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.Wpno).HasColumnName("WPNo").HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Account).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Creator).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.Modifier).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-            entity.Property(e => e.ModiTime).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<MWorkProcessPhrase>(entity =>
-        {
-            entity.ToTable("M_WorkProcessPhrase");
-            entity.HasKey(e => e.Id).HasName("PK_M_Phrase");
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.AStatus).HasColumnName("aStatus").HasMaxLength(1).IsUnicode(false);
-            entity.Property(e => e.Directions).IsUnicode(false);
-            entity.Property(e => e.Creator).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<MWorkProcessType>(entity =>
-        {
-            entity.ToTable("M_WorkProcessType");
-            entity.HasKey(e => e.Id).HasName("PK_M_WorkType");
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.AStatus).HasColumnName("aStatus").HasMaxLength(1).IsUnicode(false);
-            entity.Property(e => e.Descript).IsUnicode(false);
-            entity.Property(e => e.Creator).HasMaxLength(10).IsUnicode(false);
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<CrmCustomer>(entity =>
-        {
-            entity.ToTable("CRM_Customer");
-            entity.HasKey(e => e.Id);
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.AStatus).HasColumnName("aStatus").HasMaxLength(1).IsUnicode(false);
-            entity.Property(e => e.ContactEmail).HasColumnName("ContactEMail");
-            entity.Property(e => e.ContactFax).HasColumnName("ContactFAX");
-            entity.Property(e => e.ContactTel1).HasColumnName("ContactTEL1");
-            entity.Property(e => e.ContactTel2).HasColumnName("ContactTEL2");
-            entity.Property(e => e.ErpcustomerNo).HasColumnName("ERPCustomerNo");
-            entity.Property(e => e.ErpheadCustomer).HasColumnName("ERPHeadCustomer");
-            entity.Property(e => e.Erpsource).HasColumnName("ERPSource");
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-            entity.Property(e => e.ModiTime).HasColumnType("datetime");
-        });
-
         modelBuilder.Entity<MUser>(entity =>
         {
             entity.ToTable("M_User");
@@ -192,15 +63,6 @@ public class SalesIssueDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("ID");
             entity.Property(e => e.CreateTime).HasColumnType("datetime");
             entity.Property(e => e.ModiTime).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<HFileLink>(entity =>
-        {
-            entity.ToTable("H_FileLink");
-            entity.HasKey(e => e.Id).HasName("PK__H_FileLi__3214EC279A1BB9B4");
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.UpdateTime).HasColumnType("datetime");
         });
 
         modelBuilder.Entity<VErpcustomer>(entity =>
@@ -449,5 +311,54 @@ public class SalesIssueDbContext : DbContext
         // keyless，只給 Set<T>().FromSqlInterpolated(...) 用，不對應任何表/view
         modelBuilder.Entity<CopGetCredit>().HasNoKey();
         modelBuilder.Entity<CopGetCreditCrm>().HasNoKey();
+
+        modelBuilder.Entity<MCustomer>(entity =>
+        {
+            entity.ToTable("M_Customer");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.ContactEmail).HasMaxLength(100).HasColumnName("ContactEMail");
+            entity.Property(e => e.ContactName).HasMaxLength(60);
+            entity.Property(e => e.ContactPhone).HasMaxLength(40);
+            entity.Property(e => e.CustomerNo).HasMaxLength(20).IsUnicode(false);
+            entity.Property(e => e.LongName).HasMaxLength(200);
+            entity.Property(e => e.Ship).HasMaxLength(40);
+            entity.Property(e => e.ShortName).HasMaxLength(40);
+            entity.Property(e => e.Transport).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<VCopCustomer>(entity =>
+        {
+            entity.HasNoKey().ToView("V_COP_Customer");
+
+            entity.Property(e => e.ContactEmail).HasMaxLength(60).HasColumnName("ContactEMail");
+            entity.Property(e => e.ContactName).HasMaxLength(30);
+            entity.Property(e => e.ContactPhone).HasMaxLength(20);
+            entity.Property(e => e.CustomerNo).HasMaxLength(10);
+            entity.Property(e => e.LongName).HasMaxLength(80);
+            entity.Property(e => e.Ship).HasMaxLength(10);
+            entity.Property(e => e.ShortName).HasMaxLength(30);
+            entity.Property(e => e.Transport).HasMaxLength(8);
+        });
+
+        modelBuilder.Entity<DCustormerOrder>(entity =>
+        {
+            entity.ToTable("D_CustormerOrder");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.CoMemo).HasDefaultValue("");
+            entity.Property(e => e.CoNo).HasMaxLength(40).IsUnicode(false);
+            entity.Property(e => e.MissionNo).HasMaxLength(40).IsUnicode(false);
+        });
+
+        modelBuilder.Entity<DMailDetail>(entity =>
+        {
+            entity.ToTable("D_MailDetail");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.CoNo).HasMaxLength(40).IsUnicode(false);
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.MdNo).HasMaxLength(40).IsUnicode(false);
+        });
     }
 }
