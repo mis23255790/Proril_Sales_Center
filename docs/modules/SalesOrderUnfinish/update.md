@@ -1,4 +1,15 @@
 <details>
+  <summary>版號2026.09.10.1200</summary>
+
+##### fix: 客戶下拉選單渲染失敗
+      USelectMenu 的 placeholder 選項用 value:'' 跟 Reka UI Combobox 保留的「清空選取」值
+      衝突，mount 就丟例外，選單看起來像空的。改用哨兵字串 + writable computed 轉換。
+      同一個模式在其他模組的客戶/類別篩選也有，一併修掉，詳見
+      `docs/modules/SalesIssue/update.md` 對應那筆的完整說明。
+
+</details>
+
+<details>
   <summary>版號2026.09.02.1700</summary>
 
 ##### feat: 未完成訂單檢索自 PRORIL 1.0 (業務檢索/QueryUnFinish) 搬到 2.0 業務中心

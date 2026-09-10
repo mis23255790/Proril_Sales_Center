@@ -1,4 +1,51 @@
 <details>
+  <summary>版號2026.09.10.1200</summary>
+
+##### fix: 客戶別下拉選單渲染失敗，畫面上看起來像清單是空的
+      USelectMenu（Nuxt UI 4 底層是 Reka UI Combobox）保留空字串 value 代表「清空選取、
+      顯示 placeholder」，item 的 value 不能是空字串，否則 mount 就丟例外
+      "A <ComboboxItem /> must have a value prop that is not an empty string"，
+      整個下拉選單的內容渲染失敗（不是資料真的是空的，GetCustom/GetKindList 都有正常回資料，
+      只是選項渲染不出來，看起來像空的）。
+
+      這個模式（用 value:'' 代表「未指定/全部」）在議題編輯頁的客戶別，以及
+      sales-search 底下多個查詢頁的客戶/類別篩選都有，一次全部改掉：
+        app/pages/sales-center/sales-issue/issues/[wpno].vue（客戶別）
+        app/pages/sales-center/sales-issue/issues/index.vue（類別篩選）
+        app/pages/sales-center/sales-search/customer.vue（內網客戶、ERP客戶）
+        app/pages/sales-center/sales-search/order-info-verify.vue（客戶）
+        app/pages/sales-center/sales-search/shipping-inquiry.vue（客戶）
+        app/pages/sales-center/sales-search/unfinished-orders.vue（客戶）
+
+      作法：placeholder 選項改用專屬哨兵字串（例如 __no_customer__），
+      實際存到 form/filters 的欄位還是空字串，透過一個 writable computed
+      （get 時空字串轉哨兵值、set 時哨兵值轉回空字串）在畫面綁定與業務邏輯之間轉換，
+      不用改動任何既有讀寫該欄位的邏輯。
+
+      驗證：npm run typecheck 通過；瀏覽器實測 issues/new 頁客戶別下拉，
+      console 不再噴 ComboboxItem 例外，選單正常列出真實客戶清單。
+
+##### fix: 類別維護新增編號沒有補零成 4 碼
+      kind-maintain.vue 的 nextCode 用 padStart(2, '0')，跟既有資料（0201、0202…）
+      的 4 碼格式不一致，新增流程類別時算出「212」而不是「0212」。改成 padStart(4, '0')。
+
+##### chore: 業務議題本體 + CRM_Customer + H_FileLink 切到 Proril_Sales_Center
+      WorkProcessApiController（含 .Attach.cs/.Permission.cs）、
+      CustomQueryApiController.SaveCustom、UploadApiController.AddFileLog
+      改注入 SalesCenterDbContext，實際讀寫 Proril_Sales_Center，不再打 PRORIL_WEB。
+      對應實體改用 api/Data/SalesCenter/（dotnet ef scaffold 產生，不要手改）；
+      ApiModels.cs 的 DWorkProcessesEx 等 ViewModel 基底型別、ProrilWebDbContext 裡
+      這幾張表原本的手寫映射，都跟著調整/移除。M_User/M_Permission（1.0 還在寫）、
+      V_ERPCustomer、COP_* 維持不動，繼續留在 ProrilWebDbContext 打 PRORIL_WEB。
+      詳見 database/PortingNotes.md「已切連線」段落與 CLAUDE.md 對應說明。
+
+      驗證：dotnet build 通過；本機起一份 api 打 dev 的 SalesCenter 連線字串，
+      實測 GetKindList 讀到的資料與 Proril_Sales_Center.M_WorkProcessPhrase 一致，
+      SaveKindData 寫入的測試列出現在 Proril_Sales_Center 而非 PRORIL_WEB（測試列已清除）。
+
+</details>
+
+<details>
   <summary>版號2026.09.02.1700</summary>
 
 ##### refactor: 每一層都有自己的頁面，改成逐層下鑽（比照 1.0）
