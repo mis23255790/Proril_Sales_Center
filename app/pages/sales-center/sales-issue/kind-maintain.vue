@@ -91,14 +91,14 @@ const form = reactive({
  *
  * 後端 SaveKindData 是用 (phraseType, phraseCode) 判斷新增或更新，
  * 撞號會直接覆蓋掉別人的資料，所以新增時先算出目前最大值 + 1。
- * 編號是字串欄位，但實際內容都是數字，補到兩碼跟既有資料一致。
+ * 編號是字串欄位，但實際內容都是數字，補到四碼跟既有資料一致。
  */
 const nextCode = computed(() => {
   const max = phrases.value.reduce((acc, p) => {
     const n = Number.parseInt(p.phraseCode, 10)
     return Number.isNaN(n) ? acc : Math.max(acc, n)
   }, 0)
-  return String(max + 1).padStart(2, '0')
+  return String(max + 1).padStart(4, '0')
 })
 
 const openCreate = () => {
