@@ -19,7 +19,11 @@ COP_PoCheck
 COP_PoDetailCheck
 
 # 跨模組共用的附件 log。
-# 注意：M_User / M_Permission 刻意不放進這份白名單——CLAUDE.md 明訂這兩張表的帳號鎖定/
-# 建帳號/改密碼/權限維護仍是 1.0 Controller 在寫，2.0 不接手也不切連線，
-# 整張表（結構 + 資料）留在 PRORIL_WEB 由 1.0 控管。詳見 CLAUDE.md「不要動資料庫」那段。
 H_FileLink
+
+# 權限控管 (帳號 / 功能權限)。2026 進行中：完整搬遷到 2.0，含 1.0 帳號鎖定/建帳號/
+# 改密碼/權限維護的 Controller 邏輯，見 PortingNotes.md「權限控管搬遷」段落。
+# 搬完前這兩張表在 api/ 仍是唯讀（db.MUsers/db.MPermissions 打 ProrilWebDbContext），
+# 等對應 Controller 邏輯也搬完才切到 SalesCenterDbContext 寫入。
+M_User
+M_Permission

@@ -50,6 +50,11 @@
 > 寫入仍留在 1.0 打 `PRORIL_WEB`——否則登入鎖定/新建帳號/權限異動不會反映到
 > `Proril_Sales_Center`，會造成兩邊帳號權限狀態分岔。**新增功能一律不要對這兩張表加寫入邏輯。**
 > 目前 2.0 對這兩張表維持唯讀（`db.MUsers`/`db.MPermissions`，仍打 `ProrilWebDbContext`）。
+> **2026 進行中：往「完整搬遷」方向走**，`database/TABLES.txt` 已把這兩張表收進 DACPAC
+> schema 版控（16 張），但 `api/` 的讀寫還沒切，Controller 邏輯也還沒搬，
+> 進度與待辦看 `database/PortingNotes.md`「權限控管搬遷」段落——**在那邊的 Controller
+> 邏輯搬完、`api/` 正式切到 `SalesCenterDbContext` 之前，這兩張表在 `api/` 仍然只能
+> 唯讀，新增功能一律不要對它們加寫入邏輯，這條規則沒有改變。**
 >
 > 已核對「單一擁有者、之後可以放心切」且**已完成切連線**的表：業務議題 7 張（不含
 > `CRM_Customer`，只有 `WorkProcessApiController.cs`）、`CRM_Customer`（只有

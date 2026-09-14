@@ -20,9 +20,10 @@
 
 ## 這個目錄管什麼、不管什麼
 
-**管**：`TABLES.txt` 白名單裡的表的**結構**（欄位、型別、索引、條件約束）——目前是業務議題
-8 張 + 訂單資料檢核 5 張 + 跨模組共用的附件 log 1 張，共 14 張。
-`M_User`/`M_Permission` 刻意不在白名單內，見 `TABLES.txt` 的註解與 `CLAUDE.md`。
+**管**：`TABLES.txt` 白名單裡的表的**結構**（欄位、型別、索引、條件約束）——業務議題
+8 張 + 訂單資料檢核 5 張 + 跨模組共用的附件 log 1 張 + 權限控管 2 張（`M_User`/
+`M_Permission`，2026 進行中的完整搬遷，見 `PortingNotes.md`「權限控管搬遷」段落），
+共 16 張。
 
 **不管**：
 - 資料列。所有 extract / publish 都帶 `ExtractAllTableData=false`，不會碰到任何一筆資料

@@ -128,14 +128,10 @@ CREATE VIEW 開頭寫的是舊名字 `V_Produce_English_All`（`sp_rename` 只�
   **記得把上面這 7 個欄位重新改回 `nvarchar`**——直接照抄 `PRORIL_WEB` 的 `varchar` 定義
   會重新踩到同一個 collation 問題。
 - `database/` 目前的 DACPAC 版控（`Tables/*.sql`、`scripts/*.ps1`、`TABLES.txt`）納管的
-  是業務議題 8 張 + 訂單資料檢核 5 張 + `H_FileLink`，共 14 張（見 `README.md`）。
-  `M_User`/`M_Permission` **刻意排除在外**：這兩張表的帳號鎖定/建帳號/改密碼/權限維護
-  仍是 1.0 Controller 在寫（見 `CLAUDE.md`「不要動資料庫」那段），2.0 不接手也不切連線，
-  整張表（結構 + 資料）留在 `PRORIL_WEB` 由 1.0 完全控管，不受這裡的 DACPAC drift
-  檢查、也不會被 `copy-snapshot-data.ps1` 再複製進 `Proril_Sales_Center`。
-  這一輪之前已經複製進 `Proril_Sales_Center` 的 `M_User`/`M_Permission`
-  結構與資料**尚未從那個快照庫實際刪除**——這屬於動到既有資料庫的操作，
-  不是改 repo 設定檔能完成的，需要另外找有權限的人手動處理。
+  是業務議題 8 張 + 訂單資料檢核 5 張 + `H_FileLink` + 權限控管 2 張，共 16 張
+  （見 `README.md`）。`M_User`/`M_Permission` 從「刻意排除在外」改成「2026 進行中的
+  完整搬遷」，見下面「權限控管搬遷」小節——**schema 已收編，但 `api/` 的讀寫仍指向
+  `PRORIL_WEB`，資料還沒重新整批複製**，兩件事分開看，見下一節。
 - 訂單資料檢核相關的 7 View/5 SP/1 函式/5 表不在這一段（13 張表）的複製範圍內，
   腳本另外放在 `database/OrderCheckObjectsMigration.sql`，見上面「訂單資料檢核相關的
   View / 預存程序 / 函式」小節。
@@ -143,3 +139,52 @@ CREATE VIEW 開頭寫的是舊名字 `V_Produce_English_All`（`sp_rename` 只�
   repo 裡的腳本檔——若要重跑，流程是：查詢 `PRORIL_WEB` 對應表的 `sys.columns`/
   `sys.indexes` 組出 `CREATE TABLE`（欄位型別套用上表覆寫），
   `SET IDENTITY_INSERT ON` 後 `INSERT INTO ... SELECT ... FROM PRORIL_WEB.dbo.表名`。
+
+## 權限控管搬遷（2026 進行中，先做資料庫這半）
+
+目標是把 `M_User`/`M_Permission` 從「唯讀留在 `PRORIL_WEB`」改成「2.0 完整接手寫入」——
+CLAUDE.md 講得很白：這兩張表**要嘛連同 1.0 對應的兩支 Controller 一起搬過來寫新 DB，
+要嘛維持唯讀**，不能只切一半。這次先做資料庫這一半，Controller 邏輯
+（`MainApiController.cs` 的帳號鎖定/建帳號/改密碼/刪帳號、
+`MainApiController_SystemSetting.cs` 的權限維護）留到下一輪。
+
+### 這次做了什麼
+
+- `TABLES.txt` 加入 `M_User`/`M_Permission`，DACPAC schema 版控從 14 張變 16 張。
+- `Tables/M_User.sql`／`Tables/M_Permission.sql` **手動撰寫**，不是 `extract.ps1` 產出——
+  沙盒環境的唯讀分類器擋掉了直連正式區 `PRORIL_WEB` 做 schema extract 的動作
+  （`sqlcmd`/`sqlpackage` 對外連線一律被擋），改成照抄 1.0
+  `Models/ProrilWebContext.cs` 裡 `MUser`/`MPermission` 的 EF fluent mapping
+  （欄位型別、長度、PK 約束名稱 `PK__M_User__3214EC27F2F69166` /
+  `PK__M_Permis__3214EC274A3FED69` 都是從那邊照抄，不是憑空編的）。
+  **這兩個檔案還沒被 `extract.ps1` 驗證過**，正式排進 DACPAC 部署流程前，
+  請找能連正式區的人跑一次 `.\scripts\extract.ps1 -Environment prod` 蓋掉重新產生，
+  `git diff` 應該要是空的（沒有差異）才代表手動謄寫沒抄錯。
+- `README.md`（本目錄）與本檔前面幾節的敘述一併更新為 16 張表、拿掉「刻意排除」的舊字句。
+
+### 還沒做、需要人工執行（都需要能連正式區/測試區的帳密，這裡的沙盒連不過去）
+
+1. `extract.ps1 -Environment prod` —— 驗證上面手寫的兩個 `Tables/*.sql`（唯讀）。
+2. `.\scripts\publish.ps1 -Environment snapshot -Execute` —— 在 `Proril_Sales_Center`
+   建出 `M_User`/`M_Permission` 的表結構。**這兩張表的 `UserName`/`Modifier` 等欄位
+   有中文內容，比照上面「為什麼有 7 個欄位型別跟來源不一樣」那節的做法，
+   `Tables/*.sql` 裡維持 `PRORIL_WEB` 的 `varchar`，但 publish 到 `snapshot` 前
+   要先確認 DACPAC 是否會把這兩張表的 `UserName` varchar 開下去** ——
+   若會，得照抄同一招先在 `Proril_Sales_Center` 手動建成 `nvarchar(40)`，
+   不能直接信任 `publish.ps1` 的預設輸出，否則中文使用者名稱會變成 `?`。
+3. `.\scripts\copy-snapshot-data.ps1 -Environment test`（dry-run 看列數對照）→
+   確認無誤後 `-Execute`，把 `PRORIL_WEB` 最新的 `M_User`/`M_Permission` 資料
+   整批覆蓋進 `Proril_Sales_Center`（這一輪 2026-09-03 複製過的那份已經舊了，
+   之後 1.0 新增的帳號/權限都沒進去，見上面「已核對」段落）。
+4. `drift.ps1 -From snapshot -To prod` 收尾確認兩邊长一樣。
+
+### 之後（下一輪，不是這次的範圍）
+
+- `api/Data/SalesCenter/` 加上 `MUser`/`MPermission` 的 EF scaffold 對映
+  （`database/scripts/scaffold-sales-center.ps1`）。
+- 把 1.0 `Controllers/MainApiController.cs`（帳號鎖定/建帳號/改密碼/刪帳號）與
+  `Controllers/System/MainApiController_SystemSetting.cs`（權限維護）的邏輯
+  搬進 `api/Controllers/`，`db.MUsers`/`db.MPermissions` 才能從 `ProrilWebDbContext`
+  換成 `SalesCenterDbContext`——邏輯沒搬完前，即使資料庫這半做完了，
+  `api/` 也不能提前切連線，否則 1.0 那邊的登入鎖定/建帳號/權限異動會讀不到
+  `Proril_Sales_Center` 的最新狀態，兩邊帳號權限狀態分岔。
