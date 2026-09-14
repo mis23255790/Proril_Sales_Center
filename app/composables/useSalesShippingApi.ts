@@ -28,8 +28,12 @@ export type SalesOrderQuery = {
 /**
  * 銷貨檢索後端 API。
  *
- * 全部打舊 PRORIL 的 MixSalesShipApi / CustomerApi（經由 /api/proxy 轉發），
- * 不新增後端、不動資料庫（含預存程序 prc_QuerySalesOrder / prc_QuerySalesOrder_1）。
+ * 端點是 MixSalesShipApi / CustomerApi（經由 /api/proxy 轉發）。MixSalesShipApi 已經搬進
+ * api/Controllers/SalesSearch/，端點名稱與參數大小寫跟 1.0 一字不差，所以
+ * NUXT_PUBLIC_API_BASE 指 api/ 或 1.0 站台都能跑，這支 composable 不用改。
+ *
+ * 查詢邏輯仍在預存程序 prc_QuerySalesOrder / prc_QuerySalesOrder_1 裡（目前還在 PRORIL_WEB，
+ * 搬移腳本見 database/SalesShippingObjectsMigration.sql）。
  */
 export const useSalesShippingApi = () => {
   const { apiFetch } = useApi()

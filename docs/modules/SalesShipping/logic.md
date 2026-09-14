@@ -6,30 +6,52 @@
        Controllers/MixSalesShip/MixSalesShipController.cs   MVC 入口（回空 View）
        Views/Mix/SalesShipping.cshtml
        wwwroot/js/mix/{sales-shipping, sales-shipping-apis}.js
-       Controllers/MixSalesShip/MixSalesShipApiController.cs        ← **後端沒搬，繼續用**
-       Controllers/MixSalesShip/MixSalesShipApiController_XlsOut.cs ← ExportXls
+       Controllers/MixSalesShip/MixSalesShipApiController.cs        ← 已搬（見下）
+       Controllers/MixSalesShip/MixSalesShipApiController_XlsOut.cs ← ExportXls，已搬
        SystemId.MixSales = 32 / FunctionId.MixSalesShipping = 410
 
+###### 對應 2.0 後端
+       api/Controllers/SalesSearch/MixSalesShipApiController.cs      GetSalesOrder / GetSalesOrder_1
+       api/Controllers/SalesSearch/MixSalesShipApiController.Xls.cs  ExportXls
+       api/Data/SalesShippingEntities.cs                             CopSalesOrder
+
 ###### 相關資料表 / 預存程序
-     COP_SalesOrder（EF: CopSalesOrder）  查詢結果暫存表，兩支 API 都 FromSql 這張
+     COP_SalesOrder（EF: CopSalesOrder）  ERP 銷貨單明細快取，也是兩支查詢 SP 的結果集形狀
+     prc_ImportSalesOrder     從鼎新 ERP（linked server [192.168.1.200]）增量補 COP_SalesOrder
+                              兩支查詢 SP 進來第一行就叫它 → **查詢其實會寫資料**
      prc_QuerySalesOrder      依品號(TH004)分群，GetSalesOrder 呼叫
      prc_QuerySalesOrder_1    依銷貨單(TH001+TH002)分群，GetSalesOrder_1 呼叫
                               也是兩個明細 modal 在用（帶 orderType/orderNo 篩單一銷貨單）
      M_Permission / M_PermissionLinkType   金額欄位權限（FunctionNo=410, LinkType=100）
 </details>
 
-# 架構：只搬前端
-
-跟 `docs/modules/SalesIssue/logic.md`（業務議題）一樣，只搬 Nuxt 前端，後端沿用 1.0 的 `MixSalesShipApi`。
+# 架構：前後端都在 2.0
 
 ```
 Nuxt 頁面 ──▶ useSalesShippingApi() ──▶ /api/proxy/... ──▶ server/api/proxy/[...path].ts
-                                                              └─▶ NUXT_PUBLIC_API_BASE (.NET) /MixSalesShipApi/...
+                                                              └─▶ NUXT_PUBLIC_API_BASE /MixSalesShipApi/...
 ```
 
-- **沒有新後端、沒有動資料庫**（含 View / StoredProcedure）。
-- 任何查詢邏輯要改，回 `PRORIL/DB/prc_QuerySalesOrder(_1).sql`；欄位要改，回
-  `MixSalesShipApiController.cs`。
+`NUXT_PUBLIC_API_BASE` 指到 `api/` 或 1.0 站台都能跑——端點名稱、參數大小寫與回傳信封
+一字不差（`GetSalesOrder_1` 的 `OrderType`/`OrderNo` 是大寫開頭，其餘小寫開頭，別順手改）。
+
+- 查詢邏輯在預存程序裡，要改回 `database/SalesShippingObjectsMigration.sql`
+  （那份是從 `PRORIL_WEB` 原樣抄出來的，1.0 repo 的 `DB/prc_QuerySalesOrder_1.sql`
+  是舊版本，不要拿它當準）；欄位與匯出版面要改，回
+  `api/Controllers/SalesSearch/MixSalesShipApiController*.cs`。
+- **資料庫物件目前還在 `PRORIL_WEB`**：`api/` 的 `CopSalesOrder` 對映在
+  `ProrilWebDbContext`，`EXEC prc_QuerySalesOrder(_1)` 也還是在舊庫執行。
+  搬到 `Proril_Sales_Center` 的腳本已經產好但**尚未執行**，細節與注意事項見
+  `database/PortingNotes.md`「銷貨檢索相關的表 / 預存程序」。
+
+## 與 1.0 後端的差異（刻意的）
+
+| 項目 | 1.0 | 2.0 |
+|---|---|---|
+| SQL 參數 | 把使用者輸入串進 `EXEC` 字串 | `FromSqlInterpolated` 交給 EF 參數化 |
+| 匯出版面 | 讀 `PUR_XlsFileFormat`（FunctionNo=410）動態組表頭/欄寬/數字格式 | 寫死在 C#（表頭與數字格式照抄那張表），欄寬改用 `AdjustToContents()` |
+| 匯出用的 EF 型別 | 另一個空殼型別 `CopMdlSalesOrder1`（對映 0 筆的 `COP_MDL_SalesOrder_1`） | 與查詢共用 `CopSalesOrder`，那張表不搬 |
+| try/catch | 每個 action 自己包 | 全域 `ApiExceptionFilter`，見 CLAUDE.md |
 
 # 兩支查詢 API，同時打，餵給不同分頁
 
@@ -136,9 +158,16 @@ usePermission().checkLinkTypePermission(410, 100)
 
 # 尚未搬移
 
-搬過來的是銷貨檢索這一支查詢頁。以下舊功能**還沒做**，需要時再補：
+搬過來的是銷貨檢索這一支查詢頁的前端與它用到的三支後端端點
+（`GetSalesOrder` / `GetSalesOrder_1` / `ExportXls`）。以下舊功能**還沒做**，需要時再補：
 
-- `MixSalesShipApi/GetCOPOrder`（早期/未用的全表查詢，畫面上沒有入口）
+- 1.0 同一支 `MixSalesShipApiController` 底下的其他端點，它們屬於別的模組、
+  2.0 前端目前也沒有呼叫：`GetCOPOrder`（早期/未用的全表查詢，畫面上沒有入口）、
+  `GetFinalQuotation` / `ExportCustomerPrice`（報價）、`GetSalesTotal` /
+  `GetCustomerCredit` / `GetCustomerCreditCRM` / `GetCustomerOrderTotal` /
+  `GetCustomerUnfinOrder`（客戶相關頁籤）。
+  其中 `GetSalesTotal` 走的 `V_SalesTotal` 也讀 `COP_SalesOrder`，
+  搬它的時候要一併處理那張表的歸屬。
 - 頁面級功能權限檢查 `checkPermission(functionId)`（`MainApi/CheckUserPermission`）——
   2.0 目前假設能進到路由就有權限，之後若要做選單/路由層級的權限守衛再補
 - `業務檢索`系統底下其他功能（報價、應收帳款、未完工訂單等，`MixSalesShip` 目錄下

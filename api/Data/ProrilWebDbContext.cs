@@ -7,8 +7,13 @@ namespace Proril.SalesIssue.Api.Data;
 ///
 /// 業務議題本體（D_WorkProcess* / M_WorkProcessPhrase / M_WorkProcessType）、
 /// CRM_Customer、H_FileLink 已確認單一擁有者、切到 <see cref="SalesCenter.SalesCenterDbContext"/>
-/// 打 Proril_Sales_Center，不再對映在這裡。M_User / M_Permission 因為 1.0 的
-/// 登入鎖定/建帳號/權限維護還在寫 PRORIL_WEB，維持唯讀留在這裡，見 CLAUDE.md 「已核對」段落。
+/// 打 Proril_Sales_Center，不再對映在這裡。M_User / M_Permission / M_PermissionGroup
+/// 在 2026 的權限控管搬遷裡跟著人員管理／權限管理的 Controller 一起切過去，同樣不在這裡。
+///
+/// 留在這裡的權限相關表只剩 M_Department（1.0 OrgApiController 在寫），**唯讀**。
+/// M_PermissionLinkType 原本也在這裡，但 FunctionNo 改成 AAABBCC 格式之後跨庫對不起來
+/// （舊庫還是 int），已一併搬到 SalesCenterDbContext，見
+/// database/FunctionNoFormatMigration.sql。
 ///
 /// 這是 database-first：schema 由 <c>database/</c> 的 DACPAC 管，這裡只做對映，
 /// **不要**用 EF Migrations 去改 DB。PRORIL_WEB 裡混著鼎新 ERP 的表，
@@ -21,9 +26,7 @@ public class ProrilWebDbContext : DbContext
 {
     public ProrilWebDbContext(DbContextOptions<ProrilWebDbContext> options) : base(options) { }
 
-    public virtual DbSet<MUser> MUsers { get; set; } = null!;
-    public virtual DbSet<MPermission> MPermissions { get; set; } = null!;
-    public virtual DbSet<MSystem> MSystems { get; set; } = null!;
+    public virtual DbSet<MDepartment> MDepartments { get; set; } = null!;
     public virtual DbSet<VErpcustomer> VErpcustomers { get; set; } = null!;
 
     // ---- 訂單資料檢核（OrderInfoVerify），見 OrderInfoVerifyEntities.cs ----
@@ -39,6 +42,12 @@ public class ProrilWebDbContext : DbContext
     public virtual DbSet<CopGetCredit> CopGetCredits { get; set; } = null!;
     public virtual DbSet<CopGetCreditCrm> CopGetCreditCrms { get; set; } = null!;
 
+    // ---- 銷貨檢索（MixSalesShip），見 SalesShippingEntities.cs ----
+    public virtual DbSet<CopSalesOrder> CopSalesOrders { get; set; } = null!;
+
+    // ---- 未完成訂單檢索（SalesOrderUnFinish），見 SalesOrderUnfinishEntities.cs ----
+    public virtual DbSet<UnfinOrder> UnfinOrders { get; set; } = null!;
+
     // ---- 客戶資料維護 + 任務信件往來記錄（Customer），見 CustomerEntities.cs ----
     public virtual DbSet<MCustomer> MCustomers { get; set; } = null!;
     public virtual DbSet<VCopCustomer> VCopCustomers { get; set; } = null!;
@@ -47,36 +56,19 @@ public class ProrilWebDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<MUser>(entity =>
+        modelBuilder.Entity<MDepartment>(entity =>
         {
-            entity.ToTable("M_User");
-            entity.HasKey(e => e.Id).HasName("PK__M_User__3214EC27F2F69166");
+            entity.ToTable("M_Department");
+            entity.HasKey(e => e.Id).HasName("PK__M_Depart__3214EC2799095914");
 
             entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.LastChangePwd).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<MPermission>(entity =>
-        {
-            entity.ToTable("M_Permission");
-            entity.HasKey(e => e.Id).HasName("PK__M_Permis__3214EC274A3FED69");
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-            entity.Property(e => e.ModiTime).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<MSystem>(entity =>
-        {
-            entity.ToTable("M_System");
-            entity.HasKey(e => e.Id).HasName("PK__M_System__3214EC279302271C");
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.Href).HasMaxLength(50).HasDefaultValue("");
-            entity.Property(e => e.ImagePath).HasMaxLength(50).IsUnicode(false);
-            entity.Property(e => e.RedirectHref).HasMaxLength(50);
-            entity.Property(e => e.SystemName).HasMaxLength(20);
-            entity.Property(e => e.TypeName).HasMaxLength(20);
+            entity.Property(e => e.DepCode).HasMaxLength(10).IsUnicode(false);
+            entity.Property(e => e.DepLeader).HasMaxLength(10).IsUnicode(false);
+            entity.Property(e => e.DepName).HasMaxLength(40).IsUnicode(false);
+            entity.Property(e => e.Directions).IsUnicode(false);
+            entity.Property(e => e.IsEnable).HasDefaultValue(true);
+            entity.Property(e => e.OrgChartFlag).HasDefaultValue(true);
+            entity.Property(e => e.ParentsDep).HasMaxLength(10).IsUnicode(false);
         });
 
         modelBuilder.Entity<VErpcustomer>(entity =>
@@ -325,6 +317,57 @@ public class ProrilWebDbContext : DbContext
         // keyless，只給 Set<T>().FromSqlInterpolated(...) 用，不對應任何表/view
         modelBuilder.Entity<CopGetCredit>().HasNoKey();
         modelBuilder.Entity<CopGetCreditCrm>().HasNoKey();
+        modelBuilder.Entity<UnfinOrder>().HasNoKey();
+
+        modelBuilder.Entity<CopSalesOrder>(entity =>
+        {
+            entity.ToTable("COP_SalesOrder");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.AStatus).HasMaxLength(1).IsUnicode(false).HasColumnName("aStatus");
+            entity.Property(e => e.CopSource).HasMaxLength(10).HasDefaultValue("").HasColumnName("COP_Source");
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.Creator).HasMaxLength(40);
+            entity.Property(e => e.CustomerName).HasMaxLength(80);
+            entity.Property(e => e.CustomerNo).HasMaxLength(20).IsUnicode(false);
+            entity.Property(e => e.FooterFlag).HasMaxLength(1).IsUnicode(false).HasDefaultValue("");
+            entity.Property(e => e.Memo).HasMaxLength(500);
+            entity.Property(e => e.ModiTime).HasColumnType("datetime");
+            entity.Property(e => e.Modifier).HasMaxLength(40);
+            entity.Property(e => e.PlanNumber).HasMaxLength(40);
+            entity.Property(e => e.PlanNumber1).HasMaxLength(40);
+            entity.Property(e => e.SumAmt).HasColumnType("numeric(21, 6)").HasDefaultValue(0m);
+            entity.Property(e => e.SumQty).HasColumnType("numeric(16, 3)").HasDefaultValue(0m);
+            entity.Property(e => e.Ta001).HasMaxLength(4).IsFixedLength().HasColumnName("TA001");
+            entity.Property(e => e.Ta0011).HasMaxLength(4).IsFixedLength().HasColumnName("TA0011");
+            entity.Property(e => e.Ta002).HasMaxLength(11).IsFixedLength().HasColumnName("TA002");
+            entity.Property(e => e.Ta0021).HasMaxLength(11).IsFixedLength().HasColumnName("TA0021");
+            entity.Property(e => e.Ta026).HasMaxLength(4).HasColumnName("TA026");
+            entity.Property(e => e.Ta027).HasMaxLength(11).HasColumnName("TA027");
+            entity.Property(e => e.Ta028).HasMaxLength(4).HasColumnName("TA028");
+            entity.Property(e => e.Tc012).HasMaxLength(20).HasDefaultValue("").HasColumnName("TC012");
+            entity.Property(e => e.Tg003).HasMaxLength(50).HasDefaultValue("").HasColumnName("TG003");
+            entity.Property(e => e.Tg011).HasMaxLength(4).HasColumnName("TG011");
+            entity.Property(e => e.Tg012).HasColumnType("numeric(16, 3)").HasColumnName("TG012");
+            entity.Property(e => e.Th001).HasMaxLength(50).HasDefaultValue("").HasColumnName("TH001");
+            entity.Property(e => e.Th002).HasMaxLength(50).HasColumnName("TH002");
+            entity.Property(e => e.Th003).HasMaxLength(50).HasColumnName("TH003");
+            entity.Property(e => e.Th004).HasMaxLength(40).HasColumnName("TH004");
+            entity.Property(e => e.Th005).HasMaxLength(120).HasColumnName("TH005");
+            entity.Property(e => e.Th006).HasMaxLength(120).HasColumnName("TH006");
+            entity.Property(e => e.Th007).HasMaxLength(10).HasColumnName("TH007");
+            entity.Property(e => e.Th008).HasColumnType("numeric(16, 3)").HasColumnName("TH008");
+            entity.Property(e => e.Th009).HasMaxLength(6).HasColumnName("TH009");
+            entity.Property(e => e.Th012).HasColumnType("numeric(21, 6)").HasColumnName("TH012");
+            entity.Property(e => e.Th013).HasColumnType("numeric(21, 6)").HasColumnName("TH013");
+            entity.Property(e => e.Th014).HasMaxLength(4).HasColumnName("TH014");
+            entity.Property(e => e.Th015).HasMaxLength(11).HasColumnName("TH015");
+            entity.Property(e => e.Th016).HasMaxLength(4).HasColumnName("TH016");
+            entity.Property(e => e.Th018).HasMaxLength(255).HasDefaultValue("").HasColumnName("TH018");
+            entity.Property(e => e.Th024).HasColumnType("numeric(16, 3)").HasColumnName("TH024");
+            entity.Property(e => e.Th037).HasColumnType("numeric(21, 6)").HasColumnName("TH037");
+            entity.Property(e => e.Th038).HasColumnType("numeric(21, 6)").HasColumnName("TH038");
+        });
 
         modelBuilder.Entity<MCustomer>(entity =>
         {

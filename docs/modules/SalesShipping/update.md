@@ -1,4 +1,55 @@
 <details>
+  <summary>版號2026.09.14.1700</summary>
+
+##### feat: 銷貨檢索後端自 1.0 搬到 api/，並產出資料庫物件遷移腳本
+      後端 (api/Controllers/SalesSearch/):
+          MixSalesShipApiController.cs      GetSalesOrder / GetSalesOrder_1
+          MixSalesShipApiController.Xls.cs  ExportXls (四個分頁, 金額欄位權限 410/100)
+          api/Data/SalesShippingEntities.cs CopSalesOrder, 對映在 ProrilWebDbContext
+
+      端點名稱/參數大小寫/回傳信封與 1.0 一字不差, 前端 useSalesShippingApi.ts 不用改,
+      NUXT_PUBLIC_API_BASE 指 api/ 或 1.0 站台都能跑。
+
+      刻意的差異:
+          SQL 改 FromSqlInterpolated 參數化 (1.0 是直接串字串, 有 injection 風險)
+          匯出版面不再讀 PUR_XlsFileFormat 動態組, 改寫死在 C# (表頭與數字格式照抄
+              那張表的 FunctionNo=410 設定), 欄寬改 AdjustToContents()
+          不搬 COP_MDL_SalesOrder_1 (0 筆空殼表, 無人參照), 匯出改用 CopSalesOrder
+
+      資料庫 (測試區已執行完成):
+          database/SalesShippingObjectsMigration.sql
+              COP_SalesOrder 1 張表 + prc_QuerySalesOrder / prc_QuerySalesOrder_1 /
+              prc_ImportSalesOrder 3 支預存程序, 0 個 View。
+              唯一改過的邏輯: prc_ImportSalesOrder 兩處寫死的
+              PRORIL_WEB.dbo.COP_SalesOrder 改成 dbo.COP_SalesOrder。
+              PRORIL_WEB.dbo.NPS_D_Order 的參照刻意保留 (那張表屬於別的模組)。
+          database/Tables/COP_SalesOrder.sql + TABLES.txt  收進 DACPAC schema 版控
+          database/scripts/run-objects-migration.ps1
+              新增: 執行 *ObjectsMigration.sql 的共用執行器 (訂單資料檢核那支也適用)。
+              預設 dry-run: 目標庫與腳本 USE 對帳 / linked server [192.168.1.200] 檢查 /
+              物件現況列表 / SET PARSEONLY ON 驗語法; 加 -Execute 才真的跑。
+              一律用 sqlcmd -f 65001 讀 (腳本是 UTF-8 無 BOM 且含中文字串常值)。
+
+      注意: prc_QuerySalesOrder(_1) 進來第一行就 EXEC prc_ImportSalesOrder,
+      所以「查詢」其實會對 COP_SalesOrder 做 INSERT/DELETE, 不是唯讀。
+      詳見 database/PortingNotes.md「銷貨檢索相關的表 / 預存程序」。
+
+##### fix(db): Proril_Sales_Center 定序對齊 PRORIL_WEB
+      執行上面那支遷移腳本時發現的: 同一份資料、同一組查詢條件,
+      prc_QuerySalesOrder_1 在兩個庫回傳的分群統計筆數不一樣 (200/24/33 vs 194/23/32)。
+      原因是 Proril_Sales_Center 建庫時沿用 instance 預設的
+      SQL_Latin1_General_CP1_CI_AS, 與 PRORIL_WEB 的 Chinese_Taiwan_Stroke_BIN 不同,
+      SP 的 ORDER BY 在兩種定序下順序有 13 列不同, 而它的分群是用游標比對相鄰列做的。
+
+      已用新增的 database/scripts/fix-collation.ps1 把整個庫對齊
+      (142 個字元欄位 / 15 張表 / 1 個索引重建), 改完兩支 SP 在兩庫的結果完全一致。
+      這不只影響銷貨檢索 —— 業務議題與權限控管那幾張表的字串比對原本也是
+      「不分大小寫」, 現在回到 1.0 的 BIN 語意。詳見
+      database/PortingNotes.md「定序已對齊」與 database/README.md「定序 (collation)」。
+
+</details>
+
+<details>
   <summary>版號2026.09.10.1200</summary>
 
 ##### fix: 客戶下拉選單渲染失敗
