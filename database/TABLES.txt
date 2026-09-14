@@ -18,12 +18,33 @@ COP_PassCheck
 COP_PoCheck
 COP_PoDetailCheck
 
+# 銷貨檢索 (MixSalesShip)。來源：docs/modules/SalesShipping/logic.md
+# ERP 銷貨單明細快取，prc_ImportSalesOrder 增量寫入、prc_QuerySalesOrder(_1) 查詢。
+# 搬移腳本（表 + 3 支預存程序）是 SalesShippingObjectsMigration.sql，尚未執行。
+COP_SalesOrder
+
 # 跨模組共用的附件 log。
 H_FileLink
 
-# 權限控管 (帳號 / 功能權限)。2026 進行中：完整搬遷到 2.0，含 1.0 帳號鎖定/建帳號/
-# 改密碼/權限維護的 Controller 邏輯，見 PortingNotes.md「權限控管搬遷」段落。
-# 搬完前這兩張表在 api/ 仍是唯讀（db.MUsers/db.MPermissions 打 ProrilWebDbContext），
-# 等對應 Controller 邏輯也搬完才切到 SalesCenterDbContext 寫入。
+# 權限控管 (帳號 / 功能權限 / 群組預設功能)。2026 完整搬遷到 2.0：1.0 的人員管理
+# （MainApiController）與權限管理（MainApiController_SystemSetting）邏輯已搬進
+# api/Controllers/Shared/MainApiController.User.cs / .SystemSetting.cs，
+# 這三張表在 api/ 已改打 SalesCenterDbContext 讀寫，見 PortingNotes.md「權限控管搬遷」。
 M_User
 M_Permission
+M_PermissionGroup
+
+# 功能主檔。api/ 已切到 Proril_Sales_Center 讀（權限樹第一、二層 + 側欄 + topbar 環境圖示），
+# 但**資料只保留 2.0 真的有頁面的那幾列**（3 個系統別 + 8 個功能），不是整份複製——
+# copy-snapshot-data.ps1 會跳過這兩張，資料由 PermissionMasterSeed.sql 維護。
+# 應用層沒有任何寫入路徑（1.0 全站 grep 過，直接維護在 DB），2.0 也維持唯讀。
+M_System
+M_Function
+
+# 權限控管的唯讀主檔。2.0 讀它們長出權限樹，但它們在 1.0 還有別的寫入者，
+# 所以 api/ 仍打 PRORIL_WEB：
+# M_PermissionLinkType 由 1.0 Controllers/Query/FileQueryApiController 在寫；
+# M_Department 由 1.0 Controllers/System/OrgApiController（組織維護）在寫。
+# 收進 schema 版控只是為了讓結構跟著 branch 走，**不代表 api/ 已經切連線**。
+M_PermissionLinkType
+M_Department
