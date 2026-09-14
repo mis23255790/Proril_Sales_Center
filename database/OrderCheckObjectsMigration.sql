@@ -38,6 +38,15 @@
  *   5. 資料複製區塊（表結構之後那段 INSERT）在表已經有資料時會自動跳過，
  *      避免重跑腳本造成資料重複。
  *
+ * 怎麼執行：走 database/scripts/run-objects-migration.ps1（檔案是 UTF-8 無 BOM，
+ * 那支 ps1 一律用 sqlcmd -f 65001 讀，不要以別的編碼開啟後另存）：
+ *
+ *   .\scripts\run-objects-migration.ps1 -Script OrderCheckObjectsMigration.sql -Environment snapshot
+ *   .\scripts\run-objects-migration.ps1 -Script OrderCheckObjectsMigration.sql -Environment snapshot -Execute
+ *
+ * 不加 -Execute 只做檢查：目標庫與這裡的 USE 對帳、linked server 在不在、
+ * 物件現況、SET PARSEONLY ON 驗語法。
+ *
  * 執行前建議：
  *   - 確認連到的是 Proril_Sales_Center（192.168.1.142,50002），不是 PRORIL_WEB。
  *   - prc_COPOrderChk / prc_ProductChk_COP 內容很長（各 700+ 行），業務邏輯完整、

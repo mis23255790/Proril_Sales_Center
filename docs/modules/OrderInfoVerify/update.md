@@ -27,6 +27,34 @@
 </details>
 
 <details>
+  <summary>版號2026.09.14.1800</summary>
+
+##### chore(db): 訂單資料檢核的資料庫物件已搬進 Proril_Sales_Center (測試區)
+      跑了 database/OrderCheckObjectsMigration.sql (走 scripts/run-objects-migration.ps1)，
+      18 個物件全部建立: 7 View + 5 SP + 1 函式 + 5 表。
+
+      驗證:
+          5 張表筆數與 PRORIL_WEB 逐一相同
+              COP_PoCheck 446 / COP_PoDetailCheck 1256 / COP_PassCheck 47 /
+              COP_AvailableAmt 2790 / COP_ProductCheck 23135
+          7 個 View 在新庫查得到資料且筆數與舊庫一致
+              196 / 4974 / 18688 / 9984 / 7078 / 3 / 22
+              → instance 層級的 linked server [192.168.1.200] 在新庫同樣可用
+
+      還沒驗: prc_COPOrderChk / prc_COPPassCheck / prc_COPGetCredit /
+      prc_ProductChk_COP 四支都會寫資料，沒有「只查不寫」的跑法，要驗得挑一張
+      可以拿來試的訂單。
+
+      **api/ 還沒切連線**: OrderInfoVerifyApiController 仍打 ProrilWebDbContext，
+      SP 也還是在 PRORIL_WEB 執行。切連線要三支呼叫入口 (ErpImportApi /
+      BomQueryApi / OrderInfoVerifyApi) 一併確認，見 CLAUDE.md。
+
+      同時間整個 Proril_Sales_Center 的定序已對齊成 Chinese_Taiwan_Stroke_BIN，
+      詳見 database/PortingNotes.md「定序已對齊」。
+
+</details>
+
+<details>
   <summary>版號2026.09.10.1200</summary>
 
 ##### fix: 客戶下拉選單渲染失敗

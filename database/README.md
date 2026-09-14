@@ -18,17 +18,43 @@
 | 欄位加完後同步 EF Model | git（schema）→ C# | `sync-model.ps1` | 手動把提示的差異貼進 `Entities.cs` |
 | 快照庫建好後灌資料 | PRORIL_WEB → Proril_Sales_Center | `copy-snapshot-data.ps1` | 半自動，dry-run 預覽 + `-Execute` 確認 |
 
+> ⚠️ `copy-snapshot-data.ps1` **不加 `-Tables` 就是整批覆蓋白名單的每一張表**，
+> 包含 `D_WorkProcess*` / `CRM_Customer` / `H_FileLink`——那幾張在 `Proril_Sales_Center`
+> 已經是正式讀寫的資料，來源 `PRORIL_WEB` 那份停在 2026-09-03 的快照，
+> 整批跑下去等於把業務議題資料倒退回舊版本。補灌特定幾張一律用
+> `-Tables M_User,M_Permission` 這種寫法限定範圍。
+| 搬 View/SP 到快照庫 | `*ObjectsMigration.sql` → DB | `run-objects-migration.ps1` | 半自動，dry-run 檢查 + `-Execute` 確認 |
+| 快照庫定序對齊來源 | DB → DB | `fix-collation.ps1` | 半自動，dry-run 檢查 + `-Execute` 確認（需停機） |
+
 ## 這個目錄管什麼、不管什麼
 
 **管**：`TABLES.txt` 白名單裡的表的**結構**（欄位、型別、索引、條件約束）——業務議題
-8 張 + 訂單資料檢核 5 張 + 跨模組共用的附件 log 1 張 + 權限控管 2 張（`M_User`/
-`M_Permission`，2026 進行中的完整搬遷，見 `PortingNotes.md`「權限控管搬遷」段落），
-共 16 張。
+8 張 + 訂單資料檢核 5 張 + 銷貨檢索 1 張 + 跨模組共用的附件 log 1 張 + 權限控管 7 張，
+共 22 張。
+
+權限控管那 7 張要分三種看（見 `PortingNotes.md`「權限控管搬遷」段落）：
+- **已切連線、`api/` 會寫**：`M_User`、`M_Permission`、`M_PermissionGroup`
+- **已切連線、`api/` 唯讀，而且新庫只保留部分資料列**：`M_System`、`M_Function`、
+  `M_PermissionLinkType`。只收 2.0 真的有頁面的 3 個系統別 + 8 個功能（及其 4 列細項），
+  由 `PermissionMasterSeed.sql` / `FunctionNoFormatMigration.sql` 維護，
+  `copy-snapshot-data.ps1` 會跳過 `M_System` / `M_Function`。
+- **只收 schema、`api/` 唯讀且仍打 `PRORIL_WEB`**：`M_Department`
+  （1.0 的組織維護還在寫它）。**收進版控不等於切連線**，兩件事分開看。
+
+> ⚠️ **`FunctionNo` 在兩個庫型別不同**：`PRORIL_WEB` 是 `int`，
+> `Proril_Sales_Center` 是 `varchar(8)`（AAABBCC 格式，見 `PortingNotes.md`
+> 「FunctionNo 改成 AAABBCC 格式」）。`Tables/` 底下的 .sql 是 `PRORIL_WEB` 的正本、
+> 維持 `int`，所以 `publish.ps1 -Environment snapshot` 與 `drift.ps1` 對快照庫
+> 一定會報 `M_Function` / `M_Permission` / `M_PermissionGroup` /
+> `M_PermissionLinkType` / `H_FileLink` 這幾個欄位的差異——**那是預期的，不要套用回去**。
 
 **不管**：
 - 資料列。所有 extract / publish 都帶 `ExtractAllTableData=false`，不會碰到任何一筆資料
   （資料列的搬移是 `copy-snapshot-data.ps1` 的事，見下面「快照庫資料複製」）。
 - View、Stored Procedure。專案規範明訂不動這些。
+  把既有的 View/SP **原樣搬一份**到 `Proril_Sales_Center` 是另一回事，那不走 DACPAC，
+  物件寫在 `database/*ObjectsMigration.sql`，用 `scripts/run-objects-migration.ps1`
+  執行（見下面「View / 預存程序的搬移」）。
 - 白名單以外的表。`PRORIL_WEB` 有 400+ 張表（含鼎新 ERP 的），這裡只收業務議題用到的。
 
 **注意**：本 repo (`Proril_Sales_Center`) 是純 Nuxt 前端，沒有自己的資料庫。
@@ -178,6 +204,69 @@ CLAUDE.md 說的「18 張表一次性複製」是指把 `PRORIL_WEB` 白名單�
 `-Environment test` / `prod` 選的是**來源** `PRORIL_WEB` 在哪個 instance，目標會自動對到
 同一個 instance 上的快照庫（`test` → `snapshot`，`prod` → `snapshot-prod`），因為腳本假設
 來源跟目標永遠在同一台 SQL Server 上，用三段式命名跨資料庫查詢，不用設 linked server。
+
+## View / 預存程序的搬移
+
+DACPAC 只管資料表結構，View/SP 不納管（上面「不管」那段）。但要讓某個模組在
+`Proril_Sales_Center` 完整跑起來，它吃的 View/SP 還是得原樣複製一份過去。
+這些物件寫在 `database/` 底下的 `*ObjectsMigration.sql`，由
+`scripts/run-objects-migration.ps1` 執行：
+
+| 腳本 | 內容 | 狀態 |
+|---|---|---|
+| `OrderCheckObjectsMigration.sql` | 訂單資料檢核：7 View + 5 SP + 1 函式 + 5 表 | 測試區已執行 |
+| `SalesShippingObjectsMigration.sql` | 銷貨檢索：3 SP + 1 表 | 測試區已執行 |
+
+```powershell
+# 1. 先看看要做什麼（不會動任何東西）
+.\scripts\run-objects-migration.ps1 -Script SalesShippingObjectsMigration.sql -Environment snapshot
+
+# 2. 確認無誤再執行
+.\scripts\run-objects-migration.ps1 -Script SalesShippingObjectsMigration.sql -Environment snapshot -Execute
+```
+
+dry-run 會做四件事：目標資料庫與腳本裡的 `USE` 對帳、檢查 linked server
+`[192.168.1.200]`（鼎新 ERP，View/SP 都靠它，缺了建得起來但一執行就失敗）、
+列出腳本會建立的物件在目標端「已存在／不存在」、把整份腳本以 `SET PARSEONLY ON`
+送進 SQL Server 驗語法。
+
+兩支腳本都可重複執行：`CREATE TABLE` 包 `IF OBJECT_ID(...) IS NULL`、
+View/SP/函式一律 `CREATE OR ALTER`、資料複製區塊在表已經有資料時自動跳過。
+
+> **編碼**：腳本是 UTF-8 無 BOM，而且 `prc_ImportSalesOrder` 裡有中文字串常值
+> （`'浦瑞ERP'` / `'芳晟ERP'`）。`run-objects-migration.ps1` 一律用 `sqlcmd -f 65001`
+> 讀。若要改用 SSMS 手動跑，開檔時務必選 UTF-8，不要以 ANSI 開啟後另存，
+> 否則那兩個字串會變亂碼寫進資料。
+
+## 定序（collation）
+
+`Proril_Sales_Center` 的定序**必須與 `PRORIL_WEB` 相同**：`Chinese_Taiwan_Stroke_BIN`。
+測試區的那一份已經在 2026-09-14 對齊（原本是建庫時沿用 instance 預設的
+`SQL_Latin1_General_CP1_CI_AS`）。
+
+不一致的後果不是只有「中文變問號」那麼直白——**排序與比對語意會變**，
+實際踩到的案例是銷貨檢索的預存程序在兩個庫回傳不同的分群統計筆數。
+完整來龍去脈見 `PortingNotes.md`「定序已對齊」。
+
+**新建這個資料庫時，`CREATE DATABASE` 就直接指定定序**，不要靠事後修：
+
+```sql
+CREATE DATABASE [Proril_Sales_Center] COLLATE Chinese_Taiwan_Stroke_BIN;
+```
+
+真的已經建成別的定序了，用這支修（預設 dry-run，會列出所有要改的欄位、
+要重建的索引，並掃描 varchar 欄位有沒有非 ASCII 內容）：
+
+```powershell
+.\scripts\fix-collation.ps1 -Environment snapshot
+.\scripts\fix-collation.ps1 -Environment snapshot -Execute
+```
+
+`-Execute` 會 `SET SINGLE_USER WITH ROLLBACK IMMEDIATE`，**踢掉所有連線**，
+跑之前要先停掉 `api/` 與任何連著這個庫的工具。
+
+DACPAC 這邊不用配合改：`Tables/*.sql` 不帶 `COLLATE` 子句，publish 出去的欄位
+沿用資料庫預設。
 
 ## 相關文件
 
