@@ -47,6 +47,7 @@ dotnet run
 | `MainApi`（人員管理） | GetUserSetting / AddUser / UpdateUser / DeleteUser / ResetPassword / UnlockUser / GetAllUserList |
 | `MainApi`（權限管理） | GetMSystem / GetMFunction / GetMPermissionLinkType / GetPermissionLinkType / SetPermissionTree / SaveDepFunction / GetDepartmentList / GetUserFunctions |
 | `MixSalesShipApi` | GetSalesOrder / GetSalesOrder_1 / ExportXls |
+| `SalesOrderUnFinishApi` | GetUnfinOrder / QueryUnfinOrder_1 / ExportXls |
 | `CommonApi` | GetDepFunction |
 
 **沒搬**：
@@ -71,6 +72,9 @@ dotnet run
   `GetFinalQuotation`/`ExportCustomerPrice`（報價）、`GetSalesTotal`/`GetCustomerCredit`/
   `GetCustomerCreditCRM`/`GetCustomerOrderTotal`/`GetCustomerUnfinOrder`（客戶相關頁籤）。
   它們屬於別的模組，搬那些模組時再處理。
+- 未完成訂單檢索頁面級功能權限檢查 `checkPermission(functionId)`（`MainApi/CheckUserPermission`）——
+  跟銷貨檢索一樣，2.0 目前假設能進到路由就有權限，見
+  `../docs/modules/SalesOrderUnfinish/logic.md`「尚未搬移」。
 
 ## 與 1.0 的行為差異
 
@@ -163,6 +167,35 @@ dotnet run
    （`../database/SalesShippingObjectsMigration.sql`）已經產好但尚未執行，
    注意事項見 `../database/PortingNotes.md`「銷貨檢索相關的表 / 預存程序」。
 
+## 未完成訂單檢索（`SalesOrderUnFinishApi`）
+
+只搬未完成訂單檢索頁實際會打的三支：`GetUnfinOrder`（依品號 TD004 分群）、
+`QueryUnfinOrder_1`（依訂單 TC001+TC002 分群）、`ExportXls`（四個分頁的 Excel）。
+
+跟銷貨檢索是不同資料表/不同 ViewModel（訂單 `SalesOrderViewModel` vs 銷貨單
+`COP_SalesOrder`），型別（`UnfinOrder`）、Controller 都各自獨立，不共用銷貨檢索那組。
+
+1. **查詢是純讀，不像銷貨檢索的 SP 會順便寫資料。** `prc_QueryUnfinOrder(_1)` 不會像
+   `prc_QuerySalesOrder(_1)` 先 `EXEC prc_ImportSalesOrder` 匯入 ERP，所以不用放寬
+   `SetCommandTimeout`，也沒有「查詢會寫資料」的顧慮。
+2. **`orderType` 沒有對應的 SP 參數。** `prc_QueryUnfinOrder(_1)` 不支援按訂單單別篩選，
+   收到 `orderType` 非空時對已查出的結果用 LINQ 再過濾一次（小計/總計列 `FooterFlag=Y`
+   一律保留）。篩單一訂單靠 `poNo` 帶 `"{訂單單別}-{訂單單號}"` 組合字串
+   （`QueryUnfinOrder_1` 的「單一訂單明細」modal 用法），不是走 `orderType`/`orderNo`——
+   這點跟銷貨檢索的兩個明細 modal 不同，改邏輯時別套錯模式。
+3. **SQL 改成參數化。** 1.0 是把使用者輸入串進 `EXEC` 字串再 `FromSql`，這裡用
+   `FromSqlInterpolated`。SP 內部仍會把值再組成動態 SQL，那是 SP 自己的事（不改資料庫）。
+4. **匯出版面寫死在 C#。** 理由與銷貨檢索、訂單資料檢核相同（1.0 讀 `PUR_XlsFileFormat`
+   動態組，那套引擎是給多個還沒搬的模組共用的基礎設施）。欄位順序跟頁面上四個頁籤的
+   表格逐欄對齊，欄寬改成 `AdjustToContents()`——這是與 1.0 已知的唯一外觀差異。
+   金額欄位權限用 `(FunctionIds.QueryUnFinish=0320102, LinkType=100)`。
+5. **資料庫物件還在 `PRORIL_WEB`。** `UnfinOrder` 是 keyless 型別，只給
+   `FromSqlInterpolated` 用，對映在 `ProrilWebDbContext`；SP 也還在舊庫執行，
+   repo 內找不到對應 .sql，只存在資料庫端。
+6. **`UnfinOrder.CopSource` 改名自 1.0 的 `COPSource`。** camelCase 化後前者是
+   `copSource`（跟銷貨檢索的 `CopSalesOrder.CopSource` 一致），後者會是 `cOPSource`，
+   跟前端 `app/types/salesOrderUnfinish.ts` 定的欄位名對不起來，故意改掉。
+
 ## 與 1.0 並存
 
 兩邊打同一個資料庫，可以同時運作，token 也互通（前提是 JwtSettings 相同）。
@@ -185,6 +218,7 @@ dotnet run
 - `../docs/modules/SalesIssue/update.md` — 更新紀錄
 - `../docs/modules/OrderInfoVerify/logic.md` — 訂單資料檢核的業務邏輯、檢核欄位語意
 - `../docs/modules/SalesShipping/logic.md` — 銷貨檢索的業務邏輯、四個頁籤與金額權限
+- `../docs/modules/SalesOrderUnfinish/logic.md` — 未完成訂單檢索的業務邏輯、四個頁籤與金額權限
 - `../docs/modules/SystemSetting/logic.md` — 權限控管（人員管理 / 權限管理）的邏輯與資料表歸屬
 - `../database/README.md` — schema 版控（DACPAC）
 - `../database/checks/README.md` — 資料正確性檢查

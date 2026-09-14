@@ -37,8 +37,11 @@ export type UnfinOrderQuery = {
 /**
  * 未完成訂單檢索後端 API。
  *
- * 全部打舊 PRORIL 的 SalesOrderUnFinishApi / CustomerApi（經由 /api/proxy 轉發），
- * 不新增後端、不動資料庫（含預存程序 prc_QueryUnfinOrder / prc_QueryUnfinOrder_1）。
+ * SalesOrderUnFinishApi 已搬進 2.0（api/Controllers/SalesSearch/SalesOrderUnFinishApiController.cs），
+ * CustomerApi 也已搬進 2.0（api/Controllers/Customer/CustomerApiController.cs）——
+ * 兩者都經由 /api/proxy 轉發，前端不用改路徑，只是後端從 1.0 換成 api/。
+ * 不動資料庫（含預存程序 prc_QueryUnfinOrder / prc_QueryUnfinOrder_1，
+ * repo 內沒有對應 .sql，只存在資料庫端）。
  */
 export const useSalesOrderUnfinishApi = () => {
   const { apiFetch } = useApi()

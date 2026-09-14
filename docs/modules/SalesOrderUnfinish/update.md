@@ -1,4 +1,46 @@
 <details>
+  <summary>版號2026.09.14.1800</summary>
+
+##### feat: 未完成訂單檢索後端搬進 2.0（api/），不再沿用 1.0
+      背景: 本機 .env 的 NUXT_PUBLIC_API_BASE 指向 api/（新後端）測試時，這個模組
+      因為後端還留在 1.0 而打不到路由，前端跳「無法連接後端 API」。順勢把
+      SalesOrderUnFinishApi 整支搬進來，不用再切 .env 才能測。
+
+      新增:
+          api/Data/SalesOrderUnfinishEntities.cs
+              UnfinOrder（對映 1.0 SalesOrderViewModel，keyless，FromSql 專用）。
+          api/Controllers/SalesSearch/SalesOrderUnFinishApiController.cs
+              GetUnfinOrder（依品號 TD004 分群）/ QueryUnfinOrder_1（依訂單 TC001+TC002 分群）。
+          api/Controllers/SalesSearch/SalesOrderUnFinishApiController.Xls.cs
+              ExportXls，欄位配置寫死在 C#，比照 MixSalesShipApiController.Xls.cs 的做法。
+
+      異動:
+          api/Data/ProrilWebDbContext.cs
+              加 DbSet<UnfinOrder> + HasNoKey() 註冊。
+          app/composables/useSalesOrderUnfinishApi.ts
+              更新頂端註解，反映後端已搬（前端呼叫路徑不變）。
+
+      技術決策:
+      - **資料庫物件不動、不搬連線**：prc_QueryUnfinOrder(_1) repo 內沒有對應 .sql，
+        只存在資料庫端，跟 1.0 一樣直接 EXEC，對映的表仍在 PRORIL_WEB，走 api/ 的
+        ProrilWebDbContext（不是 Proril_Sales_Center）。
+      - **SQL 改參數化**：1.0 是拼字串 FromSql，這裡改 FromSqlInterpolated，
+        跟銷貨檢索/訂單資料檢核搬移時的做法一致，堵掉 SQL injection 風險。
+      - **UnfinOrder.CopSource 改名**：1.0 是 COPSource（全大寫前綴），camelCase 化後
+        會變成 cOPSource；這裡改成一般 PascalCase 的 CopSource，跟銷貨檢索的
+        CopSalesOrder.CopSource 一致，camelCase 化是 copSource（前端型別本來就是這樣定的）。
+      - **Excel 欄位配置寫死在 C#**：1.0 讀 PUR_XlsFileFormat（FunctionNo=420）動態組，
+        那套通用格式引擎是給多個還沒搬的模組共用的基礎設施，這裡直接寫死，
+        欄位順序跟頁面上四個頁籤的表格（unfinished-orders.vue 的 *_COLS）逐欄對齊，
+        欄寬改 AdjustToContents()，是與 1.0 已知的唯一外觀差異。
+      - FunctionIds.QueryUnFinish("0320102")、NAV_MODULES、PermissionMasterSeed.sql
+        這三處在前端搬移那次（見下面「版號2026.09.02.1700」）就已經備好，這次不用再改。
+
+      沒動: 前端頁面/composable 呼叫路徑、查詢條件、頁籤/明細 modal 邏輯全部不變，
+      詳見 logic.md「架構：前後端都搬了」。
+</details>
+
+<details>
   <summary>版號2026.09.10.1200</summary>
 
 ##### fix: 客戶下拉選單渲染失敗

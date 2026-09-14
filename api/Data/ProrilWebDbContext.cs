@@ -317,7 +317,17 @@ public class ProrilWebDbContext : DbContext
         // keyless，只給 Set<T>().FromSqlInterpolated(...) 用，不對應任何表/view
         modelBuilder.Entity<CopGetCredit>().HasNoKey();
         modelBuilder.Entity<CopGetCreditCrm>().HasNoKey();
-        modelBuilder.Entity<UnfinOrder>().HasNoKey();
+
+        // prc_QueryUnfinOrder(_1) 的結果集欄位是 ID / COP_Source / Mq002 / Tc001...，
+        // 其餘屬性跟 1.0 一樣同名同型免對映，只有 Id 跟 CopSource 的實際欄名不同，
+        // 照抄 1.0 ProrilWebContext_Custom.cs 的 HasColumnName，少了會噴
+        // 「required column 'CopSource' was not present」。
+        modelBuilder.Entity<UnfinOrder>(entity =>
+        {
+            entity.HasNoKey();
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.CopSource).HasColumnName("COP_Source");
+        });
 
         modelBuilder.Entity<CopSalesOrder>(entity =>
         {

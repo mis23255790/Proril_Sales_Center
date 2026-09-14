@@ -20,7 +20,8 @@ namespace Proril.SalesIssue.Api.Data;
 /// 對照舊碼／SQL 時不用再翻譯一層，前端 app/types/salesOrderUnfinish.ts 也是同一套命名。
 /// 唯一例外是 <see cref="CopSource"/>：1.0 叫 <c>COPSource</c>，這裡改成一般 PascalCase
 /// 讓 camelCase 化後是 <c>copSource</c>（跟銷貨檢索 <c>CopSalesOrder.CopSource</c> 一致），
-/// 不是 <c>cOPSource</c>。
+/// 不是 <c>cOPSource</c>。實際欄名（SP 回傳的欄位）是 <c>COP_Source</c>，
+/// 在 <c>ProrilWebDbContext.OnModelCreating</c> 用 <c>HasColumnName</c> 對映。
 /// </summary>
 public class UnfinOrder
 {

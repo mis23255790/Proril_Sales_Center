@@ -6,8 +6,8 @@
        Controllers/MixSalesShip/MixSalesShipController.cs   MVC 入口 `QueryUnFinish()`（回空 View）
        Views/Mix/QueryUnFinish.cshtml
        wwwroot/js/mix/{query-unfinish, query-unfinish-apis}.js
-       Controllers/MixSalesShip/SalesOrderUnFinishApiController.cs        ← **後端沒搬，繼續用**
-       Controllers/MixSalesShip/SalesOrderUnFinishApiController_XlsOut.cs ← ExportXls
+       Controllers/MixSalesShip/SalesOrderUnFinishApiController.cs        ← 已搬進 api/
+       Controllers/MixSalesShip/SalesOrderUnFinishApiController_XlsOut.cs ← ExportXls，已搬進 api/
        SystemId.MixSales = 32 / FunctionId.QueryUnFinish = 420
 
      enum 註解寫「尚未出貨訂單」，但畫面 top-title 顯示的是**「未完成訂單檢索」**，
@@ -24,20 +24,31 @@
      這個功能是 1.0 唯讀，不動資料庫），只存在資料庫端，需要改邏輯要直接查資料庫。
 </details>
 
-# 架構：只搬前端
+# 架構：前後端都搬了
 
-跟 [業務議題](../SalesIssue/logic.md)、[銷貨檢索](../SalesShipping/logic.md) 一樣，只搬 Nuxt 前端，
-後端沿用 1.0 的 `SalesOrderUnFinishApi`。
+跟 [銷貨檢索](../SalesShipping/logic.md) 一樣，前端 Nuxt 頁面之外，後端也已搬進
+`api/Controllers/SalesSearch/SalesOrderUnFinishApiController(.Xls).cs`，端點名稱、
+參數大小寫與 1.0 一字不差，只要 `NUXT_PUBLIC_API_BASE` 切到 `api/` 就能直接跑。
 
 ```
 Nuxt 頁面 ──▶ useSalesOrderUnfinishApi() ──▶ /api/proxy/... ──▶ server/api/proxy/[...path].ts
-                                                                   └─▶ NUXT_PUBLIC_API_BASE (.NET) /SalesOrderUnFinishApi/...
+                                                                   └─▶ NUXT_PUBLIC_API_BASE
+                                                                       ├─ api/（2.0，已搬）SalesOrderUnFinishApiController
+                                                                       └─ 1.0 .NET 站台（搬移期間仍可切回去）
 ```
 
-- **沒有新後端、沒有動資料庫**。
+- **沒有新增資料庫物件，也沒有動資料庫**：`prc_QueryUnfinOrder(_1)` 這兩支 SP repo 內找不到
+  對應 .sql，只存在資料庫端，`api/` 跟 1.0 一樣直接 `EXEC` 它們（改用 `FromSqlInterpolated`
+  參數化，不再是拼字串 `FromSql`，是與 1.0 唯一的行為差異）。查詢對映的資料表物件仍在
+  `PRORIL_WEB`，走 `api/` 的 `ProrilWebDbContext`（`db`），不是 `Proril_Sales_Center`。
 - 跟銷貨檢索是**不同資料表/不同 ViewModel**（訂單 vs 銷貨單），欄位命名也不同
   （銷貨檢索是 `th0xx`/`tg0xx`，這裡是 `tc0xx`/`td0xx`），刻意不共用型別或常數
-  （`app/types/salesOrderUnfinish.ts` 自成一組），避免兩個模組互相牽動。
+  （`app/types/salesOrderUnfinish.ts`、`api/Data/SalesOrderUnfinishEntities.cs` 自成一組），
+  避免兩個模組互相牽動。
+- Excel 匯出欄位配置比照 `MixSalesShipApiController.Xls.cs` / `OrderInfoVerifyApiController.Xls.cs`
+  的做法，直接寫死在 C#（`SalesOrderUnFinishApiController.Xls.cs`），不再讀 1.0 的
+  `PUR_XlsFileFormat`（FunctionNo=420）。欄位順序與頁面上四個頁籤的表格逐欄對齊，
+  欄寬改成 `AdjustToContents()`，是與 1.0 已知的唯一外觀差異。
 
 # 兩支查詢 API，同時打，餵給不同分頁
 
