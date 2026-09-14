@@ -19,6 +19,15 @@
          `.\publish.ps1 -Environment <對應的 snapshot 環境> -Execute`
       3. `.env` 要有對應的 PRORIL_DB_SNAPSHOT / PRORIL_DB_SNAPSHOT_PROD
 
+    M_System / M_Function 刻意排除在外（$script:PartialRowTables）：那兩張在目標庫只保留
+    2.0 用得到的那幾列，由 database/PermissionMasterSeed.sql 維護，整批覆蓋會灌進一堆
+    2.0 沒有的功能。
+
+    **不加 -Tables 的話會覆蓋白名單裡的每一張表**，包含 D_WorkProcess* / CRM_Customer /
+    H_FileLink——那幾張在 Proril_Sales_Center 已經是正式讀寫的資料，而 PRORIL_WEB 那份
+    停在 2026-09-03 的快照，整批跑下去等於把業務議題的資料倒退回舊版本。
+    要補灌特定幾張（例如帳號權限）請務必用 -Tables 限定範圍。
+
     預設 dry-run：只列出「來源列數 -> 目標列數」對照，不會動任何資料。加 -Execute
     才會真的複製，而且是**整批覆蓋**（先清空目標的白名單表，再從來源灌全新的），
     不是增量同步，執行前務必確認目標端沒有需要保留的資料。
@@ -33,6 +42,10 @@
       test -> 目標對到 -Environment snapshot（Proril_Sales_Center@50002，已存在）
       prod -> 目標對到 -Environment snapshot-prod（Proril_Sales_Center@51002，還沒建）
 
+.PARAMETER Tables
+    只處理指定的表（白名單的子集，大小寫不拘）。不指定就是白名單全部——那會覆蓋
+    業務議題等已經在用的表，見上面的警告。
+
 .PARAMETER Execute
     真的執行複製。不加只會做 dry-run（列出兩邊列數對照）。
 
@@ -40,16 +53,25 @@
     .\copy-snapshot-data.ps1 -Environment test
     .\copy-snapshot-data.ps1 -Environment test -Execute
     .\copy-snapshot-data.ps1 -Environment prod -Execute
+    .\copy-snapshot-data.ps1 -Environment test -Tables M_User,M_Permission -Execute
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('test', 'prod')][string]$Environment = 'prod',
+    [string[]]$Tables,
     [switch]$Execute
 )
 
 . "$PSScriptRoot\_common.ps1"
 
 $script:SnapshotEnvMap = @{ test = 'snapshot'; prod = 'snapshot-prod' }
+
+# 這兩張表在 Proril_Sales_Center **只保留 2.0 真的有頁面的那幾列**（3 個系統別 + 8 個功能），
+# 不是整份複製。整批覆蓋會把 1.0 全部 90+ 個功能灌進來，2.0 的權限樹就會長出一堆
+# 點下去 404 的功能，所以這支腳本刻意跳過它們——資料由 database/PermissionMasterSeed.sql
+# 維護（含 varchar → nvarchar 的中文欄位覆寫）。詳見 PortingNotes.md
+# 「功能主檔（M_System / M_Function）只搬 2.0 用得到的列」。
+$script:PartialRowTables = @('M_System', 'M_Function')
 
 function Invoke-SqlLines {
     # 對目標資料庫執行一段 sqlcmd 查詢，回傳非空白的輸出行。
@@ -101,11 +123,39 @@ try {
     Write-Host "目標: $($targetArgs.Server) / $($targetArgs.Database)（-Environment $targetEnv）" -ForegroundColor Cyan
     Write-Host ""
 
-    $tables = Get-ManagedTables
+    # 注意：**不要**把這個區域變數叫 $tables。PowerShell 變數不分大小寫，
+    # 那樣會直接覆寫掉參數 $Tables，-Tables 的過濾就會變成「全部都符合」（踩過一次）。
+    $managedTables = Get-ManagedTables | Where-Object { $script:PartialRowTables -notcontains $_ }
+
+    if ($Tables) {
+        $requested = @($Tables | ForEach-Object { $_.Trim() })
+        $unknown = @($requested | Where-Object { $managedTables -notcontains $_ })
+        if ($unknown.Count -gt 0) {
+            throw "-Tables 指定了不在白名單（或被 PartialRowTables 排除）的表：$($unknown -join ', ')"
+        }
+        $managedTables = @($managedTables | Where-Object { $requested -contains $_ })
+        Write-Host "只處理 -Tables 指定的 $($managedTables.Count) 張：$($managedTables -join ', ')" -ForegroundColor Cyan
+        Write-Host ""
+    }
+    else {
+        Write-Host "警告：沒有指定 -Tables，白名單裡的每一張表都會被整批覆蓋。" -ForegroundColor Yellow
+        Write-Host "      D_WorkProcess* / CRM_Customer / H_FileLink 在目標庫已經是正式資料，" -ForegroundColor Yellow
+        Write-Host "      來源 PRORIL_WEB 那份是舊快照——確定要整批倒回去嗎？" -ForegroundColor Yellow
+        Write-Host ""
+    }
+
+    $skippedPartial = Get-ManagedTables | Where-Object { $script:PartialRowTables -contains $_ }
+    if ($skippedPartial.Count -gt 0) {
+        Write-Host "[跳過] 這幾張在 Proril_Sales_Center 只保留 2.0 用得到的那幾列，不整批覆蓋：" -ForegroundColor Yellow
+        $skippedPartial | ForEach-Object { Write-Host "  ~ $_" -ForegroundColor Yellow }
+        Write-Host "        它們的資料由 database/PermissionMasterSeed.sql 維護，見 PortingNotes.md。" -ForegroundColor Yellow
+        Write-Host ""
+    }
+
     $ready = @()
     $notReady = @()
 
-    foreach ($table in $tables) {
+    foreach ($table in $managedTables) {
         if (Test-TargetTableExists -Target $targetArgs -Table $table) {
             $ready += $table
         }

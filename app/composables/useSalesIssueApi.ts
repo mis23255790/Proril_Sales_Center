@@ -9,7 +9,7 @@ import type {
 import { DEFAULT_VER_NO } from '~/types/salesIssue'
 
 /** 舊系統 FunctionId.ProcessMaintain，上傳 log 用。 */
-export const SALES_ISSUE_FUNCTION_NO = 17
+export const SALES_ISSUE_FUNCTION_NO = '0070102'
 
 /**
  * 業務議題後端 API。

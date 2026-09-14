@@ -31,13 +31,15 @@ const customers = ref<CrmCustomer[]>([])
 const form = reactive({
   sopTitle: '',
   descript: '',
-  customerNo: '',
   pubFlag: true,
   finFlag: false
 })
 
 /** 已選的類別（phraseType 02）的 phraseCode。 */
 const selectedCategoryCodes = ref<string[]>([])
+
+/** 已選的客戶別（customerNo），比照 1.0 可複選。 */
+const selectedCustomerNos = ref<string[]>([])
 
 useSeoMeta({
   title: () => `${form.sopTitle || '新增議題'} · 業務議題 · PRORIL 業務中心`
@@ -82,7 +84,6 @@ const loadIssue = async () => {
     issue.value = res.body
     form.sopTitle = res.body.sopTitle ?? ''
     form.descript = res.body.descript ?? ''
-    form.customerNo = (res.body.customerNo ?? '').trim()
     form.pubFlag = res.body.pubFlag ?? true
     form.finFlag = res.body.finFlag ?? false
 
@@ -90,13 +91,14 @@ const loadIssue = async () => {
       .filter(p => p.phraseType === PHRASE_TYPE.CATEGORY)
       .map(p => p.phraseCode)
 
-    // GetSOPOrder 的 customerNo 有時是空的（早期資料只寫在 D_WorkProcessCustomer），
-    // 補一次關聯表才不會把畫面上的客戶洗掉。
-    if (!form.customerNo) {
-      const linkRes = await api.getIssueCustomers(wpno.value)
-      const first = (linkRes?.body ?? [])[0]
-      form.customerNo = String(first?.customerNo ?? '').trim()
-    }
+    // 客戶別比照 1.0 可複選，真正的清單在 D_WorkProcessCustomer 關聯表；
+    // GetSOPOrder 的 customerNo 對早期資料常是空的或只有一筆，兩邊都要看才不會漏客戶。
+    const linkRes = await api.getIssueCustomers(wpno.value)
+    const linkedNos = (linkRes?.body ?? [])
+      .map(c => String(c?.customerNo ?? '').trim())
+      .filter(Boolean)
+    const headerNo = (res.body.customerNo ?? '').trim()
+    selectedCustomerNos.value = Array.from(new Set(headerNo ? [headerNo, ...linkedNos] : linkedNos))
 
     await loadDetails()
   } catch (err) {
@@ -113,26 +115,13 @@ onMounted(async () => {
 
 // ------------------------------------------------------------------ 衍生
 
-/**
- * USelectMenu（Reka UI Combobox）保留空字串代表「清空選取、顯示 placeholder」，
- * item 的 value 不能是空字串，否則 mount 就丟例外、整個下拉選單渲染失敗（畫面上看起來像
- * 選項是空的）。「未指定客戶」用這個哨兵值，實際存到 form.customerNo 的還是空字串，
- * 透過下面的 customerSelectValue 轉換，不影響其他讀寫 form.customerNo 的邏輯。
- */
-const NO_CUSTOMER = '__no_customer__'
-
-const customerOptions = computed(() => [
-  { label: '（未指定客戶）', value: NO_CUSTOMER },
-  ...customers.value.map(c => ({
-    label: `${c.shortName || c.customerNo}${c.longName ? ` · ${c.longName}` : ''}`,
+/** 客戶下拉選項，比照 1.0「選擇客戶別」清單的欄位組合（代碼／ERP 代碼／簡稱／全名）。 */
+const customerOptions = computed(() =>
+  customers.value.map(c => ({
+    label: `${c.customerNo}(${(c.erpcustomerNo ?? '').trim()})-${c.shortName || c.customerNo}${c.longName ? ` · ${c.longName}` : ''}`,
     value: String(c.customerNo ?? '').trim()
   }))
-])
-
-const customerSelectValue = computed({
-  get: () => form.customerNo || NO_CUSTOMER,
-  set: (v: string) => { form.customerNo = v === NO_CUSTOMER ? '' : v }
-})
+)
 
 const categoryOptions = computed(() =>
   categories.value.map(c => ({ label: c.phraseName, value: c.phraseCode }))
@@ -144,10 +133,13 @@ const selectedCategoryNames = computed(() =>
     .filter((n): n is string => Boolean(n))
 )
 
-const customerName = computed(() => {
-  const found = customers.value.find(c => String(c.customerNo ?? '').trim() === form.customerNo)
-  return found?.shortName || issue.value?.customerName || ''
-})
+const selectedCustomerNames = computed(() =>
+  selectedCustomerNos.value
+    .map(no => customers.value.find(c => String(c.customerNo ?? '').trim() === no)?.shortName)
+    .filter((n): n is string => Boolean(n))
+)
+
+const customerNamesDisplay = computed(() => selectedCustomerNames.value.join('、') || issue.value?.customerName || '')
 
 /**
  * 進度由新到舊。
@@ -187,7 +179,7 @@ const save = async () => {
 
     const res = await api.saveIssue({
       wpno: targetWpno,
-      customerNo: form.customerNo,
+      customerNo: selectedCustomerNos.value.join(';'),
       sopTitle: form.sopTitle.trim(),
       descript: form.descript,
       type2PhraseCode: selectedCategoryCodes.value.join(';'),
@@ -214,7 +206,7 @@ const save = async () => {
         phraseName: categories.value.find(c => c.phraseCode === code)?.phraseName ?? ''
       }))
     )
-    await api.setIssueCustomers(targetWpno, form.customerNo ? [form.customerNo] : [])
+    await api.setIssueCustomers(targetWpno, selectedCustomerNos.value)
 
     toast.add({ title: '議題已儲存', color: 'success' })
 
@@ -342,15 +334,21 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
               <UInput v-model="form.sopTitle" placeholder="議題主題" class="w-full" />
             </UFormField>
 
-            <UFormField label="客戶別">
+            <UFormField label="客戶別" hint="可複選">
               <USelectMenu
-                v-model="customerSelectValue"
+                v-model="selectedCustomerNos"
                 :items="customerOptions"
                 value-key="value"
                 label-key="label"
+                multiple
                 placeholder="選擇客戶"
                 class="w-full"
               />
+              <div v-if="selectedCustomerNames.length" class="mt-2 flex flex-wrap gap-1">
+                <UBadge v-for="name in selectedCustomerNames" :key="name" color="neutral" variant="subtle" size="sm">
+                  {{ name }}
+                </UBadge>
+              </div>
             </UFormField>
 
             <UFormField label="類別" hint="可複選">
@@ -477,7 +475,7 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
     <div class="fixed inset-x-0 bottom-0 z-40 border-t border-default bg-default/95 px-4 py-3 backdrop-blur">
       <div class="mx-auto flex max-w-7xl items-center justify-between gap-3">
         <p class="truncate text-sm text-muted">
-          <span v-if="customerName">{{ customerName }} · </span>
+          <span v-if="customerNamesDisplay">{{ customerNamesDisplay }} · </span>
           {{ form.sopTitle || '尚未命名的議題' }}
         </p>
         <UButton icon="i-lucide-save" size="lg" :loading="saving" @click="save">

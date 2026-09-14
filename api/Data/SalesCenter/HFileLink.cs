@@ -11,7 +11,7 @@ public partial class HFileLink
 
     public string? FileType { get; set; }
 
-    public int LinkFunctionNo { get; set; }
+    public string LinkFunctionNo { get; set; } = null!;
 
     public string LinkNo { get; set; } = null!;
 

@@ -52,10 +52,10 @@ public partial class OrderInfoVerifyApiController
         return ca;
     }
 
-    private bool HasAmountPermission(string account, int functionNo, int linkType)
+    private bool HasAmountPermission(string account, string functionNo, int linkType)
     {
-        if (db.MUsers.Any(u => u.Account == account && u.IsAdmin)) return true;
-        return db.MPermissions.Any(p => p.LinkNumber == account && p.FunctionNo == functionNo && p.LinkType == linkType);
+        if (scDb.MUsers.Any(u => u.Account == account && u.IsAdmin)) return true;
+        return scDb.MPermissions.Any(p => p.LinkNumber == account && p.FunctionNo == functionNo && p.LinkType == linkType);
     }
 
     /// <summary>檢核結果上色：Y=淡綠／P=淡黃／N=淡紅／其他(未檢核)=灰，照抄 1.0 色碼。</summary>

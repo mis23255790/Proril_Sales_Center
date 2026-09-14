@@ -56,13 +56,13 @@ public partial class WorkProcessApiController
         var trimmed = account.Trim();
         var enableType = (byte)EWorkProcessPermission.Edit;
 
-        var exists = _scDb.DWorkProcessPermissions
+        var exists = scDb.DWorkProcessPermissions
             .Where(p => p.Wpno == padded && p.EnableType == enableType).ToList()
             .Any(p => (p.Account ?? "").Trim() == trimmed);
 
         if (!exists)
         {
-            _scDb.DWorkProcessPermissions.Add(new DWorkProcessPermission
+            scDb.DWorkProcessPermissions.Add(new DWorkProcessPermission
             {
                 Wpno = padded,
                 EnableType = enableType,
@@ -70,7 +70,7 @@ public partial class WorkProcessApiController
                 Creator = GetAccountByToken(),
                 CreateTime = DateTime.Now
             });
-            _scDb.SaveChanges();
+            scDb.SaveChanges();
         }
 
         ca.IsSuccess = true;
@@ -92,7 +92,7 @@ public partial class WorkProcessApiController
         }
 
         ca.IsSuccess = true;
-        ca.Body = _scDb.DWorkProcessPermissions.Where(p => p.Wpno == padded).ToList();
+        ca.Body = scDb.DWorkProcessPermissions.Where(p => p.Wpno == padded).ToList();
         return ca;
     }
 
@@ -128,18 +128,18 @@ public partial class WorkProcessApiController
 
         var accounts = accountList.Select(a => (a ?? "").Trim()).Where(a => a.Length > 0).ToList();
         var type = (byte)enableType;
-        var current = _scDb.DWorkProcessPermissions
+        var current = scDb.DWorkProcessPermissions
             .Where(p => p.Wpno == padded && p.EnableType == type).ToList();
 
         foreach (var row in current.Where(r => !accounts.Contains((r.Account ?? "").Trim())))
         {
-            _scDb.DWorkProcessPermissions.Remove(row);
+            scDb.DWorkProcessPermissions.Remove(row);
         }
 
         var existingAccounts = current.Select(r => (r.Account ?? "").Trim()).ToHashSet();
         foreach (var account in accounts.Where(a => !existingAccounts.Contains(a)))
         {
-            _scDb.DWorkProcessPermissions.Add(new DWorkProcessPermission
+            scDb.DWorkProcessPermissions.Add(new DWorkProcessPermission
             {
                 Wpno = padded,
                 EnableType = type,
@@ -149,7 +149,7 @@ public partial class WorkProcessApiController
             });
         }
 
-        _scDb.SaveChanges();
+        scDb.SaveChanges();
         ca.IsSuccess = true;
         return ca;
     }

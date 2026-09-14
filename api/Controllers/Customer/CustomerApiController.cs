@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Proril.SalesIssue.Api.Controllers.Shared;
 using Proril.SalesIssue.Api.Data;
+using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
 
@@ -17,8 +18,11 @@ namespace Proril.SalesIssue.Api.Controllers.Customer;
 [Authorize]
 public class CustomerApiController : BaseApiController
 {
-    public CustomerApiController(ProrilWebDbContext db, JwtHelper jwtHelper, ILogger<CustomerApiController> logger)
-        : base(db, jwtHelper, logger)
+    public CustomerApiController(
+        ProrilWebDbContext db,
+        SalesCenterDbContext scDb,
+        JwtHelper jwtHelper,
+        ILogger<CustomerApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
     }
 

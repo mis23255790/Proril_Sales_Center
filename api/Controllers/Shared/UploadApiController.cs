@@ -10,7 +10,7 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 /// 檔案上傳。只搬業務議題會用到的 SaveByFileName（單檔存到指定路徑）。
 ///
 /// 1.0 還有 SaveZipFile / SaveByPath 等，那些是別的模組在用，等搬到那些模組再補。
-/// H_FileLink 打 <see cref="_scDb"/>（Proril_Sales_Center，已確認單一擁有者，
+/// H_FileLink 打 <see cref="scDb"/>（Proril_Sales_Center，已確認單一擁有者，
 /// 只有這支的 AddFileLog 在寫）。
 /// </summary>
 [Authorize]
@@ -19,7 +19,6 @@ public class UploadApiController : BaseApiController
     private const int MaxMb = 10;
     private const long MaxUploadSize = MaxMb * 1024L * 1024L;
 
-    private readonly SalesCenterDbContext _scDb;
     private readonly StoragePaths _paths;
 
     public UploadApiController(
@@ -27,9 +26,8 @@ public class UploadApiController : BaseApiController
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<UploadApiController> logger) : base(db, jwtHelper, logger)
+        ILogger<UploadApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
-        _scDb = scDb;
         _paths = paths;
     }
 
@@ -40,7 +38,7 @@ public class UploadApiController : BaseApiController
     /// 例如 /Temp/112012/Doc_SOP/00000/3/報價單.pdf。
     /// </summary>
     [HttpPost]
-    public CustomApiViewModel SaveByFileName(List<IFormFile> files, string saveByFileName, int linkFuncNo, string linkNo)
+    public CustomApiViewModel SaveByFileName(List<IFormFile> files, string saveByFileName, string linkFuncNo, string linkNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
 
@@ -119,12 +117,12 @@ public class UploadApiController : BaseApiController
         return combined.StartsWith(rootWithSep, StringComparison.OrdinalIgnoreCase) ? combined : null;
     }
 
-    private string AddFileLog(string destSaveFile, int linkFuncNo, string linkNo)
+    private string AddFileLog(string destSaveFile, string linkFuncNo, string linkNo)
     {
         try
         {
             var ext = Path.GetExtension(destSaveFile);
-            _scDb.HFileLinks.Add(new HFileLink
+            scDb.HFileLinks.Add(new HFileLink
             {
                 FilePath = destSaveFile[..^ext.Length],
                 FileType = ext,
@@ -133,7 +131,7 @@ public class UploadApiController : BaseApiController
                 UpdateTime = DateTime.Now,
                 UpdateUser = GetAccountByToken()
             });
-            _scDb.SaveChanges();
+            scDb.SaveChanges();
             return "";
         }
         catch (Exception ex)

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Data;
+using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
 
@@ -13,17 +14,18 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 /// 所以 1.0 與 2.0 的 token 互通，可以漸進切換不必強迫使用者重登。
 /// </summary>
 [Authorize]
-public class MainApiController : BaseApiController
+public partial class MainApiController : BaseApiController
 {
     private readonly AesHelper _aes;
     private readonly string _ssoInternalSecret;
 
     public MainApiController(
         ProrilWebDbContext db,
+        SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         AesHelper aes,
         IConfiguration configuration,
-        ILogger<MainApiController> logger) : base(db, jwtHelper, logger)
+        ILogger<MainApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
         _aes = aes;
         _ssoInternalSecret = configuration.GetValue<string>("Sso:InternalSecret") ?? "";
@@ -52,7 +54,7 @@ public class MainApiController : BaseApiController
         var account = model.Account.Trim();
         var encrypted = _aes.Encrypt(model.Password ?? "");
 
-        var user = db.MUsers.ToList()
+        var user = scDb.MUsers.ToList()
             .FirstOrDefault(u => (u.Account ?? "").Trim() == account && u.Password == encrypted);
 
         if (user is null)
@@ -104,7 +106,7 @@ public class MainApiController : BaseApiController
             return result;
         }
 
-        var user = db.MUsers.ToList().FirstOrDefault(u => (u.Account ?? "").Trim() == account);
+        var user = scDb.MUsers.ToList().FirstOrDefault(u => (u.Account ?? "").Trim() == account);
         if (user is null)
         {
             result.Message = $"查無帳號 {account}，請洽系統管理員確認 PRORIL 通行證帳號是否已建立對應資料";
@@ -136,7 +138,7 @@ public class MainApiController : BaseApiController
             return ca;
         }
 
-        var user = db.MUsers.ToList()
+        var user = scDb.MUsers.ToList()
             .FirstOrDefault(u => (u.Account ?? "").Trim() == account && u.IsEnable);
         if (user is null)
         {
@@ -156,7 +158,7 @@ public class MainApiController : BaseApiController
         var ca = new CustomApiViewModel { IsSuccess = false };
 
         var trimmed = (account ?? "").Trim();
-        var user = db.MUsers.ToList().FirstOrDefault(u => (u.Account ?? "").Trim() == trimmed);
+        var user = scDb.MUsers.ToList().FirstOrDefault(u => (u.Account ?? "").Trim() == trimmed);
         if (user is null)
         {
             ca.Message = $"查無帳號 {account}";
@@ -177,11 +179,11 @@ public class MainApiController : BaseApiController
     /// 查不到就當非 admin 處理，不用把「帳號不存在」也當成例外。
     /// </summary>
     [HttpGet]
-    public bool CheckUserPermissionLinkType(int functionNo, int linkType)
+    public bool CheckUserPermissionLinkType(string functionNo, int linkType)
     {
         var account = GetAccountByToken();
-        if (db.MUsers.Any(u => u.Account == account && u.IsAdmin)) return true;
-        return db.MPermissions.Any(p => p.LinkNumber == account && p.FunctionNo == functionNo && p.LinkType == linkType);
+        if (scDb.MUsers.Any(u => u.Account == account && u.IsAdmin)) return true;
+        return scDb.MPermissions.Any(p => p.LinkNumber == account && p.FunctionNo == functionNo && p.LinkType == linkType);
     }
 
     /// <summary>
@@ -195,7 +197,7 @@ public class MainApiController : BaseApiController
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
 
-        var msystemList = db.MSystems.Where(o => o.SystemNo == systemNo).ToList();
+        var msystemList = scDb.MSystems.Where(o => o.SystemNo == systemNo).ToList();
         ca.Body = msystemList;
         ca.IsSuccess = true;
         return ca;
@@ -208,7 +210,7 @@ public class MainApiController : BaseApiController
         var ca = new CustomApiViewModel { IsSuccess = false };
 
         ca.IsSuccess = true;
-        ca.Body = db.MUsers
+        ca.Body = scDb.MUsers
             .Where(u => u.IsEnable)
             .OrderBy(u => u.Account)
             .Select(u => new { u.Account, u.UserName })

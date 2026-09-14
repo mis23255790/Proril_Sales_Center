@@ -1,4 +1,29 @@
 <details>
+  <summary>版號2026.09.14.1400</summary>
+
+##### feat: 客戶別比照 1.0 改為可複選
+      1.0 的「選擇客戶別」是 checkbox 表格（table-edit-customize-list），可以勾多個客戶，
+      存檔時 CustomerNo 與 D_WorkProcessCustomer 都寫全部選取的清單（分號分隔）；
+      2.0 議題編輯頁原本是單選下拉（USelectMenu 單值 + 未指定客戶哨兵值），
+      同一張議題只能掛一個客戶，跟 D_WorkProcessCustomer / SetWPOrderCustom
+      本來就支援多筆的設計不一致。
+
+      改成 USelectMenu multiple，比照既有「類別」欄位的作法（selectedCategoryCodes
+      同一套 pattern）：
+        - selectedCustomerNos: ref<string[]> 取代 form.customerNo 單一欄位，
+          連帶拿掉只在單選情境需要的 NO_CUSTOMER 哨兵值 / customerSelectValue。
+        - 讀取時一律打 GetWPOrderCustom 取得完整清單，再併入 GetSOPOrder 的
+          customerNo（早期資料可能只落在表頭欄位，兩邊都要看，去重後就是選取狀態）。
+        - 存檔時 SaveOrder 的 CustomerNo 與 SetWPOrderCustom 都送同一份分號字串／陣列。
+        - customerOptions 的 label 補上客戶代碼與 ERP 代碼，比照 1.0 客戶清單欄位。
+
+      app/pages/sales-center/sales-issue/issues/[wpno].vue
+
+      驗證：npm run typecheck 通過。
+
+</details>
+
+<details>
   <summary>版號2026.09.10.1200</summary>
 
 ##### fix: 客戶別下拉選單渲染失敗，畫面上看起來像清單是空的

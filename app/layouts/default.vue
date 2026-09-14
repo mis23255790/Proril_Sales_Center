@@ -2,14 +2,44 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
-const { modules, modulePath, itemPath, appBaseLabel } = useAppNavigation()
+const { modules, modulePath, itemPath, appBaseLabel, loadUserFunctions, hasNoAccessibleModule } = useAppNavigation()
 const { account } = useAuthAccount()
+const { getCurrentUser } = useCurrentUser()
 const { getSystemByNo } = useSystemInfo()
+const config = useRuntimeConfig()
 
 const collapsed = ref(false)
 
-/** 正式區/測試區環境圖示，沿用 1.0 _AuthLayout：圖檔路徑本身就是環境差異。 */
+/**
+ * 側欄要顯示哪些功能是 DB 說了算（M_Function ∩ M_Permission），
+ * 在這裡載一次，之後整個站共用（見 useAppNavigation.loadUserFunctions）。
+ */
+onMounted(() => { loadUserFunctions() })
+
+/** 姓名不在 JWT 裡，要另外查；查不到就退回顯示帳號，不要整塊空著。 */
+const userName = ref('')
+onMounted(async () => {
+  try {
+    const res = await getCurrentUser()
+    userName.value = res?.body?.username || ''
+  } catch (err) {
+    console.log('load current user failed -->', err)
+  }
+})
+
+/**
+ * 正式區/測試區環境圖示，沿用 1.0 _AuthLayout：圖檔路徑本身就是環境差異。
+ *
+ * ImagePath 是 1.0 站台根目錄下的相對路徑（例如 /images/ic_mission.png），
+ * 在 1.0 同源渲染直接可用，2.0 前端是不同網域，要補上 API 站台的 origin
+ * 才不會被瀏覽器解析成 2.0 自己網域下的路徑（做法同 server/api/download.get.ts）。
+ */
 const systemImagePath = ref<string | null>(null)
+const systemImageUrl = computed(() => {
+  if (!systemImagePath.value) return null
+  const origin = config.public.apiBase.replace(/\/api\/?$/, '').replace(/\/$/, '')
+  return `${origin}${systemImagePath.value}`
+})
 onMounted(async () => {
   try {
     const res = await getSystemByNo(WORK_PROCESS_SYSTEM_NO)
@@ -26,7 +56,7 @@ const activeModuleSlug = computed(() => route.path.split('/')[2] || '')
 const items = computed<NavigationMenuItem[][]>(() => [
   [
     { label: appBaseLabel, type: 'label' as const },
-    ...modules.map(mod => ({
+    ...modules.value.map(mod => ({
       label: mod.label,
       icon: mod.icon,
       // 點模組名稱進模組首頁（跟首頁卡片同一個目的地），展開則看得到底下的功能
@@ -67,6 +97,18 @@ const items = computed<NavigationMenuItem[][]>(() => [
           class="-mx-1"
           :ui="{ link: 'cursor-pointer', childLink: 'cursor-pointer' }"
         />
+
+        <!--
+          一個功能都沒有時要講話，不能只是空白一片：
+          使用者分不出「沒權限」跟「系統壞了」，而這條路徑後端是回成功的，
+          不會有任何 toast 或 console error 可以看。
+        -->
+        <p
+          v-if="hasNoAccessibleModule && !isCollapsed"
+          class="px-2 py-3 text-xs leading-relaxed text-muted"
+        >
+          目前沒有任何可用功能，請洽系統管理員開通權限。
+        </p>
       </template>
 
       <template #footer="{ collapsed: isCollapsed }">
@@ -89,10 +131,10 @@ const items = computed<NavigationMenuItem[][]>(() => [
 
           <template #right>
             <div class="flex items-center gap-3">
-              <span v-if="account" class="text-sm text-gray-600 dark:text-gray-300">{{ account }}</span>
+              <span v-if="userName || account" class="text-sm text-gray-600 dark:text-gray-300">{{ userName || account }}</span>
               <img
-                v-if="systemImagePath"
-                :src="systemImagePath"
+                v-if="systemImageUrl"
+                :src="systemImageUrl"
                 width="30"
                 height="30"
                 class="opacity-50"

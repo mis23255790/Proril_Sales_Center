@@ -8,10 +8,10 @@
     這支是整批覆蓋（--force），採用即代表放棄「哪個表確定安全再搬」的逐表遷移，
     請自行承擔 CLAUDE.md 提過的風險。
 
-    預設排除 M_User / M_Permission（-ExcludeAuthTables，預設 $true）——這兩張表
-    1.0 的 MainApiController（帳號鎖定/建帳號/改密碼）與 MainApiController_SystemSetting
-    （權限維護）仍在寫，貿然切連線會讓 Proril_Sales_Center 跟 PRORIL_WEB 的帳號權限
-    狀態分岔。要納入請明確加 -ExcludeAuthTables:$false，並自行確認不會有寫入路徑。
+    2026 的權限控管搬遷把 M_User / M_Permission / M_PermissionGroup 一起切到
+    Proril_Sales_Center（1.0 的人員管理與權限管理邏輯也一併搬進 api/），所以
+    -ExcludeAuthTables 預設已改成 $false，這三張表會被 scaffold 進來。
+    只有在「要退回讓 1.0 繼續管帳號權限」時才需要 -ExcludeAuthTables:$true。
 
     Entity 與 DbContext 都輸出到獨立 namespace（Proril.SalesIssue.Api.Data.SalesCenter，
     實體檔在 api/Data/SalesCenter/）：兩邊都要放同一個 namespace，不能只有 Entity
@@ -36,12 +36,12 @@
 .EXAMPLE
     .\scaffold-sales-center.ps1
     .\scaffold-sales-center.ps1 -Environment snapshot-prod
-    .\scaffold-sales-center.ps1 -ExcludeAuthTables:$false
+    .\scaffold-sales-center.ps1 -ExcludeAuthTables:$true
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('snapshot', 'snapshot-prod')][string]$Environment = 'snapshot',
-    [bool]$ExcludeAuthTables = $true
+    [bool]$ExcludeAuthTables = $false
 )
 
 . "$PSScriptRoot\_common.ps1"
@@ -77,7 +77,7 @@ try {
     $allTables = Get-AllTableNames -ConnectionString $cs
     if ($allTables.Count -eq 0) { throw "$Environment 環境查不到任何表，連線字串可能不對。" }
 
-    $authTables = @('M_User', 'M_Permission')
+    $authTables = @('M_User', 'M_Permission', 'M_PermissionGroup')
     $targetTables = if ($ExcludeAuthTables) {
         $allTables | Where-Object { $authTables -notcontains $_ }
     }
@@ -88,12 +88,12 @@ try {
     if ($ExcludeAuthTables) {
         $skipped = $allTables | Where-Object { $authTables -contains $_ }
         if ($skipped.Count -gt 0) {
-            Write-Host "排除（CLAUDE.md：1.0 仍在寫，2.0 不接手）: $($skipped -join ', ')" -ForegroundColor Yellow
+            Write-Host "排除（退回讓 1.0 管帳號權限）: $($skipped -join ', ')" -ForegroundColor Yellow
         }
     }
     else {
-        Write-Host "警告：-ExcludeAuthTables:`$false，M_User/M_Permission 會被納入 SalesCenterDbContext。" -ForegroundColor Red
-        Write-Host "      請自行確認這不會跟 1.0 MainApiController 的帳號寫入邏輯衝突。" -ForegroundColor Red
+        Write-Host "M_User/M_Permission/M_PermissionGroup 會被納入 SalesCenterDbContext（2026 權限控管搬遷的預設）。" -ForegroundColor Cyan
+        Write-Host "前提是 1.0 站台的人員管理／權限管理已經停用，否則兩邊帳號權限會分岔。" -ForegroundColor Cyan
     }
 
     if ($targetTables.Count -eq 0) { throw "篩選後沒有任何表可以 scaffold。" }

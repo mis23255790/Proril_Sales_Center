@@ -6,7 +6,7 @@
  */
 
 /** FunctionId.MixSalesShipping，權限檢查用。 */
-export const SALES_SHIPPING_FUNCTION_NO = 410
+export const SALES_SHIPPING_FUNCTION_NO = '0320101'
 
 /**
  * M_PermissionLinkType.LinkType，銷貨檢索金額欄位的權限碼。

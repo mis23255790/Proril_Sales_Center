@@ -29,6 +29,18 @@ public partial class SalesCenterDbContext : DbContext
 
     public virtual DbSet<HFileLink> HFileLinks { get; set; }
 
+    public virtual DbSet<MFunction> MFunctions { get; set; }
+
+    public virtual DbSet<MPermission> MPermissions { get; set; }
+
+    public virtual DbSet<MPermissionGroup> MPermissionGroups { get; set; }
+
+    public virtual DbSet<MPermissionLinkType> MPermissionLinkTypes { get; set; }
+
+    public virtual DbSet<MSystem> MSystems { get; set; }
+
+    public virtual DbSet<MUser> MUsers { get; set; }
+
     public virtual DbSet<MWorkProcessPhrase> MWorkProcessPhrases { get; set; }
 
     public virtual DbSet<MWorkProcessType> MWorkProcessTypes { get; set; }
@@ -359,6 +371,10 @@ public partial class SalesCenterDbContext : DbContext
             entity.Property(e => e.FileType)
                 .HasMaxLength(10)
                 .IsUnicode(false);
+            entity.Property(e => e.LinkFunctionNo)
+                .HasMaxLength(8)
+                .IsUnicode(false)
+                .HasDefaultValue("0");
             entity.Property(e => e.LinkNo)
                 .HasMaxLength(40)
                 .IsUnicode(false);
@@ -366,6 +382,147 @@ public partial class SalesCenterDbContext : DbContext
             entity.Property(e => e.UpdateUser)
                 .HasMaxLength(10)
                 .IsUnicode(false);
+        });
+
+        modelBuilder.Entity<MFunction>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__M_Functi__3214EC2746E5CF47");
+
+            entity.ToTable("M_Function");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.AStatus)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasDefaultValue("Y")
+                .HasColumnName("aStatus");
+            // FunctionName / GroupName 在 Proril_Sales_Center 是 nvarchar（來源 PRORIL_WEB
+            // 是 varchar，兩庫 collation 不同，照搬會讓中文功能名變成 ?），
+            // 見 database/PortingNotes.md「為什麼有 9 個欄位型別跟來源不一樣」。
+            entity.Property(e => e.FunctionName).HasMaxLength(20);
+            entity.Property(e => e.FunctionNo)
+                .HasMaxLength(8)
+                .IsUnicode(false);
+            entity.Property(e => e.GroupName).HasMaxLength(20);
+            entity.Property(e => e.Href).HasMaxLength(50);
+            entity.Property(e => e.ImagrePath)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.RedirectHref).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<MPermission>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__M_Permis__3214EC274A3FED69");
+
+            entity.ToTable("M_Permission");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.Creator)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.FunctionNo)
+                .HasMaxLength(8)
+                .IsUnicode(false);
+            entity.Property(e => e.LinkNumber)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.ModiTime).HasColumnType("datetime");
+            entity.Property(e => e.Modifier)
+                .HasMaxLength(40)
+                .IsUnicode(false);
+            entity.Property(e => e.PermissionLinkTypeId).HasColumnName("PermissionLinkTypeID");
+        });
+
+        modelBuilder.Entity<MPermissionGroup>(entity =>
+        {
+            entity.ToTable("M_PermissionGroup");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.AStatus)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasColumnName("aStatus");
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.Creator)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.FunctionNo)
+                .HasMaxLength(8)
+                .IsUnicode(false);
+            entity.Property(e => e.GroupDesc).HasMaxLength(50);
+            entity.Property(e => e.GroupNo)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.ModiTime).HasColumnType("datetime");
+            entity.Property(e => e.Modifier)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.TypeDesc).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<MPermissionLinkType>(entity =>
+        {
+            entity.ToTable("M_PermissionLinkType");
+
+            entity.HasIndex(e => new { e.FunctionNo, e.LinkType, e.ParentLinkTypeId },
+                "NonClusteredIndex-20231116-083304").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.Creator)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.FunctionNo)
+                .HasMaxLength(8)
+                .IsUnicode(false);
+            entity.Property(e => e.LinkTypeName)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.Modifier)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.ModifyTime).HasColumnType("datetime");
+            entity.Property(e => e.ParentLinkTypeId).HasColumnName("ParentLinkTypeID");
+        });
+
+        modelBuilder.Entity<MSystem>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__M_System__3214EC279302271C");
+
+            entity.ToTable("M_System");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.Href)
+                .HasMaxLength(50)
+                .HasDefaultValue("");
+            entity.Property(e => e.ImagePath)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.RedirectHref).HasMaxLength(50);
+            entity.Property(e => e.SystemName).HasMaxLength(20);
+            entity.Property(e => e.TypeName).HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<MUser>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__M_User__3214EC27F2F69166");
+
+            entity.ToTable("M_User");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.Account)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.LastChangePwd).HasColumnType("datetime");
+            entity.Property(e => e.Password)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            // UserName 在 Proril_Sales_Center 是 nvarchar(40)（來源 PRORIL_WEB 是
+            // varchar(40)，兩庫 collation 不同，照搬會讓中文姓名變成 ?），
+            // 見 database/PortingNotes.md「為什麼有 7 個欄位型別跟來源不一樣」。
+            entity.Property(e => e.UserName).HasMaxLength(40);
         });
 
         modelBuilder.Entity<MWorkProcessPhrase>(entity =>

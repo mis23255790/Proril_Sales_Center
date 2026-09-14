@@ -9,16 +9,19 @@
  * Nuxt 的靜態路由優先於動態路由，會自動蓋過這裡。
  */
 const route = useRoute()
-const { findModuleBySlug, itemPath, breadcrumbForModule } = useAppNavigation()
+const { findModuleBySlug, allModules, itemPath, breadcrumbForModule } = useAppNavigation()
 
 const slug = computed(() => String(route.params.module ?? ''))
-const mod = findModuleBySlug(slug.value)
 
-if (!mod) {
+// 模組存不存在看未過濾的完整表；權限過濾只影響「列出哪幾張卡片」，
+// 不該讓一個真的存在的模組變成 404（權限清單是非同步載入的，會有先後順序）。
+if (!allModules.some(m => m.path === slug.value)) {
   throw createError({ statusCode: 404, statusMessage: '找不到此模組' })
 }
 
-useSeoMeta({ title: `${mod.label} · PRORIL 業務中心` })
+const mod = computed(() => findModuleBySlug(slug.value))
+
+useSeoMeta({ title: `${mod.value?.label ?? ''} · PRORIL 業務中心` })
 </script>
 
 <template>

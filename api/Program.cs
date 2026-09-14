@@ -96,6 +96,13 @@ var app = builder.Build();
 // ---------------------------------------------------------------- Pipeline
 
 /*
+ * wwwroot 靜態檔（目前只有 images/ic_mission.png、images/ic_test.png）。
+ * M_System.ImagePath 存的是這種站台根目錄相對路徑，topbar 環境圖示用它分辨正式/測試區
+ * （見 useSystemInfo.ts）。放進 api/ 自己的 wwwroot，圖示才不會綁死在 1.0 站台還活著。
+ */
+app.UseStaticFiles();
+
+/*
  * /ShareRoot 靜態檔。
  * GetDownloadUrl 回的路徑就是對應這裡。刻意**不開** EnableDirectoryBrowsing：
  * 1.0 開著，等於任何人都能瀏覽整個共享目錄的檔案清單。

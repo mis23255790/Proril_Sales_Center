@@ -8,58 +8,36 @@ namespace Proril.SalesIssue.Api.Data;
  * api/Data/SalesCenter/（dotnet ef dbcontext scaffold 產生，不要手改，
  * 要改欄位對映去跑 database/scripts/scaffold-sales-center.ps1）。
  *
- * 這裡只留還在打 PRORIL_WEB 的表：M_User / M_Permission（1.0 還在寫，2.0 唯讀）、
- * V_ERPCustomer（ERP 唯讀 view，不在搬遷白名單）。
+ * M_User / M_Permission / M_PermissionGroup / M_System / M_Function 也在 2026 的權限控管搬遷裡切到
+ * Proril_Sales_Center（人員管理與權限管理的 Controller 已一併搬過來，
+ * 見 api/Controllers/Shared/MainApiController.User.cs / .SystemSetting.cs）。
+ *
+ * 這裡只留還在打 PRORIL_WEB 的表：
+ *   - M_Department：1.0 Controllers/System/OrgApiController（組織維護）在寫，
+ *     維持唯讀，等組織管理也搬過來再切。
+ *   - V_ERPCustomer（ERP 唯讀 view，不在搬遷白名單）。
  *
  * 屬性名稱刻意沿用 1.0 scaffold 的結果（Wpno / Sno / AStatus），
  * 對照舊碼與 SQL 時不必再翻譯一層。實際 DB 欄位名在 DbContext 裡對映。
  */
 
-/// <summary>M_User：使用者。</summary>
-public class MUser
-{
-    public int Id { get; set; }
-    public string? Account { get; set; }
-    public string? Password { get; set; }
-    public string? UserName { get; set; }
-    public bool IsEnable { get; set; }
-    public bool IsFirstLogin { get; set; }
-    public DateTime? LastChangePwd { get; set; }
-    public bool IsAdmin { get; set; }
-    public bool IsLocked { get; set; }
-    public byte PwdWrongTime { get; set; }
-}
-
-/// <summary>M_Permission：功能層級權限。議題列表用它判斷使用者是否有「公開」權限。</summary>
-public class MPermission
-{
-    public int Id { get; set; }
-    public string? LinkNumber { get; set; }
-    public int FunctionNo { get; set; }
-    public string? Creator { get; set; }
-    public byte LinkType { get; set; }
-    public DateTime? CreateTime { get; set; }
-    public int? PermissionLinkTypeId { get; set; }
-    public string? Modifier { get; set; }
-    public DateTime? ModiTime { get; set; }
-}
-
 /// <summary>
-/// M_System：系統別主檔。topbar 用它的 ImagePath 顯示登入使用者名稱旁的環境圖示——
-/// 正式區/測試區的 DB 各自存了不同圖檔路徑，程式碼本身不判斷環境（見 1.0
-/// Views/Shared/_AuthLayout.cshtml）。應用層只有查詢，沒有 CRUD，維持唯讀留在 PRORIL_WEB。
+/// M_Department：部門／群組主檔，權限管理的「套用群組」下拉用它。
+/// 1.0 的 OrgApiController（組織維護）在寫，2.0 唯讀。
 /// </summary>
-public class MSystem
+public class MDepartment
 {
     public int Id { get; set; }
-    public int SystemNo { get; set; }
-    public string SystemName { get; set; } = null!;
-    public int SystemType { get; set; }
-    public string? TypeName { get; set; }
-    public int Sort { get; set; }
-    public string? ImagePath { get; set; }
-    public string Href { get; set; } = null!;
-    public string? RedirectHref { get; set; }
+    public string DepCode { get; set; } = null!;
+    public string DepName { get; set; } = null!;
+    public string? DepLeader { get; set; }
+    public string? Directions { get; set; }
+    public int? DepLevel { get; set; }
+    public string? ParentsDep { get; set; }
+    public bool? OrgChartFlag { get; set; }
+    public int? Horqueue { get; set; }
+    public bool IsEnable { get; set; }
+    public int DepGroup { get; set; }
 }
 
 /// <summary>

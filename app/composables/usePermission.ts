@@ -14,7 +14,7 @@ export const usePermission = () => {
   const { apiFetch } = useApi()
 
   /** 回傳裸 bool，不是 ApiResponse 信封（跟站上其他 API 不同，這支例外）。 */
-  const checkLinkTypePermission = (functionNo: number, linkType: number) =>
+  const checkLinkTypePermission = (functionNo: string, linkType: number) =>
     apiFetch<boolean>('/MainApi/CheckUserPermissionLinkType', { params: { functionNo, linkType } })
 
   return { checkLinkTypePermission }

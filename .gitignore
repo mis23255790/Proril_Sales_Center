@@ -6,6 +6,9 @@
 .cache
 dist
 
+# docker save 打包出來的 image tar 檔（scripts/pack-docker-images.ps1）
+docker-images/
+
 # Node dependencies
 node_modules
 
@@ -39,3 +42,7 @@ api/appsettings.Production.json
 # docker-compose 本機/測試區用環境檔（依 *.docker.env.example 複製出來，不進版控）
 docker.env
 api/docker.env
+
+# .env 的手動複本（含連線字串與密鑰，不進版控）
+* - 複製.env
+*複製.env

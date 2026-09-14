@@ -12,7 +12,7 @@ namespace Proril.SalesIssue.Api.Controllers.SalesIssue;
 /// 前端把 NUXT_PUBLIC_API_BASE 指過來就能直接跑，不必改任何一行。
 ///
 /// 議題本身（D_WorkProcess* / M_WorkProcessPhrase / M_WorkProcessType / CRM_Customer）
-/// 打 <see cref="_scDb"/>（Proril_Sales_Center，已確認單一擁有者，可以放心切）；
+/// 打 <see cref="scDb"/>（Proril_Sales_Center，已確認單一擁有者，可以放心切）；
 /// M_User / M_Permission 這兩張表仍留在 <c>db</c>（PRORIL_WEB），只唯讀，
 /// 見 CLAUDE.md 「已核對」段落，寫入邏輯還在 1.0，不要對它們加寫入。
 /// </summary>
@@ -21,7 +21,6 @@ public partial class WorkProcessApiController : BaseApiController
 {
     private const int SopTitleMaxLength = 80;
 
-    private readonly SalesCenterDbContext _scDb;
     private readonly StoragePaths _paths;
 
     public WorkProcessApiController(
@@ -29,9 +28,8 @@ public partial class WorkProcessApiController : BaseApiController
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<WorkProcessApiController> logger) : base(db, jwtHelper, logger)
+        ILogger<WorkProcessApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
-        _scDb = scDb;
         _paths = paths;
     }
 
@@ -59,7 +57,7 @@ public partial class WorkProcessApiController : BaseApiController
         var isAdmin = IsAdmin(account);
 
         // 有「公開」層級的功能權限就看得到全部
-        var isPublic = db.MPermissions.Any(p =>
+        var isPublic = scDb.MPermissions.Any(p =>
             p.LinkNumber == account
             && p.FunctionNo == FunctionIds.ProcessMaintain
             && p.LinkType == (byte)EWorkProcessPermission.Public);
@@ -75,7 +73,7 @@ public partial class WorkProcessApiController : BaseApiController
         }
 
         // 逐議題的權限過濾：本人或全體帳號，且為「編輯」或「公開」層級
-        var permissions = _scDb.DWorkProcessPermissions
+        var permissions = scDb.DWorkProcessPermissions
             .Where(p => p.EnableType == (byte)EWorkProcessPermission.Edit
                      || p.EnableType == (byte)EWorkProcessPermission.Public)
             .ToList()
@@ -112,10 +110,10 @@ public partial class WorkProcessApiController : BaseApiController
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
 
-        var processes = _scDb.DWorkProcesses.Where(o => o.AStatus == ActiveStatus.Active).ToList();
+        var processes = scDb.DWorkProcesses.Where(o => o.AStatus == ActiveStatus.Active).ToList();
 
         // 內文很大，列表不需要，撈的時候就跳過（1.0 也是這樣）
-        var details = _scDb.DWorkProcessDetails
+        var details = scDb.DWorkProcessDetails
             .Where(d => d.AStatus == ActiveStatus.Active)
             .Select(d => new DWorkProcessDetail
             {
@@ -136,11 +134,11 @@ public partial class WorkProcessApiController : BaseApiController
             })
             .ToList();
 
-        var phrases = _scDb.MWorkProcessPhrases.Where(o => o.AStatus == ActiveStatus.Active).ToList();
-        var searches = _scDb.DWorkProcessSearches.Where(o => o.AStatus == ActiveStatus.Active).ToList();
-        var wpCustomers = _scDb.DWorkProcessCustomers.Where(o => o.AStatus == ActiveStatus.Active).ToList();
-        var crmCustomers = _scDb.CrmCustomers.Where(o => o.AStatus == ActiveStatus.Active).ToList();
-        var users = db.MUsers.ToList();
+        var phrases = scDb.MWorkProcessPhrases.Where(o => o.AStatus == ActiveStatus.Active).ToList();
+        var searches = scDb.DWorkProcessSearches.Where(o => o.AStatus == ActiveStatus.Active).ToList();
+        var wpCustomers = scDb.DWorkProcessCustomers.Where(o => o.AStatus == ActiveStatus.Active).ToList();
+        var crmCustomers = scDb.CrmCustomers.Where(o => o.AStatus == ActiveStatus.Active).ToList();
+        var users = scDb.MUsers.ToList();
 
         var userNameByAccount = users
             .GroupBy(u => (u.Account ?? "").Trim())
@@ -223,7 +221,7 @@ public partial class WorkProcessApiController : BaseApiController
         if (!string.IsNullOrWhiteSpace(contentName))
         {
             // 列表沒有載入 ProcessContent，所以內文關鍵字要回資料庫查一次
-            var matched = _scDb.DWorkProcessDetails
+            var matched = scDb.DWorkProcessDetails
                 .Where(d => d.AStatus == ActiveStatus.Active
                          && ((d.ProcessContent != null && d.ProcessContent.Contains(contentName))
                           || (d.ProcessCaption2 != null && d.ProcessCaption2.Contains(contentName))))
@@ -285,7 +283,7 @@ public partial class WorkProcessApiController : BaseApiController
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
 
-        var list = _scDb.DWorkProcesses.OrderByDescending(wp => wp.CreateTime).ToList();
+        var list = scDb.DWorkProcesses.OrderByDescending(wp => wp.CreateTime).ToList();
         if (list.Count == 0)
         {
             ca.Message = "查無工作流程項目類別資料!!!";
@@ -313,7 +311,7 @@ public partial class WorkProcessApiController : BaseApiController
             return ca;
         }
 
-        var wp = _scDb.DWorkProcesses.FirstOrDefault(o => o.AStatus == ActiveStatus.Active && o.Wpno == padded);
+        var wp = scDb.DWorkProcesses.FirstOrDefault(o => o.AStatus == ActiveStatus.Active && o.Wpno == padded);
         if (wp is null)
         {
             ca.Message = $"查無工作流程項目資料:{padded}!!!";
@@ -322,13 +320,13 @@ public partial class WorkProcessApiController : BaseApiController
 
         var result = new DWorkProcessesEx(wp);
 
-        var wpCustomer = _scDb.DWorkProcessCustomers
+        var wpCustomer = scDb.DWorkProcessCustomers
             .FirstOrDefault(c => c.Wpno == padded && c.AStatus == ActiveStatus.Active);
         if (wpCustomer is not null)
         {
             var customerNo = (wpCustomer.CustomerNo ?? "").Trim();
             result.CustomerNo = customerNo;
-            result.CustomerName = _scDb.CrmCustomers
+            result.CustomerName = scDb.CrmCustomers
                 .Where(c => c.AStatus == ActiveStatus.Active)
                 .ToList()
                 .FirstOrDefault(c => (c.CustomerNo ?? "").Trim() == customerNo)?.ShortName ?? "";
@@ -392,7 +390,7 @@ public partial class WorkProcessApiController : BaseApiController
         }
 
         var account = GetAccountByToken();
-        var existing = _scDb.DWorkProcesses.FirstOrDefault(wp => wp.Wpno == padded);
+        var existing = scDb.DWorkProcesses.FirstOrDefault(wp => wp.Wpno == padded);
 
         if (existing is null)
         {
@@ -404,7 +402,7 @@ public partial class WorkProcessApiController : BaseApiController
             wpOrder.Modifier = account;
             wpOrder.ModiTime = DateTime.Now;
 
-            _scDb.DWorkProcesses.Add(wpOrder);
+            scDb.DWorkProcesses.Add(wpOrder);
         }
         else
         {
@@ -418,10 +416,10 @@ public partial class WorkProcessApiController : BaseApiController
             existing.Modifier = account;
             existing.ModiTime = DateTime.Now;
 
-            _scDb.DWorkProcesses.Update(existing);
+            scDb.DWorkProcesses.Update(existing);
         }
 
-        _scDb.SaveChanges();
+        scDb.SaveChanges();
         ca.IsSuccess = true;
         return ca;
     }
@@ -441,7 +439,7 @@ public partial class WorkProcessApiController : BaseApiController
             return ca;
         }
 
-        var wp = _scDb.DWorkProcesses.FirstOrDefault(o => o.Wpno == padded);
+        var wp = scDb.DWorkProcesses.FirstOrDefault(o => o.Wpno == padded);
         if (wp is null)
         {
             ca.Message = $"查無工作流程單:{padded}!!!";
@@ -451,8 +449,8 @@ public partial class WorkProcessApiController : BaseApiController
         wp.AStatus = ActiveStatus.Inactive;
         wp.Modifier = GetAccountByToken();
         wp.ModiTime = DateTime.Now;
-        _scDb.DWorkProcesses.Update(wp);
-        _scDb.SaveChanges();
+        scDb.DWorkProcesses.Update(wp);
+        scDb.SaveChanges();
 
         ca.IsSuccess = true;
         return ca;
@@ -478,7 +476,7 @@ public partial class WorkProcessApiController : BaseApiController
             return ca;
         }
 
-        var details = _scDb.DWorkProcessDetails
+        var details = scDb.DWorkProcessDetails
             .Where(d => d.Wpno == padded)
             .OrderBy(d => d.ProcessCaption)
             .ToList();
@@ -490,7 +488,7 @@ public partial class WorkProcessApiController : BaseApiController
             return ca;
         }
 
-        var userNameByAccount = db.MUsers.ToList()
+        var userNameByAccount = scDb.MUsers.ToList()
             .GroupBy(u => (u.Account ?? "").Trim())
             .ToDictionary(g => g.Key, g => g.First().UserName);
 
@@ -519,7 +517,7 @@ public partial class WorkProcessApiController : BaseApiController
         }
 
         var paddedSno = StoragePaths.PadSno(sNo);
-        var detail = _scDb.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
+        var detail = scDb.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
 
         // 新增中的進度還不存在，這不是錯誤
         ca.IsSuccess = true;
@@ -550,7 +548,7 @@ public partial class WorkProcessApiController : BaseApiController
         }
 
         var paddedSno = StoragePaths.PadSno(SNo);
-        var detail = _scDb.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
+        var detail = scDb.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == padded && d.Sno == paddedSno);
         if (detail is null)
         {
             ca.Message = $"{padded}:{paddedSno} 查無資料!!!";
@@ -596,7 +594,7 @@ public partial class WorkProcessApiController : BaseApiController
         wpDetail.ProcessContent = (wpDetail.ProcessContent ?? "").Trim();
 
         var account = GetAccountByToken();
-        var existing = _scDb.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == wpDetail.Wpno && d.Sno == wpDetail.Sno);
+        var existing = scDb.DWorkProcessDetails.FirstOrDefault(d => d.Wpno == wpDetail.Wpno && d.Sno == wpDetail.Sno);
 
         if (existing is null)
         {
@@ -605,7 +603,7 @@ public partial class WorkProcessApiController : BaseApiController
             wpDetail.CreateTime = DateTime.Now;
             wpDetail.Modifier = account;
             wpDetail.ModiTime = DateTime.Now;
-            _scDb.DWorkProcessDetails.Add(wpDetail);
+            scDb.DWorkProcessDetails.Add(wpDetail);
         }
         else
         {
@@ -617,10 +615,10 @@ public partial class WorkProcessApiController : BaseApiController
             existing.RenameFile = wpDetail.RenameFile;
             existing.Modifier = account;
             existing.ModiTime = DateTime.Now;
-            _scDb.DWorkProcessDetails.Update(existing);
+            scDb.DWorkProcessDetails.Update(existing);
         }
 
-        _scDb.SaveChanges();
+        scDb.SaveChanges();
         ca.IsSuccess = true;
         return ca;
     }
@@ -647,15 +645,15 @@ public partial class WorkProcessApiController : BaseApiController
         }
 
         var paddedSno = StoragePaths.PadSno(sNo);
-        var details = _scDb.DWorkProcessDetails.Where(d => d.Wpno == padded && d.Sno == paddedSno).ToList();
+        var details = scDb.DWorkProcessDetails.Where(d => d.Wpno == padded && d.Sno == paddedSno).ToList();
         if (details.Count != 1)
         {
             ca.Message = $"文件{padded}:{paddedSno} 不存在或個數不為1 !!!";
             return ca;
         }
 
-        _scDb.DWorkProcessDetails.Remove(details.First());
-        _scDb.SaveChanges();
+        scDb.DWorkProcessDetails.Remove(details.First());
+        scDb.SaveChanges();
 
         ca.IsSuccess = true;
         return ca;
@@ -671,7 +669,7 @@ public partial class WorkProcessApiController : BaseApiController
 
         WriteStepLog(nameof(GetKindList), $"typeCode:{typeCode}");
 
-        var list = _scDb.MWorkProcessPhrases
+        var list = scDb.MWorkProcessPhrases
             .Where(p => p.PhraseType == typeCode && p.AStatus == ActiveStatus.Active)
             .OrderBy(p => p.PhraseCode)
             .ToList();
@@ -701,7 +699,7 @@ public partial class WorkProcessApiController : BaseApiController
 
         mPhrase.PubFlag ??= true;
 
-        var existing = _scDb.MWorkProcessPhrases
+        var existing = scDb.MWorkProcessPhrases
             .FirstOrDefault(p => p.PhraseType == mPhrase.PhraseType && p.PhraseCode == mPhrase.PhraseCode);
 
         if (existing is not null)
@@ -710,14 +708,14 @@ public partial class WorkProcessApiController : BaseApiController
             existing.PubFlag = mPhrase.PubFlag;
             existing.Principal = mPhrase.Principal;
             existing.PotentialCustom = mPhrase.PotentialCustom;
-            _scDb.MWorkProcessPhrases.Update(existing);
+            scDb.MWorkProcessPhrases.Update(existing);
         }
         else
         {
             // Directions 沿用 1.0：存放所屬分類的名稱，方便人工看 DB
-            var type = _scDb.MWorkProcessTypes.FirstOrDefault(t => t.TypeCode == mPhrase.PhraseType);
+            var type = scDb.MWorkProcessTypes.FirstOrDefault(t => t.TypeCode == mPhrase.PhraseType);
 
-            _scDb.MWorkProcessPhrases.Add(new MWorkProcessPhrase
+            scDb.MWorkProcessPhrases.Add(new MWorkProcessPhrase
             {
                 PhraseType = mPhrase.PhraseType,
                 PhraseCode = mPhrase.PhraseCode,
@@ -732,7 +730,7 @@ public partial class WorkProcessApiController : BaseApiController
             });
         }
 
-        _scDb.SaveChanges();
+        scDb.SaveChanges();
         ca.IsSuccess = true;
         return ca;
     }
@@ -754,9 +752,9 @@ public partial class WorkProcessApiController : BaseApiController
             return ca;
         }
 
-        var searches = _scDb.DWorkProcessSearches
+        var searches = scDb.DWorkProcessSearches
             .Where(s => s.AStatus == ActiveStatus.Active && s.Wpno == padded).ToList();
-        var phrases = _scDb.MWorkProcessPhrases
+        var phrases = scDb.MWorkProcessPhrases
             .Where(p => p.AStatus == ActiveStatus.Active).ToList();
 
         var phraseByCode = phrases
@@ -808,13 +806,13 @@ public partial class WorkProcessApiController : BaseApiController
         }
 
         var account = GetAccountByToken();
-        var existing = _scDb.DWorkProcessSearches
+        var existing = scDb.DWorkProcessSearches
             .Where(s => s.Wpno == padded && s.AStatus == ActiveStatus.Active).ToList();
 
         // 不在新清單裡的移除
         foreach (var row in existing.Where(r => !codes.Contains((r.PhraseCode ?? "").Trim())))
         {
-            _scDb.DWorkProcessSearches.Remove(row);
+            scDb.DWorkProcessSearches.Remove(row);
         }
 
         // 新的加入，既有的沿用
@@ -823,7 +821,7 @@ public partial class WorkProcessApiController : BaseApiController
             var match = existing.FirstOrDefault(r => (r.PhraseCode ?? "").Trim() == codes[i]);
             if (match is null)
             {
-                _scDb.DWorkProcessSearches.Add(new DWorkProcessSearch
+                scDb.DWorkProcessSearches.Add(new DWorkProcessSearch
                 {
                     Wpno = padded,
                     PhraseType = types[i],
@@ -842,7 +840,7 @@ public partial class WorkProcessApiController : BaseApiController
             }
         }
 
-        _scDb.SaveChanges();
+        scDb.SaveChanges();
         ca.IsSuccess = true;
         return ca;
     }
@@ -862,9 +860,9 @@ public partial class WorkProcessApiController : BaseApiController
             return ca;
         }
 
-        var wpCustomers = _scDb.DWorkProcessCustomers
+        var wpCustomers = scDb.DWorkProcessCustomers
             .Where(c => c.AStatus == ActiveStatus.Active && c.Wpno == padded).ToList();
-        var crmByNo = _scDb.CrmCustomers
+        var crmByNo = scDb.CrmCustomers
             .Where(c => c.AStatus == ActiveStatus.Active).ToList()
             .GroupBy(c => (c.CustomerNo ?? "").Trim())
             .ToDictionary(g => g.Key, g => g.First());
@@ -908,7 +906,7 @@ public partial class WorkProcessApiController : BaseApiController
 
         var customNos = SplitList(strCustomNoList);
         var account = GetAccountByToken();
-        var existing = _scDb.DWorkProcessCustomers
+        var existing = scDb.DWorkProcessCustomers
             .Where(c => c.Wpno == padded && c.AStatus == ActiveStatus.Active).ToList();
 
         // 不在新清單裡的失效（客戶關聯是軟刪除，與關鍵字不同）
@@ -924,7 +922,7 @@ public partial class WorkProcessApiController : BaseApiController
             var match = existing.FirstOrDefault(r => (r.CustomerNo ?? "").Trim() == customNo);
             if (match is null)
             {
-                _scDb.DWorkProcessCustomers.Add(new DWorkProcessCustomer
+                scDb.DWorkProcessCustomers.Add(new DWorkProcessCustomer
                 {
                     Wpno = padded,
                     CustomerNo = customNo,
@@ -942,7 +940,7 @@ public partial class WorkProcessApiController : BaseApiController
             }
         }
 
-        _scDb.SaveChanges();
+        scDb.SaveChanges();
         ca.IsSuccess = true;
         return ca;
     }

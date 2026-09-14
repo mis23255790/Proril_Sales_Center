@@ -6,7 +6,7 @@
  */
 
 /** FunctionId.OrderInfoVerify，權限檢查用。1.0 enum 註解「訂單資料查核」，畫面顯示「訂單資料檢核」。 */
-export const ORDER_INFO_VERIFY_FUNCTION_NO = 425
+export const ORDER_INFO_VERIFY_FUNCTION_NO = '0320201'
 
 /** M_PermissionLinkType.LinkType，金額欄位的權限碼。 */
 export const ORDER_INFO_VERIFY_AMOUNT_LINK_TYPE = 100

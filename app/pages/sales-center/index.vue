@@ -3,7 +3,7 @@
  * 業務中心首頁：只列**模組**，比照 1.0 的層級逐層下鑽。
  * 點模組才會看到它底下的功能（app/pages/sales-center/[module]/index.vue）。
  */
-const { modules, modulePath, countItems } = useAppNavigation()
+const { modules, modulePath, countItems, hasNoAccessibleModule } = useAppNavigation()
 
 useSeoMeta({ title: 'PRORIL 業務中心' })
 </script>
@@ -18,6 +18,16 @@ useSeoMeta({ title: 'PRORIL 業務中心' })
         選擇要進入的系統。
       </p>
     </div>
+
+    <UAlert
+      v-if="hasNoAccessibleModule"
+      icon="i-lucide-shield-alert"
+      color="warning"
+      variant="subtle"
+      title="目前沒有任何可用功能"
+      description="你的帳號在權限設定裡沒有對應到任何業務中心的功能，請洽系統管理員開通。"
+      class="mb-4"
+    />
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <NavCard

@@ -9,7 +9,7 @@
  */
 
 /** FunctionId.QueryUnFinish，權限檢查用。1.0 enum 註解是「尚未出貨訂單」，畫面標題是「未完成訂單檢索」。 */
-export const UNFINISH_FUNCTION_NO = 420
+export const UNFINISH_FUNCTION_NO = '0320102'
 
 /**
  * M_PermissionLinkType.LinkType，未完成訂單金額欄位的權限碼。

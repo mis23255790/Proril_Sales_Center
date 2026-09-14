@@ -23,18 +23,50 @@ public enum EWorkProcessPermission
     Public = 20
 }
 
-/// <summary>M_Permission.FunctionNo。</summary>
+/// <summary>
+/// M_Permission.FunctionNo / M_Function.FunctionNo。
+///
+/// 格式是 <c>AAABBCC</c>（SystemNo 3 碼 + GroupNo 2 碼 + 序號 2 碼），varchar(8)，
+/// 定長所以字串排序就等於「系統別 → 群組 → 序號」。
+/// **只有 Proril_Sales_Center 是這個格式**；PRORIL_WEB（1.0 在用）仍是 int 流水號，
+/// 兩邊永久分岔，見 database/FunctionNoFormatMigration.sql。
+/// </summary>
 public static class FunctionIds
 {
-    /// <summary>流程維護（1.0 的 FunctionId.ProcessMaintain）。上傳 log 也用這個號。</summary>
-    public const int ProcessMaintain = 17;
+    /// <summary>權限管理（舊 1）。</summary>
+    public const string PermissionManager = "0000101";
+
+    /// <summary>人員管理（舊 8）。</summary>
+    public const string UserManager = "0000102";
+
+    /// <summary>類別維護（舊 16）。</summary>
+    public const string KindMaintain = "0070101";
+
+    /// <summary>議題維護（舊 17，1.0 的 ProcessMaintain）。上傳 log 也用這個號。</summary>
+    public const string ProcessMaintain = "0070102";
+
+    /// <summary>銷貨檢索（舊 410，1.0 的 MixSalesShipping）。</summary>
+    public const string MixSalesShipping = "0320101";
+
+    /// <summary>未完成訂單檢索（舊 420，1.0 的 QueryUnFinish）。</summary>
+    public const string QueryUnFinish = "0320102";
+
+    /// <summary>客戶維護（舊 440，1.0 的 CustomQuery）。</summary>
+    public const string CustomQuery = "0320103";
 
     /// <summary>
-    /// 訂單資料檢核（1.0 FunctionId.OrderInfoVerify）。
+    /// 訂單資料檢核（舊 425）。
     /// 1.0 enum 註解寫「訂單資料查核」，但畫面標題與 JS top-title 顯示的是「訂單資料檢核」，
     /// 2.0 沿用畫面上實際看到的字樣。
     /// </summary>
-    public const int OrderInfoVerify = 425;
+    public const string OrderInfoVerify = "0320201";
+}
+
+/// <summary>M_PermissionGroup.GroupType。</summary>
+public static class PermissionGroupType
+{
+    /// <summary>部門預設功能。1.0 MainApiController._default_group_type = 10。</summary>
+    public const int Department = 10;
 }
 
 /// <summary>訂單資料檢核相關常數。</summary>

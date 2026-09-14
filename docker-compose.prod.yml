@@ -1,0 +1,32 @@
+# 內部測試站部署：image 已經 build/push 到 registry，這裡只負責跑起來，不 build。
+# 起之前確認 dev-mssql-2022-network、nginx-proxy 這兩個 external network 已經存在於這台主機
+# （docker network ls 查得到），這兩個是別的 compose/手動建的，這份不負責建立它們。
+#
+# api/docker.env 要先準備好（見 api/docker.env.example）——尤其
+# ConnectionStrings__ProrilWeb / ConnectionStrings__SalesCenter，這台主機在
+# dev-mssql-2022-network 上，SQL Server 可能要改用該 network 上的容器名稱連，
+# 不一定是本機測試用的 LAN IP。
+services:
+  web-server:
+    image: intranet-sales-center-dev.proril
+    container_name: proril_intranet_sales_center
+    user: "root"
+    ports:
+      - "8088:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    env_file:
+      - api/docker.env
+    volumes:
+      - D:\intranet-sales-center-dev.proril\ProrilWebFiles:/app/ProrilWebFiles
+      - D:\intranet-sales-center-dev.proril\Logs:/app/Logs
+    restart: unless-stopped
+    networks:
+      - dev-mssql-2022-network
+      - nginx-proxy
+
+networks:
+  dev-mssql-2022-network:
+    external: true
+  nginx-proxy:
+    external: true

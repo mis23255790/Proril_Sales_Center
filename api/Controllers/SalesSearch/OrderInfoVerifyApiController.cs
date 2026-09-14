@@ -5,6 +5,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Proril.SalesIssue.Api.Controllers.Shared;
 using Proril.SalesIssue.Api.Data;
+using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
 
@@ -21,9 +22,10 @@ public partial class OrderInfoVerifyApiController : BaseApiController
 {
     public OrderInfoVerifyApiController(
         ProrilWebDbContext db,
+        SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<OrderInfoVerifyApiController> logger) : base(db, jwtHelper, logger)
+        ILogger<OrderInfoVerifyApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
         _paths = paths;
     }

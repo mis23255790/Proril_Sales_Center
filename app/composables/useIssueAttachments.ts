@@ -84,7 +84,7 @@ export const useIssueAttachments = () => {
     const form = new FormData()
     form.append('files', file)
     form.append('saveByFileName', `${tempDir(wpNo, sNo)}/${file.name}`)
-    form.append('linkFuncNo', String(SALES_ISSUE_FUNCTION_NO))
+    form.append('linkFuncNo', SALES_ISSUE_FUNCTION_NO)
     form.append('linkNo', '0')
 
     return apiFetch<ApiResponse<unknown>>('/UploadApi/SaveByFileName', {
