@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableColumn } from '@nuxt/ui'
-import type { SalesIssueRow, WorkPhrase } from '~/types/salesIssue'
+import type { CrmCustomer, SalesIssueRow, WorkPhrase } from '~/types/salesIssue'
 import { PHRASE_TYPE } from '~/types/salesIssue'
 import ConfirmDialog from '~/components/common/ConfirmDialog.vue'
 
@@ -19,6 +19,7 @@ const table = useTemplateRef('table')
 const loading = ref(false)
 const rows = ref<SalesIssueRow[]>([])
 const categories = ref<WorkPhrase[]>([])
+const customers = ref<CrmCustomer[]>([])
 
 /** 後端可以過濾的條件。改這些要重新查詢。 */
 const filters = reactive({
@@ -67,9 +68,21 @@ const loadCategories = async () => {
   }
 }
 
+/** 客戶別下拉的選項來源，跟議題編輯頁同一支 CRM 客戶清單（api.getCustomers）。 */
+const loadCustomers = async () => {
+  try {
+    const res = await api.getCustomers()
+    customers.value = res?.isSuccess ? (res.body ?? []) : []
+  } catch (err) {
+    console.log('issues loadCustomers failed -->', err)
+    customers.value = []
+  }
+}
+
 onMounted(() => {
   load()
   loadCategories()
+  loadCustomers()
 })
 
 /**
@@ -87,6 +100,25 @@ const categoryOptions = computed(() => [
 const categorySelectValue = computed({
   get: () => filters.category || ALL_CATEGORY,
   set: (v: string) => { filters.category = v === ALL_CATEGORY ? '' : v }
+})
+
+/**
+ * 客戶別選項同樣用哨兵值代表「全部客戶」，實際送給後端的還是 shortName——
+ * GetSOPList_Edit 的 type3_phrase_name 是拿去 Contains 比對 CustomerName（= CRM ShortName），
+ * 不是比對舊版 phraseType 03 職能主題，見 docs/modules/SalesIssue/logic.md。
+ */
+const ALL_CUSTOMER = '__all_customer__'
+
+const customerOptions = computed(() => [
+  { label: '全部客戶', value: ALL_CUSTOMER },
+  ...customers.value
+    .filter(c => (c.shortName ?? '').trim())
+    .map(c => ({ label: `${(c.shortName ?? '').trim()}(${String(c.customerNo ?? '').trim()})`, value: (c.shortName ?? '').trim() }))
+])
+
+const customerSelectValue = computed({
+  get: () => filters.customer || ALL_CUSTOMER,
+  set: (v: string) => { filters.customer = v === ALL_CUSTOMER ? '' : v }
 })
 
 const resetFilters = () => {
@@ -245,7 +277,15 @@ const removeIssue = async (row: SalesIssueRow) => {
         </UFormField>
 
         <UFormField label="客戶別" size="sm">
-          <UInput v-model="filters.customer" placeholder="客戶簡稱關鍵字" class="w-full" @keyup.enter="load" />
+          <USelectMenu
+            v-model="customerSelectValue"
+            :items="customerOptions"
+            value-key="value"
+            label-key="label"
+            placeholder="全部客戶"
+            class="w-full"
+            @update:model-value="load"
+          />
         </UFormField>
 
         <UFormField label="標題 / 大綱關鍵字" size="sm">
