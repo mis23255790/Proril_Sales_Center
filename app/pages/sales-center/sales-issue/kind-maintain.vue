@@ -215,7 +215,7 @@ const save = async () => {
         :data="visibleRows"
         :columns="columns"
         :loading="loading"
-        :ui="{ tr: 'cursor-pointer' }"
+        :ui="{ tr: clickableRowTr }"
         @select="(_e: Event, row: any) => openEdit(row.original)"
       >
         <template #principal-cell="{ row }">

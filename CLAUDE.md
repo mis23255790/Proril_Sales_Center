@@ -153,6 +153,14 @@
     - `SalesIssue/update.md` — 業務議題更新紀錄
   - 改完邏輯請順手更新對應的 md。
 
+- **表格整列可點擊（有編輯／明細畫面的 table 一律照做）**：
+  只要 `UTable` 對應得到編輯（或明細）畫面，就必須：
+  1. `:ui="{ tr: clickableRowTr, ... }"`（`app/utils/table.ts`，Nuxt 自動 import），
+     hover 時整列變色、**列內文字加底線**、游標變手指；
+  2. `@select="(_e: Event, row: any) => openXxx(row.original)"`，點列上任一處就進編輯畫面；
+  3. `actions` 欄的按鈕包一層 `<div @click.stop>`，避免點按鈕時觸發兩次。
+  只有「純檢視、沒有編輯畫面」的 table 才不掛。
+
 - **後端字串常帶尾端空白**：ERP／舊系統同步進來的字串常帶**尾端空白**，
   前端做比對（客戶編號、SNo…）一定要兩邊都 `trim()`。這是反覆出現的 bug 來源。
 

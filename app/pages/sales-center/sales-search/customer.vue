@@ -346,12 +346,15 @@ const onSave = async () => {
         :data="customers"
         :columns="internalColumns"
         :loading="loading"
-        :ui="{ td: 'whitespace-nowrap' }"
+        :ui="{ tr: clickableRowTr, td: 'whitespace-nowrap' }"
+        @select="(_e: Event, row: any) => openEditModal(row.original)"
       >
         <template #actions-cell="{ row }">
-          <UButton size="xs" color="primary" variant="outline" @click="openEditModal(row.original)">
-            編輯
-          </UButton>
+          <div @click.stop>
+            <UButton size="xs" color="primary" variant="outline" @click="openEditModal(row.original)">
+              編輯
+            </UButton>
+          </div>
         </template>
         <template #empty>
           <p class="py-12 text-center text-sm text-muted">
@@ -365,12 +368,15 @@ const onSave = async () => {
         :data="erpCustomers"
         :columns="erpColumns"
         :loading="loading"
-        :ui="{ td: 'whitespace-nowrap' }"
+        :ui="{ tr: clickableRowTr, td: 'whitespace-nowrap' }"
+        @select="(_e: Event, row: any) => openFromErp(row.original)"
       >
         <template #actions-cell="{ row }">
-          <UButton size="xs" color="primary" variant="outline" @click="openFromErp(row.original)">
-            {{ row.original.customerNo ? '編輯' : '建立客戶' }}
-          </UButton>
+          <div @click.stop>
+            <UButton size="xs" color="primary" variant="outline" @click="openFromErp(row.original)">
+              {{ row.original.customerNo ? '編輯' : '建立客戶' }}
+            </UButton>
+          </div>
         </template>
         <template #empty>
           <p class="py-12 text-center text-sm text-muted">

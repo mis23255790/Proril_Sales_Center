@@ -363,7 +363,7 @@ const removeIssue = async (row: SalesIssueRow) => {
         :data="visibleRows"
         :columns="columns"
         :loading="loading"
-        :ui="{ tr: 'cursor-pointer', td: 'align-top whitespace-normal' }"
+        :ui="{ tr: clickableRowTr, td: 'align-top whitespace-normal' }"
         @select="(_e: Event, row: any) => openIssue(row.original)"
       >
         <template #sopTitle-cell="{ row }">

@@ -1,4 +1,32 @@
 <details>
+  <summary>版號2026.09.14.2100</summary>
+
+##### feat(app): 表格整列可點擊進編輯畫面
+
+      新增全站共用樣式 app/utils/table.ts 的 clickableRowTr:
+      hover 時整列變色 + 列內文字加底線 + 游標變手指，
+      列內的 button / a 不跟著加底線。
+
+      訂單資料檢核 (order-info-verify) 兩個分頁的表格改成整列可點，
+      點任一格即開「檢核結果」明細 Modal；原本的 actions 按鈕保留，
+      外面包 <div @click.stop> 避免觸發兩次。
+
+      同時把既有已支援整列點擊的表格換成同一組樣式 (原本只有 cursor-pointer、
+      沒有底線): 議題清單、議題類別維護、客戶資料維護 (內網 / ERP 兩張)。
+
+      規範已寫進 CLAUDE.md「核心設計原則」: 之後只要 table 有對應的編輯畫面，
+      一律掛 clickableRowTr + @select。
+
+      異動:
+          app/utils/table.ts (新增)
+          app/pages/sales-center/sales-search/{order-info-verify,customer}.vue
+          app/pages/sales-center/sales-issue/issues/index.vue
+          app/pages/sales-center/sales-issue/kind-maintain.vue
+          CLAUDE.md
+
+</details>
+
+<details>
   <summary>版號2026.09.10.1200</summary>
 
 ##### fix: 客戶下拉選單渲染失敗

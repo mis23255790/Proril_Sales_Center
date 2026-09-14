@@ -330,12 +330,15 @@ const loadConditions = async () => {
         :data="activeTab === 'notChecked' ? notCheckedGroups : checkedGroups"
         :columns="columns"
         :loading="loading"
-        :ui="{ td: 'whitespace-nowrap' }"
+        :ui="{ tr: clickableRowTr, td: 'whitespace-nowrap' }"
+        @select="(_e: Event, row: any) => openDetail(row.original)"
       >
         <template #actions-cell="{ row }">
-          <UButton size="xs" color="primary" variant="outline" @click="openDetail(row.original)">
-            檢核結果
-          </UButton>
+          <div @click.stop>
+            <UButton size="xs" color="primary" variant="outline" @click="openDetail(row.original)">
+              檢核結果
+            </UButton>
+          </div>
         </template>
         <template #empty>
           <p class="py-12 text-center text-sm text-muted">
