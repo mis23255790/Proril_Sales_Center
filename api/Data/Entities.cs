@@ -45,6 +45,24 @@ public class MPermission
 }
 
 /// <summary>
+/// M_System：系統別主檔。topbar 用它的 ImagePath 顯示登入使用者名稱旁的環境圖示——
+/// 正式區/測試區的 DB 各自存了不同圖檔路徑，程式碼本身不判斷環境（見 1.0
+/// Views/Shared/_AuthLayout.cshtml）。應用層只有查詢，沒有 CRUD，維持唯讀留在 PRORIL_WEB。
+/// </summary>
+public class MSystem
+{
+    public int Id { get; set; }
+    public int SystemNo { get; set; }
+    public string SystemName { get; set; } = null!;
+    public int SystemType { get; set; }
+    public string? TypeName { get; set; }
+    public int Sort { get; set; }
+    public string? ImagePath { get; set; }
+    public string Href { get; set; } = null!;
+    public string? RedirectHref { get; set; }
+}
+
+/// <summary>
 /// V_ERPCustomer：唯讀 View，客戶清單靠它補上 ERP 端的名稱。
 /// 這是 View 不是資料表，所以不在 database/TABLES.txt 的 DACPAC 白名單裡。
 /// </summary>

@@ -3,8 +3,21 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
 const { modules, modulePath, itemPath, appBaseLabel } = useAppNavigation()
+const { account } = useAuthAccount()
+const { getSystemByNo } = useSystemInfo()
 
 const collapsed = ref(false)
+
+/** 正式區/測試區環境圖示，沿用 1.0 _AuthLayout：圖檔路徑本身就是環境差異。 */
+const systemImagePath = ref<string | null>(null)
+onMounted(async () => {
+  try {
+    const res = await getSystemByNo(WORK_PROCESS_SYSTEM_NO)
+    systemImagePath.value = res?.body?.[0]?.imagePath || null
+  } catch (err) {
+    console.log('load system image failed -->', err)
+  }
+})
 
 // 路徑是 /sales-center/<模組>/<功能>，模組代號在第 2 段
 // （split('/') 之後 [0] 是空字串、[1] 是 sales-center）
@@ -75,7 +88,18 @@ const items = computed<NavigationMenuItem[][]>(() => [
           </template>
 
           <template #right>
-            <UColorModeButton />
+            <div class="flex items-center gap-3">
+              <span v-if="account" class="text-sm text-gray-600 dark:text-gray-300">{{ account }}</span>
+              <img
+                v-if="systemImagePath"
+                :src="systemImagePath"
+                width="30"
+                height="30"
+                class="opacity-50"
+                alt=""
+              >
+              <UColorModeButton />
+            </div>
           </template>
         </UDashboardNavbar>
       </template>

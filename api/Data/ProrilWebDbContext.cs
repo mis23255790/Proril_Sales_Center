@@ -23,6 +23,7 @@ public class ProrilWebDbContext : DbContext
 
     public virtual DbSet<MUser> MUsers { get; set; } = null!;
     public virtual DbSet<MPermission> MPermissions { get; set; } = null!;
+    public virtual DbSet<MSystem> MSystems { get; set; } = null!;
     public virtual DbSet<VErpcustomer> VErpcustomers { get; set; } = null!;
 
     // ---- 訂單資料檢核（OrderInfoVerify），見 OrderInfoVerifyEntities.cs ----
@@ -63,6 +64,19 @@ public class ProrilWebDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("ID");
             entity.Property(e => e.CreateTime).HasColumnType("datetime");
             entity.Property(e => e.ModiTime).HasColumnType("datetime");
+        });
+
+        modelBuilder.Entity<MSystem>(entity =>
+        {
+            entity.ToTable("M_System");
+            entity.HasKey(e => e.Id).HasName("PK__M_System__3214EC279302271C");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.Href).HasMaxLength(50).HasDefaultValue("");
+            entity.Property(e => e.ImagePath).HasMaxLength(50).IsUnicode(false);
+            entity.Property(e => e.RedirectHref).HasMaxLength(50);
+            entity.Property(e => e.SystemName).HasMaxLength(20);
+            entity.Property(e => e.TypeName).HasMaxLength(20);
         });
 
         modelBuilder.Entity<VErpcustomer>(entity =>
