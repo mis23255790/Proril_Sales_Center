@@ -8,6 +8,7 @@ using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Middleware;
+using Proril.SalesIssue.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,6 +46,8 @@ builder.Services.AddDbContext<SalesCenterDbContext>(options =>
 builder.Services.AddSingleton<JwtHelper>();
 builder.Services.AddSingleton<AesHelper>();
 builder.Services.AddSingleton<StoragePaths>();
+builder.Services.AddSingleton<LogHelper>();
+builder.Services.AddHostedService<LogTimedHostedService>();
 builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());
 
 /*
