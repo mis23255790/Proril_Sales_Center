@@ -27,6 +27,13 @@ namespace Proril.SalesIssue.Api.Controllers.SalesIssue;
  */
 public partial class WorkProcessApiController
 {
+    /// <summary>
+    /// zip 檔名裡的版號，跟 app/types/salesIssue.ts 的 DEFAULT_VER_NO 是同一個值、
+    /// 同一個意思——固定 "1.0"，跟 D_WorkProcess.VerNo（SOP 業務版本號）無關，
+    /// 不要混用，見 GetDownloadUrl 的說明。
+    /// </summary>
+    private const string ZipVerNo = "1.0";
+
     /// <summary>步驟 1：清掉自己這次要用的 temp 目錄。</summary>
     [HttpGet]
     [Authorize]
@@ -380,6 +387,15 @@ public partial class WorkProcessApiController
     /// 取得單一附件的下載網址。
     /// 會先把 zip 解到使用者的 temp 目錄，再回傳 /ShareRoot/... 的相對路徑
     /// （對應 Program.cs 掛在 /ShareRoot 的靜態檔目錄）。
+    ///
+    /// **zip 檔名的版號固定是 "1.0"，不是 D_WorkProcess.VerNo**：後者是 SOP 本身的
+    /// 業務版本號（可能是 1.0 舊資料留下來的 "1.1" 之類的值，跟附件 zip 完全無關）。
+    /// 壓縮/解壓端（useIssueAttachments.ts 的 commit()、ZipAttachFileList/
+    /// UpdateDBAttachFile）一律用前端常數 DEFAULT_VER_NO = "1.0" 組檔名，這裡原本
+    /// 錯拿 wp.VerNo，導致只要議題的 VerNo 不是剛好 "1.0"（migration 從 1.0 搬過來的
+    /// 舊資料很常見），就會去找一個從來沒建立過的檔名，解壓靜默略過（IsSuccess 仍是
+    /// true），最後才在下面的 File.Exists 檢查失敗，跳出「解壓後仍不存在」——
+    /// 實際上 zip 檔案好好地在，只是找錯檔名。
     /// </summary>
     [HttpGet]
     [Authorize]
@@ -404,11 +420,8 @@ public partial class WorkProcessApiController
             return ca;
         }
 
-        var wp = scDb.DWorkProcesses.FirstOrDefault(o => o.Wpno == padded);
-        var verNo = wp?.VerNo ?? "1.0";
-
         // 解到 temp/{dcu}/{sNo}，與編輯流程同一個位置
-        var unzip = UnzipAttachFileList(padded, paddedSno, verNo, paddedSno);
+        var unzip = UnzipAttachFileList(padded, paddedSno, ZipVerNo, paddedSno);
         if (!unzip.IsSuccess)
         {
             ca.Message = unzip.Message;
