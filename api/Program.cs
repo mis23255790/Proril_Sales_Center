@@ -107,19 +107,23 @@ app.UseStaticFiles();
 
 /*
  * /ShareRoot 靜態檔。
- * GetDownloadUrl 回的路徑就是對應這裡。刻意**不開** EnableDirectoryBrowsing：
- * 1.0 開著，等於任何人都能瀏覽整個共享目錄的檔案清單。
+ * GetDownloadUrl 回的路徑就是對應這裡。跟 1.0 一樣開 EnableDirectoryBrowsing：
+ * 任何人都能瀏覽整個共享目錄的檔案清單，是刻意跟 1.0 對齊的已知風險，不是這裡新增的。
  */
 var storagePaths = app.Services.GetRequiredService<StoragePaths>();
 Directory.CreateDirectory(storagePaths.ShareRoot);
 
-app.UseStaticFiles(new StaticFileOptions
+app.UseFileServer(new FileServerOptions
 {
     FileProvider = new PhysicalFileProvider(Path.GetFullPath(storagePaths.ShareRoot)),
     RequestPath = "/ShareRoot",
-    // 附件什麼副檔名都有，不在白名單內的也要能下載
-    ServeUnknownFileTypes = true,
-    DefaultContentType = "application/octet-stream"
+    EnableDirectoryBrowsing = true,
+    StaticFileOptions =
+    {
+        // 附件什麼副檔名都有，不在白名單內的也要能下載
+        ServeUnknownFileTypes = true,
+        DefaultContentType = "application/octet-stream"
+    }
 });
 
 app.UseMiddleware<RequestLoggingMiddleware>();
