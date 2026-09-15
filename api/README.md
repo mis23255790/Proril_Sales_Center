@@ -46,7 +46,7 @@ dotnet run
 | `MainApi`（權限） | CheckUserPermissionLinkType |
 | `MainApi`（人員管理） | GetUserSetting / AddUser / UpdateUser / DeleteUser / ResetPassword / UnlockUser / GetAllUserList |
 | `MainApi`（權限管理） | GetMSystem / GetMFunction / GetMPermissionLinkType / GetPermissionLinkType / SetPermissionTree / SaveDepFunction / GetDepartmentList / GetUserFunctions |
-| `MixSalesShipApi` | GetSalesOrder / GetSalesOrder_1 / ExportXls |
+| `MixSalesShipApi` | GetSalesOrder / GetSalesOrder_1 / ExportXls / GetCustomerCredit / GetCustomerCreditCRM |
 | `SalesOrderUnFinishApi` | GetUnfinOrder / QueryUnfinOrder_1 / ExportXls |
 | `CommonApi` | GetDepFunction |
 
@@ -68,10 +68,10 @@ dotnet run
 - `UploadApi` 的 SaveZipFile / SaveByPath —— 其他模組在用，搬到那些模組時再補。
 - `OrderInfoVerifyApi.SP_GetCreditCRM` 後端搬了，但前端目前沒有呼叫（比照 1.0，
   該功能在 1.0 前端本來就沒被實際用到）。
-- 1.0 `MixSalesShipApiController` 底下不屬於銷貨檢索的端點：`GetCOPOrder`（沒有畫面入口）、
-  `GetFinalQuotation`/`ExportCustomerPrice`（報價）、`GetSalesTotal`/`GetCustomerCredit`/
-  `GetCustomerCreditCRM`/`GetCustomerOrderTotal`/`GetCustomerUnfinOrder`（客戶相關頁籤）。
-  它們屬於別的模組，搬那些模組時再處理。
+- 1.0 `MixSalesShipApiController` 底下不屬於銷貨檢索本頁的端點：`GetCOPOrder`（沒有畫面入口）、
+  `GetFinalQuotation`/`ExportCustomerPrice`（報價）、`GetSalesTotal`/`GetCustomerOrderTotal`/
+  `GetCustomerUnfinOrder`（客戶相關頁籤，`GetCustomerCredit`/`GetCustomerCreditCRM` 已搬，
+  其餘還沒有畫面）。它們屬於別的模組，搬那些模組時再處理。
 - 未完成訂單檢索頁面級功能權限檢查 `checkPermission(functionId)`（`MainApi/CheckUserPermission`）——
   跟銷貨檢索一樣，2.0 目前假設能進到路由就有權限，見
   `../docs/modules/SalesOrderUnfinish/logic.md`「尚未搬移」。
@@ -166,6 +166,22 @@ dotnet run
    SP 也還在舊庫執行。搬到 `Proril_Sales_Center` 的腳本
    （`../database/SalesShippingObjectsMigration.sql`）已經產好但尚未執行，
    注意事項見 `../database/PortingNotes.md`「銷貨檢索相關的表 / 預存程序」。
+
+### 客戶信用額度（`GetCustomerCredit` / `GetCustomerCreditCRM`）
+
+1.0 這兩支是「客戶相關頁籤」底下唯二有實際查詢邏輯、且依賴已搬進來的 SP 的端點
+（`prc_COPGetCredit`/`prc_COPGetCredit_CRM`，跟訂單資料檢核的 `SP_GetCredit`/
+`SP_GetCreditCRM` 是同一支 SP），先一併搬過來；其餘客戶相關頁籤
+（`GetCustomerOrderTotal`/`GetCustomerUnfinOrder`）還沒有 2.0 畫面，維持沒搬。
+
+- **不再跨 controller 借用。** 1.0 在方法裡 `new OrderInfoVerifyApiController(...)` 借用
+  它的 `SP_GetCredit`/`SP_GetCreditCRM`，2.0 直接內聯同一支 `EXEC`
+  （`MixSalesShipApiController.CustomerCredit.cs`），不再耦合兩個 controller。
+- **母公司簡稱/全名一樣是 cross join。** 額外 join `V_ERPCustomer.Ma001` 補
+  `ParentCorpShortName`/`ParentCorpLongName`，查無對應列時整批消失（不是漏寫 left join，
+  `Ma001` 對單一 `erpCustomerNo` 本來就最多一筆），照抄 1.0 行為。
+- **目前 2.0 前端沒有頁面呼叫這兩支**，跟 `OrderInfoVerifyApi.SP_GetCreditCRM` 一樣，
+  比照 1.0 只搬後端。
 
 ## 未完成訂單檢索（`SalesOrderUnFinishApi`）
 

@@ -1,4 +1,30 @@
 <details>
+  <summary>版號2026.09.15.1000</summary>
+
+##### feat: 客戶信用額度（GetCustomerCredit/GetCustomerCreditCRM）搬進 api/
+      後端 (api/Controllers/SalesSearch/):
+          MixSalesShipApiController.CustomerCredit.cs
+              GetCustomerCredit / GetCustomerCreditCRM
+          api/Models/ApiModels.cs
+              CustomerCreditRow / CustomerCreditCrmRow（prc_COPGetCredit(_CRM) 的結果
+              + join V_ERPCustomer 補的母公司簡稱/全名）
+
+      屬於 1.0「客戶相關頁籤」的兩支，依賴的 prc_COPGetCredit/prc_COPGetCredit_CRM
+      跟訂單資料檢核的 SP_GetCredit/SP_GetCreditCRM 是同一支 SP，先一併搬過來；
+      GetCustomerOrderTotal/GetCustomerUnfinOrder 還沒有 2.0 畫面，維持沒搬。
+
+      刻意的差異:
+          不再跨 controller 借用。1.0 在方法裡 new OrderInfoVerifyApiController 借用
+          它的 SP_GetCredit(_CRM)，這裡直接內聯同一支 EXEC，改用 FromSqlInterpolated
+          參數化（1.0 是字串插值）。
+          母公司簡稱/全名一樣是 cross join V_ERPCustomer.Ma001，查無對應列時整批消失，
+          照抄 1.0 行為（不是漏寫 left join，Ma001 對單一 erpCustomerNo 本來就最多一筆）。
+
+      目前 2.0 前端沒有頁面呼叫這兩支，比照 1.0 只搬後端，先備著給之後的客戶相關
+      頁面用，詳見 logic.md「尚未搬移」與 api/README.md「客戶信用額度」。
+</details>
+
+<details>
   <summary>版號2026.09.14.1700</summary>
 
 ##### feat: 銷貨檢索後端自 1.0 搬到 api/，並產出資料庫物件遷移腳本

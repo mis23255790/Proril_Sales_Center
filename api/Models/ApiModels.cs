@@ -201,6 +201,45 @@ public class VErpcustomerViewModel : VErpcustomer
     public string CustomerNo { get; set; } = string.Empty;
 }
 
+// ---------------------------------------------------------------- 客戶信用額度（銷貨檢索客戶頁籤）
+
+/// <summary>
+/// <c>prc_COPGetCredit</c> 的結果（<see cref="CopGetCredit"/>）+ 母公司簡稱/全名
+/// （join <c>V_ERPCustomer.Ma001</c>）。1.0 對應 <c>COPCreditViewModel</c>，
+/// 欄位攤平沿用 1.0 的中文命名，跟 <see cref="CopGetCredit"/> 一樣不做語意改名。
+/// </summary>
+public sealed record CustomerCreditRow(
+    decimal 應收金額, decimal 未結帳銷貨, decimal 訂貨出貨通知金額, decimal 預收金額,
+    decimal 已出貨抵預收金額, decimal 應收合計金額, decimal 未出貨訂單總金額,
+    decimal 未出貨訂單金額比率, decimal 信用可超出額, decimal 信用餘額,
+    string? ParentCorpShortName, string? ParentCorpLongName)
+{
+    public CustomerCreditRow(CopGetCredit c, string? parentCorpShortName, string? parentCorpLongName)
+        : this(c.應收金額, c.未結帳銷貨, c.訂貨出貨通知金額, c.預收金額, c.已出貨抵預收金額,
+            c.應收合計金額, c.未出貨訂單總金額, c.未出貨訂單金額比率, c.信用可超出額, c.信用餘額,
+            parentCorpShortName, parentCorpLongName)
+    {
+    }
+}
+
+/// <summary>
+/// <c>prc_COPGetCredit_CRM</c> 的結果（<see cref="CopGetCreditCrm"/>）+ 母公司簡稱/全名。
+/// 1.0 對應 <c>COPCreditCRMViewModel</c>，比 <see cref="CustomerCreditRow"/> 多幣別欄位。
+/// </summary>
+public sealed record CustomerCreditCrmRow(
+    decimal 應收金額, decimal 未結帳銷貨, decimal 訂貨出貨通知金額, decimal 預收金額,
+    decimal 已出貨抵預收金額, decimal 應收合計金額, decimal 未出貨訂單總金額,
+    decimal 未出貨訂單金額比率, decimal 信用可超出額, decimal 信用餘額, string? 幣別,
+    string? ParentCorpShortName, string? ParentCorpLongName)
+{
+    public CustomerCreditCrmRow(CopGetCreditCrm c, string? parentCorpShortName, string? parentCorpLongName)
+        : this(c.應收金額, c.未結帳銷貨, c.訂貨出貨通知金額, c.預收金額, c.已出貨抵預收金額,
+            c.應收合計金額, c.未出貨訂單總金額, c.未出貨訂單金額比率, c.信用可超出額, c.信用餘額, c.幣別,
+            parentCorpShortName, parentCorpLongName)
+    {
+    }
+}
+
 // ---------------------------------------------------------------- 權限控管
 
 /// <summary>
