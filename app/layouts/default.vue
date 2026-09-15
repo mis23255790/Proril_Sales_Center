@@ -6,7 +6,6 @@ const { modules, modulePath, itemPath, appBaseLabel, loadUserFunctions, hasNoAcc
 const { account } = useAuthAccount()
 const { getCurrentUser } = useCurrentUser()
 const { getSystemByNo } = useSystemInfo()
-const config = useRuntimeConfig()
 
 const collapsed = ref(false)
 
@@ -30,15 +29,15 @@ onMounted(async () => {
 /**
  * 正式區/測試區環境圖示，沿用 1.0 _AuthLayout：圖檔路徑本身就是環境差異。
  *
- * ImagePath 是 1.0 站台根目錄下的相對路徑（例如 /images/ic_mission.png），
- * 在 1.0 同源渲染直接可用，2.0 前端是不同網域，要補上 API 站台的 origin
- * 才不會被瀏覽器解析成 2.0 自己網域下的路徑（做法同 server/api/download.get.ts）。
+ * ImagePath 是 1.0 站台根目錄下的相對路徑（例如 /images/ic_mission.png）。
+ * 不能直接拼 config.public.apiBase 當 origin：這個值是給 server/api/proxy 在
+ * server 端打的，部署上常是 docker 內部服務名稱（例如 web-server），瀏覽器解析不到。
+ * 一律走同源的 /api/proxy/** 轉發（跟其他 API 呼叫同一條路），由 Nuxt server 代打。
  */
 const systemImagePath = ref<string | null>(null)
 const systemImageUrl = computed(() => {
   if (!systemImagePath.value) return null
-  const origin = config.public.apiBase.replace(/\/api\/?$/, '').replace(/\/$/, '')
-  return `${origin}${systemImagePath.value}`
+  return `/api/proxy${systemImagePath.value}`
 })
 onMounted(async () => {
   try {

@@ -6,9 +6,10 @@
 #
 # ShareRoot volumes 的左邊路徑要改成測試主機上實際的附件共享目錄，
 # 必須跟 1.0 PRORIL 指向同一處，否則讀不到既有附件。
-name: intranet_sales_center
+name: proril_sales_center
 services:
   app:
+    image: proril-sales-center-app-dev.proril
     build:
       context: .
       dockerfile: Dockerfile
@@ -23,6 +24,7 @@ services:
     restart: unless-stopped
 
   api:
+    image: proril-sales-center-api-dev.proril
     build:
       context: ./api
       dockerfile: Dockerfile

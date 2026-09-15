@@ -19,7 +19,7 @@
 > **必須與 1.0 相同**，分別對應 token 互通、密碼驗證、讀得到既有附件。
 > 三者任一不同的症狀都不會直說原因（全 401 / 密碼永遠錯 / 附件讀不到）。
 
-> **不要動資料庫**，包含 View / StoredProcedure。
+> **不要動 1.0 的資料庫**，包含 View / StoredProcedure。
 >
 > 例外：`database/` 是業務議題資料表的 **schema 版控**（DACPAC），
 > 只管結構、不碰任何資料列，也不納管 View / StoredProcedure。

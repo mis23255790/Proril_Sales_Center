@@ -25,6 +25,7 @@ logs
 # Local env files
 .env
 .env.*
+*.env
 !.env.example
 
 # SQL 資料庫專案 (database/) 建置輸出
