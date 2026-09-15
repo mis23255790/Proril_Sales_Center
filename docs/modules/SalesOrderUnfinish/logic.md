@@ -20,8 +20,11 @@
                               也是「單一訂單明細」modal 在用（poNo 帶 "單別-單號" 組合字串篩單一訂單）
      M_Permission / M_PermissionLinkType   金額欄位權限（FunctionNo=420, LinkType=100）
 
-     這兩支 SP **repo 內找不到對應 .sql 檔**（`database/` 只管業務議題的表，
-     這個功能是 1.0 唯讀，不動資料庫），只存在資料庫端，需要改邏輯要直接查資料庫。
+     這兩支 SP 連同依賴的 `V_UnfinOrder` View 已搬進 `Proril_Sales_Center`
+     （`database/SalesOrderUnfinishObjectsMigration.sql`，2026-09-15），
+     PRORIL_WEB 那邊的定義只保留給 1.0 用，2.0 改邏輯要在 `Proril_Sales_Center`
+     那份上面改（`database/` 的 DACPAC 版控只管業務議題的表，不納管 View/SP，
+     所以這支腳本不是走 DACPAC，是獨立的一次性搬移腳本）。
 </details>
 
 # 架構：前後端都搬了
@@ -37,10 +40,13 @@ Nuxt 頁面 ──▶ useSalesOrderUnfinishApi() ──▶ /api/proxy/... ──
                                                                        └─ 1.0 .NET 站台（搬移期間仍可切回去）
 ```
 
-- **沒有新增資料庫物件，也沒有動資料庫**：`prc_QueryUnfinOrder(_1)` 這兩支 SP repo 內找不到
-  對應 .sql，只存在資料庫端，`api/` 跟 1.0 一樣直接 `EXEC` 它們（改用 `FromSqlInterpolated`
-  參數化，不再是拼字串 `FromSql`，是與 1.0 唯一的行為差異）。查詢對映的資料表物件仍在
-  `PRORIL_WEB`，走 `api/` 的 `ProrilWebDbContext`（`db`），不是 `Proril_Sales_Center`。
+- **資料庫物件已搬進 Proril_Sales_Center**：`prc_QueryUnfinOrder(_1)` 與它依賴的
+  `V_UnfinOrder` View 於 2026-09-15 從 `PRORIL_WEB` 複製過來（`CREATE OR ALTER`，
+  可重複執行），`api/` 改打 `scDb`（`SalesCenterDbContext`）`EXEC` 它們（同時改用
+  `FromSqlInterpolated` 參數化，不再是拼字串 `FromSql`，是與 1.0 的另一個行為差異）。
+  沒有落地快取表——`V_UnfinOrder` 每次查都直接打 ERP linked server，加上
+  `PRORIL_WEB.dbo.NPS_D_Order`（銘版序號來源，這張表沒搬，用 3 段式跨庫查詢，
+  兩個資料庫在同一個 SQL Server instance）。
 - 跟銷貨檢索是**不同資料表/不同 ViewModel**（訂單 vs 銷貨單），欄位命名也不同
   （銷貨檢索是 `th0xx`/`tg0xx`，這裡是 `tc0xx`/`td0xx`），刻意不共用型別或常數
   （`app/types/salesOrderUnfinish.ts`、`api/Data/SalesOrderUnfinishEntities.cs` 自成一組），

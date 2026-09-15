@@ -178,6 +178,12 @@ dotnet run
 1. **查詢是純讀，不像銷貨檢索的 SP 會順便寫資料。** `prc_QueryUnfinOrder(_1)` 不會像
    `prc_QuerySalesOrder(_1)` 先 `EXEC prc_ImportSalesOrder` 匯入 ERP，所以不用放寬
    `SetCommandTimeout`，也沒有「查詢會寫資料」的顧慮。
+   **這兩支 SP 連同它們依賴的 `V_UnfinOrder` View 已於 2026-09-15 搬進
+   `Proril_Sales_Center`**（見 `database/SalesOrderUnfinishObjectsMigration.sql`），
+   `CallQueryUnfinOrder` / `CallQueryUnfinOrder1` 改打 `scDb`
+   （`SalesCenterDbContext`），不再是 `db`（`ProrilWebDbContext`）。沒有落地任何快取表——
+   `V_UnfinOrder` 每次查都直接打 ERP linked server + `PRORIL_WEB.dbo.NPS_D_Order`
+   （3 段式跨庫查詢，兩個資料庫在同一個 SQL Server instance）。
 2. **`orderType` 沒有對應的 SP 參數。** `prc_QueryUnfinOrder(_1)` 不支援按訂單單別篩選，
    收到 `orderType` 非空時對已查出的結果用 LINQ 再過濾一次（小計/總計列 `FooterFlag=Y`
    一律保留）。篩單一訂單靠 `poNo` 帶 `"{訂單單別}-{訂單單號}"` 組合字串

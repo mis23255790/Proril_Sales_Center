@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
+using Proril.SalesIssue.Api.Data;
 
 namespace Proril.SalesIssue.Api.Data.SalesCenter;
 
@@ -575,6 +576,16 @@ public partial class SalesCenterDbContext : DbContext
                 .HasMaxLength(10)
                 .IsUnicode(false);
             entity.Property(e => e.TypeName).HasMaxLength(40);
+        });
+
+        // prc_QueryUnfinOrder(_1) 的結果集，keyless，只給 Set<T>().FromSqlInterpolated(...) 用，
+        // 不對應任何表/view。跟 ProrilWebDbContext 的註冊一字不差（同一個 UnfinOrder 型別，
+        // 兩支 SP 搬進 Proril_Sales_Center 之後 Controller 改打這個 DbContext 執行）。
+        modelBuilder.Entity<UnfinOrder>(entity =>
+        {
+            entity.HasNoKey();
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.CopSource).HasColumnName("COP_Source");
         });
 
         OnModelCreatingPartial(modelBuilder);

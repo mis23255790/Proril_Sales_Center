@@ -1,4 +1,47 @@
 <details>
+  <summary>版號2026.09.15.1500</summary>
+
+##### feat: prc_QueryUnfinOrder(_1) + V_UnfinOrder 搬進 Proril_Sales_Center
+      背景: 上一版把 SalesOrderUnFinishApi 的 Controller 搬進 api/ 時，資料庫物件
+      沒有一起搬（repo 內找不到對應 .sql，沒人分析過依賴，先求能動）。這次把兩支 SP
+      跟它們唯一依賴的 V_UnfinOrder View 一起搬過去，理由跟銷貨檢索/訂單資料檢核
+      的物件搬移一致：讓查詢真的走獨立資料庫，而不是靠 api/ 反過來打 PRORIL_WEB。
+
+      新增:
+          database/SalesOrderUnfinishObjectsMigration.sql
+              CREATE OR ALTER VIEW V_UnfinOrder + CREATE OR ALTER PROCEDURE
+              prc_QueryUnfinOrder / prc_QueryUnfinOrder_1，可重複執行，用
+              database/scripts/run-objects-migration.ps1 執行（比照銷貨檢索/
+              訂單資料檢核）。定義是 2026-09-15 用 OBJECT_DEFINITION 直接從
+              PRORIL_WEB 撈出來，除了 CREATE -> CREATE OR ALTER 之外一字不差。
+
+      異動:
+          database/scripts/run-objects-migration.ps1
+              ValidateSet 加 SalesOrderUnfinishObjectsMigration.sql。
+          api/Controllers/SalesSearch/SalesOrderUnFinishApiController.cs
+              CallQueryUnfinOrder / CallQueryUnfinOrder1 改打 scDb
+              （SalesCenterDbContext），不再是 db（ProrilWebDbContext）；
+              另外兩支都加了 BuildDebugSql 除錯用的 WriteStepLog，把可以直接貼
+              SSMS 執行的 EXEC 字串印出來，方便比對兩個資料庫的查詢結果。
+
+      技術決策:
+      - **不用複製任何表的資料**：V_UnfinOrder 不像銷貨檢索的 COP_SalesOrder 有本地
+        快取表，它每次查都直接打 ERP linked server（浦瑞 TWPR、芳晟 PRORIL 兩套
+        COPTC/COPTD/CMSMQ）+ PRORIL_WEB.dbo.NPS_D_Order（銘版序號來源）。NPS_D_Order
+        這次不搬，處理方式跟 SalesShippingObjectsMigration.sql 對同一張表的做法一致：
+        3 段式跨庫查詢，兩個資料庫在同一個 SQL Server instance。
+      - **不需要 COLLATE DATABASE_DEFAULT**：跟 SalesShippingObjectsMigration.sql
+        當時踩到的定序衝突不同，那支是本地快取表（用目標資料庫定序）去 JOIN ERP
+        欄位；這裡沒有本地快取表，加上 Proril_Sales_Center 現在定序已經對齊
+        Chinese_Taiwan_Stroke_BIN（見 database/PortingNotes.md「定序已對齊」），
+        兩側欄位本來就同定序，不用特別處理。
+      - **執行前先跑 dry-run**：`run-objects-migration.ps1` 不加 -Execute 已確認
+        linked server 存在、三個物件在目標庫都是 ABSENT（首次搬移）、語法檢查通過；
+        真正對測試區資料庫執行 -Execute 前跟使用者確認過。
+
+</details>
+
+<details>
   <summary>版號2026.09.14.1800</summary>
 
 ##### feat: 未完成訂單檢索後端搬進 2.0（api/），不再沿用 1.0

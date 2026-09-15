@@ -9,11 +9,13 @@
     原樣複製一份到 Proril_Sales_Center 又是必要的一步，所以那些物件寫在
     database/ 底下的 *ObjectsMigration.sql，由這支負責執行。
 
-    目前有兩支腳本：
-      OrderCheckObjectsMigration.sql     訂單資料檢核：7 View + 5 SP + 1 函式 + 5 表
-      SalesShippingObjectsMigration.sql  銷貨檢索：3 SP + 1 表
+    目前有三支腳本：
+      OrderCheckObjectsMigration.sql       訂單資料檢核：7 View + 5 SP + 1 函式 + 5 表
+      SalesShippingObjectsMigration.sql    銷貨檢索：3 SP + 1 表
+      SalesOrderUnfinishObjectsMigration.sql 未完成訂單檢索：1 View + 2 SP，沒有表
+      （V_UnfinOrder 每次都直接查 ERP linked server，不落地快取，所以不用複製任何資料）
 
-    兩支都是可重複執行的（CREATE TABLE 包 IF OBJECT_ID(...) IS NULL、
+    三支都是可重複執行的（CREATE TABLE 包 IF OBJECT_ID(...) IS NULL、
     CREATE OR ALTER PROCEDURE/VIEW/FUNCTION、資料複製區塊在表已有資料時自動跳過）。
 
     預設 dry-run：只做檢查、不改任何東西——
@@ -47,7 +49,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('OrderCheckObjectsMigration.sql', 'SalesShippingObjectsMigration.sql')]
+    [ValidateSet('OrderCheckObjectsMigration.sql', 'SalesShippingObjectsMigration.sql', 'SalesOrderUnfinishObjectsMigration.sql')]
     [string]$Script,
     [ValidateSet('snapshot', 'snapshot-prod')][string]$Environment = 'snapshot',
     [switch]$Execute

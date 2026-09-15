@@ -91,7 +91,11 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
         string? productSpec, string? startDate, string? endDate, string? deliveryStartDate, string? deliveryEndDate,
         string? serialNo, string? poNo, string? inPlanNumber, string? groupName, string? groupDesc)
     {
-        return db.Set<UnfinOrder>()
+        WriteStepLog(nameof(CallQueryUnfinOrder), BuildDebugSql("prc_QueryUnfinOrder",
+            inCopSource, inCustomerNo, productType, productNo, productName, productSpec,
+            startDate, endDate, deliveryStartDate, deliveryEndDate, serialNo, poNo, inPlanNumber, groupName, groupDesc));
+
+        return scDb.Set<UnfinOrder>()
             .FromSqlInterpolated($@"EXEC prc_QueryUnfinOrder
                 {inCopSource ?? ""}, {inCustomerNo ?? ""}, {productType ?? ""}, {productNo ?? ""}, {productName ?? ""}, {productSpec ?? ""},
                 {startDate ?? ""}, {endDate ?? ""}, {deliveryStartDate ?? ""}, {deliveryEndDate ?? ""},
@@ -106,13 +110,31 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
         string? productSpec, string? startDate, string? endDate, string? deliveryStartDate, string? deliveryEndDate,
         string? serialNo, string? poNo, string? inPlanNumber, string? groupName, string? groupDesc)
     {
-        return db.Set<UnfinOrder>()
+        WriteStepLog(nameof(CallQueryUnfinOrder1), BuildDebugSql("prc_QueryUnfinOrder_1",
+            inCopSource, inCustomerNo, productType, productNo, productName, productSpec,
+            startDate, endDate, deliveryStartDate, deliveryEndDate, serialNo, poNo, inPlanNumber, groupName, groupDesc));
+
+        return scDb.Set<UnfinOrder>()
             .FromSqlInterpolated($@"EXEC prc_QueryUnfinOrder_1
                 {inCopSource ?? ""}, {inCustomerNo ?? ""}, {productType ?? ""}, {productNo ?? ""}, {productName ?? ""}, {productSpec ?? ""},
                 {startDate ?? ""}, {endDate ?? ""}, {deliveryStartDate ?? ""}, {deliveryEndDate ?? ""},
                 {serialNo ?? ""}, {poNo ?? ""}, {inPlanNumber ?? ""}, {groupName ?? ""}, {groupDesc ?? ""}")
             .AsNoTracking()
             .ToList();
+    }
+
+    /// <summary>組出可以直接貼 SSMS 執行的 EXEC 字串，純除錯用，不參與實際查詢。</summary>
+    private static string BuildDebugSql(string procName,
+        string? inCopSource, string? inCustomerNo, string? productType, string? productNo, string? productName,
+        string? productSpec, string? startDate, string? endDate, string? deliveryStartDate, string? deliveryEndDate,
+        string? serialNo, string? poNo, string? inPlanNumber, string? groupName, string? groupDesc)
+    {
+        static string Q(string? v) => $"'{(v ?? "").Replace("'", "''")}'";
+
+        return $@"EXEC {procName}
+                {Q(inCopSource)}, {Q(inCustomerNo)}, {Q(productType)}, {Q(productNo)}, {Q(productName)}, {Q(productSpec)},
+                {Q(startDate)}, {Q(endDate)}, {Q(deliveryStartDate)}, {Q(deliveryEndDate)},
+                {Q(serialNo)}, {Q(poNo)}, {Q(inPlanNumber)}, {Q(groupName)}, {Q(groupDesc)}";
     }
 
     /// <summary>
