@@ -36,6 +36,7 @@ export default defineNuxtConfig({
       apiBase: process.env.NUXT_PUBLIC_API_BASE || 'https://intranet-dev.proril.com',
       blockRobots: process.env.NUXT_PUBLIC_BLOCK_ROBOTS === 'true',
       devToken: process.env.NUXT_PUBLIC_DEV_TOKEN || '',
+      showWatermark: process.env.NUXT_PUBLIC_SHOW_WATERMARK === 'true',
 
       // PRORIL 通行證 SSO，見 https://oauth.proril.com/docs
       oauthClientId: process.env.NUXT_PUBLIC_OAUTH_CLIENT_ID || '',
