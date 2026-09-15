@@ -37,8 +37,16 @@ public class UploadApiController : BaseApiController
     /// saveByFileName 是**相對於 Storage:ShareRoot 的完整路徑（含檔名）**，
     /// 例如 /Temp/112012/Doc_SOP/00000/3/報價單.pdf。
     /// </summary>
+    /// <remarks>
+    /// saveByFileName/linkFuncNo/linkNo 一定要 <c>[FromForm]</c>：有 <c>List&lt;IFormFile&gt;</c>
+    /// 參數時，<c>[ApiController]</c> 對一般 string 參數的來源推斷預設是 FromQuery，不會退回
+    /// 去找 multipart form 裡的欄位。前端是用 FormData 把這三個欄位跟檔案包在同一個
+    /// multipart body 送出，沒有這個標註會直接被模型驗證擋下來噴 400（ModelState 顯示
+    /// 三個欄位都是 required），連 action 本體都進不去，跟後面的 CheckFiles 等邏輯無關。
+    /// </remarks>
     [HttpPost]
-    public CustomApiViewModel SaveByFileName(List<IFormFile> files, string saveByFileName, string linkFuncNo, string linkNo)
+    public CustomApiViewModel SaveByFileName(
+        List<IFormFile> files, [FromForm] string saveByFileName, [FromForm] string linkFuncNo, [FromForm] string linkNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
 
