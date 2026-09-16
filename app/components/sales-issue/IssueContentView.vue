@@ -81,8 +81,10 @@ const sanitized = computed(() => {
 }
 
 .issue-content :deep(img) {
-  max-width: 100%;
-  height: auto;
+  /* Outlook/Word 貼進來的常帶 inline style="width:...px"，
+     優先度比外部規則高，非 !important 蓋不掉，圖片會把整個卷軌撐寬。 */
+  max-width: 100% !important;
+  height: auto !important;
 }
 
 .issue-content :deep(ul) {

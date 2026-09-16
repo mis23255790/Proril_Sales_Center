@@ -301,7 +301,7 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
 </script>
 
 <template>
-  <div class="flex flex-col pb-12 xl:h-full">
+  <div class="flex flex-col xl:h-full">
     <FullPageLoading :show="loading" />
 
     <div class="sticky top-0 z-20 mb-4 flex flex-wrap items-center justify-between gap-3 bg-white pb-2 dark:bg-white xl:shrink-0">
@@ -409,7 +409,7 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
           </UButton>
         </div>
 
-        <div class="xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+        <div class="xl:min-h-0 xl:flex-1 xl:overflow-x-hidden xl:overflow-y-auto">
           <div
             v-if="!sortedDetails.length"
             class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-default py-16 text-center xl:h-full"
@@ -470,7 +470,7 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
                   </button>
                 </div>
 
-                <div v-if="attachmentsOf(detail).length" class="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+                <div v-if="attachmentsOf(detail).length" class="mt-1 flex flex-wrap gap-2 border-t border-gray-100 pt-1">
                   <UButton
                     v-for="name in attachmentsOf(detail)"
                     :key="name"
@@ -490,8 +490,13 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
       </div>
     </div>
 
-    <!-- 存檔列 -->
-    <div class="fixed inset-x-0 bottom-0 z-40 border-t border-default bg-default/95 px-4 py-2 backdrop-blur">
+    <!--
+      存檔列：改用 sticky 而不是 fixed。fixed 是相對整個視窗定位，會蓋過側欄，
+      跟 footer／body 左邊界對不齊（footer 左邊會有側欄分隔線，這條卻沒有）；
+      sticky 是相對頁面自己的正常排版流，寬度自然跟頁面內容（body 範圍）一致，
+      也不用再算 bottom-8 去閃開 layout 的 footer，貼齊 body 底部剛好就在 footer 上緣。
+    -->
+    <div class="sticky bottom-0 z-40 shrink-0 border-t border-default bg-default/95 px-4 py-2 backdrop-blur">
       <div class="mx-auto flex max-w-7xl items-center justify-between gap-3">
         <p class="truncate">
           <span v-if="customerNamesDisplay" class="text-sm text-muted">{{ customerNamesDisplay }} · </span>

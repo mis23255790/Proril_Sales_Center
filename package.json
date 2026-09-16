@@ -1,5 +1,6 @@
 {
   "name": "proril-sales-center",
+  "version": "2026.9.16.1400",
   "private": true,
   "type": "module",
   "scripts": {

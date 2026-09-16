@@ -2,6 +2,7 @@
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
+const { public: { appVersion } } = useRuntimeConfig()
 const { modules, modulePath, itemPath, appBaseLabel, loadUserFunctions, hasNoAccessibleModule } = useAppNavigation()
 const { account } = useAuthAccount()
 const { getCurrentUser } = useCurrentUser()
@@ -154,6 +155,12 @@ const items = computed<NavigationMenuItem[][]>(() => [
 
       <template #body>
         <slot />
+      </template>
+
+      <template #footer>
+        <div class="flex h-8 shrink-0 items-center justify-center border-t border-default px-4 text-center text-xs text-muted">
+          © {{ new Date().getFullYear() }} PRORIL 業務中心 · v{{ appVersion }}
+        </div>
       </template>
     </UDashboardPanel>
   </UDashboardGroup>

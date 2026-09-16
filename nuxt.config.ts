@@ -1,3 +1,5 @@
+import { version } from './package.json'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   modules: [
@@ -30,6 +32,9 @@ export default defineNuxtConfig({
     mfgHandoffSecret: process.env.NUXT_MFG_HANDOFF_SECRET || '',
 
     public: {
+      // 跟 package.json 的 version 同步，footer 顯示用（比照 1.0 footer 的版本號連結）
+      appVersion: version,
+
       // 1.0 .NET 站台的根位址。**不要加 /api** ——
       // PRORIL 的路由是 {controller}/{action}/{id?}，沒有 api 前綴
       // （原本這裡的預設值是從製造中心複製過來的 localhost:7000/api，兩點都錯）。
