@@ -28,7 +28,10 @@ const goToSso = () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-navy-950 px-4">
+  <div
+    class="min-h-screen flex items-center justify-center bg-navy-950 bg-cover bg-center px-4"
+    style="background-image: url('/images/login.png')"
+  >
     <div class="w-full max-w-sm">
       <div class="rounded-2xl bg-white p-8 shadow-xl">
         <div class="flex flex-col items-center gap-6">
