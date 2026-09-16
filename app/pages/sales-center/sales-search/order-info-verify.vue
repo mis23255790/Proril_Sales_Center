@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { h, resolveComponent } from 'vue'
+import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableColumn } from '@nuxt/ui'
 import type { CopCheckRule, OrderInfoVerifyGroup } from '~/types/orderInfoVerify'
 import { ORDER_INFO_VERIFY_AMOUNT_LINK_TYPE, ORDER_INFO_VERIFY_FUNCTION_NO } from '~/types/orderInfoVerify'
@@ -14,6 +15,8 @@ const api = useOrderInfoVerifyApi()
 const { checkLinkTypePermission } = usePermission()
 const toast = useToast()
 const { breadcrumbFor, appPath } = useAppNavigation()
+const { pagination } = useTablePagination(20)
+const table = useTemplateRef('table')
 
 const loading = ref(false)
 const exporting = ref<'Y' | 'N' | null>(null)
@@ -81,6 +84,7 @@ const load = async () => {
       endDate: toCompactDate(filters.endDate)
     })
     groups.value = res?.isSuccess ? groupOrderInfoVerifyRows(res.body ?? []) : []
+    pagination.value.pageIndex = 0
     if (res && !res.isSuccess && res.message) {
       toast.add({ title: '查無資料', description: res.message, color: 'warning' })
     }
@@ -136,6 +140,7 @@ const onExport = async (confirmFlag: 'Y' | 'N') => {
 // ---------------------------------------------------------------- 頁籤
 
 const activeTab = ref<'notChecked' | 'checked'>('notChecked')
+watch(activeTab, () => { pagination.value.pageIndex = 0 })
 
 // ---------------------------------------------------------------- 欄位定義
 
@@ -327,6 +332,9 @@ const loadConditions = async () => {
 
     <div class="overflow-x-auto rounded-lg border border-default">
       <UTable
+        ref="table"
+        v-model:pagination="pagination"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
         :data="activeTab === 'notChecked' ? notCheckedGroups : checkedGroups"
         :columns="columns"
         :loading="loading"
@@ -346,6 +354,8 @@ const loadConditions = async () => {
           </p>
         </template>
       </UTable>
+
+      <TablePaginationBar :table="table" />
     </div>
 
     <OrderCheckDetailModal
