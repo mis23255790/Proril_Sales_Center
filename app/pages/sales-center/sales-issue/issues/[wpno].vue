@@ -38,8 +38,13 @@ const form = reactive({
 /** 已選的類別（phraseType 02）的 phraseCode。 */
 const selectedCategoryCodes = ref<string[]>([])
 
-/** 已選的客戶別（customerNo），比照 1.0 可複選。 */
-const selectedCustomerNos = ref<string[]>([])
+/**
+ * 已選的客戶別（customerNo），單選，最後只會保留一筆。
+ * D_WorkProcessCustomer／1.0 的「選擇客戶別」雖然支援一筆議題掛多個客戶，
+ * 但這是 2.0 刻意的產品決策，不比照 1.0：存檔時只送一筆給 SetWPOrderCustom，
+ * 原本掛多個客戶的舊議題存檔後其餘客戶會被移除。
+ */
+const selectedCustomerNo = ref('')
 
 /**
  * 基本資料欄可左右收合成窄邊欄，讓進度紀錄拿到更多寬度；只在 xl 兩欄並排時有意義，
@@ -97,14 +102,14 @@ const loadIssue = async () => {
       .filter(p => p.phraseType === PHRASE_TYPE.CATEGORY)
       .map(p => p.phraseCode)
 
-    // 客戶別比照 1.0 可複選，真正的清單在 D_WorkProcessCustomer 關聯表；
-    // GetSOPOrder 的 customerNo 對早期資料常是空的或只有一筆，兩邊都要看才不會漏客戶。
+    // 單選，但舊資料可能在 D_WorkProcessCustomer 掛了不只一個客戶；
+    // GetSOPOrder 的 customerNo 對早期資料常是空的，兩邊都要看，取第一個當顯示值即可。
     const linkRes = await api.getIssueCustomers(wpno.value)
     const linkedNos = (linkRes?.body ?? [])
       .map(c => String(c?.customerNo ?? '').trim())
       .filter(Boolean)
     const headerNo = (res.body.customerNo ?? '').trim()
-    selectedCustomerNos.value = Array.from(new Set(headerNo ? [headerNo, ...linkedNos] : linkedNos))
+    selectedCustomerNo.value = headerNo || linkedNos[0] || ''
 
     await loadDetails()
   } catch (err) {
@@ -139,13 +144,11 @@ const selectedCategoryNames = computed(() =>
     .filter((n): n is string => Boolean(n))
 )
 
-const selectedCustomerNames = computed(() =>
-  selectedCustomerNos.value
-    .map(no => customers.value.find(c => String(c.customerNo ?? '').trim() === no)?.shortName)
-    .filter((n): n is string => Boolean(n))
+const selectedCustomerName = computed(() =>
+  customers.value.find(c => String(c.customerNo ?? '').trim() === selectedCustomerNo.value)?.shortName ?? ''
 )
 
-const customerNamesDisplay = computed(() => selectedCustomerNames.value.join('、') || issue.value?.customerName || '')
+const customerNamesDisplay = computed(() => selectedCustomerName.value || issue.value?.customerName || '')
 
 /**
  * 進度由新到舊。
@@ -185,7 +188,7 @@ const save = async () => {
 
     const res = await api.saveIssue({
       wpno: targetWpno,
-      customerNo: selectedCustomerNos.value.join(';'),
+      customerNo: selectedCustomerNo.value,
       sopTitle: form.sopTitle.trim(),
       descript: form.descript,
       type2PhraseCode: selectedCategoryCodes.value.join(';'),
@@ -212,7 +215,7 @@ const save = async () => {
         phraseName: categories.value.find(c => c.phraseCode === code)?.phraseName ?? ''
       }))
     )
-    await api.setIssueCustomers(targetWpno, selectedCustomerNos.value)
+    await api.setIssueCustomers(targetWpno, selectedCustomerNo.value ? [selectedCustomerNo.value] : [])
 
     toast.add({ title: '議題已儲存', color: 'success' })
 
@@ -298,34 +301,15 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
 </script>
 
 <template>
-  <div class="flex flex-col pb-24 xl:h-full">
+  <div class="flex flex-col pb-12 xl:h-full">
     <FullPageLoading :show="loading" />
 
-    <div class="sticky top-0 z-20 mb-5 bg-white pb-2 dark:bg-white xl:shrink-0">
-      <UBreadcrumb
-        :items="breadcrumbFor(appPath('sales-issue/issues'), isNew ? '新增議題' : `#${wpno}`)"
-        class="mb-4"
-      />
+    <div class="sticky top-0 z-20 mb-4 flex flex-wrap items-center justify-between gap-3 bg-white pb-2 dark:bg-white xl:shrink-0">
+      <UBreadcrumb :items="breadcrumbFor(appPath('sales-issue/issues'), isNew ? '新增議題' : `#${wpno}`)" />
 
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div class="min-w-0">
-          <h1 class="truncate text-2xl font-bold text-highlighted">
-            {{ form.sopTitle || (isNew ? '新增議題' : `議題 #${wpno}`) }}
-          </h1>
-          <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
-            <span v-if="wpno !== NEW_ISSUE_WPNO">#{{ wpno }}</span>
-            <span v-if="issue?.userName">建立者 {{ issue.userName }}</span>
-            <span v-if="issue?.createTime">建立於 {{ toDateString(issue.createTime) }}</span>
-            <UBadge v-if="form.finFlag" color="success" variant="subtle" size="sm">
-              結案
-            </UBadge>
-          </div>
-        </div>
-
-        <UButton icon="i-lucide-arrow-left" color="neutral" variant="outline" :to="appPath('sales-issue/issues')">
-          回議題列表
-        </UButton>
-      </div>
+      <UButton icon="i-lucide-arrow-left" color="neutral" variant="outline" :to="appPath('sales-issue/issues')">
+        回議題列表
+      </UButton>
     </div>
 
     <div class="flex flex-col gap-5 xl:min-h-0 xl:flex-1 xl:flex-row">
@@ -365,19 +349,18 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
               <UInput v-model="form.sopTitle" placeholder="議題主題" class="w-full" />
             </UFormField>
 
-            <UFormField label="客戶別" hint="可複選">
+            <UFormField label="客戶別">
               <USelectMenu
-                v-model="selectedCustomerNos"
+                v-model="selectedCustomerNo"
                 :items="customerOptions"
                 value-key="value"
                 label-key="label"
-                multiple
                 placeholder="選擇客戶"
                 class="w-full"
               />
-              <div v-if="selectedCustomerNames.length" class="mt-2 flex flex-wrap gap-1">
-                <UBadge v-for="name in selectedCustomerNames" :key="name" color="neutral" variant="subtle" size="sm">
-                  {{ name }}
+              <div v-if="selectedCustomerName" class="mt-2 flex flex-wrap gap-1">
+                <UBadge color="neutral" variant="subtle" size="sm">
+                  {{ selectedCustomerName }}
                 </UBadge>
               </div>
             </UFormField>
@@ -427,7 +410,10 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
         </div>
 
         <div class="xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
-          <div v-if="!sortedDetails.length" class="flex flex-col items-center gap-2 rounded-lg border border-dashed border-default py-16 text-center">
+          <div
+            v-if="!sortedDetails.length"
+            class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-default py-16 text-center xl:h-full"
+          >
             <UIcon name="i-lucide-message-square-plus" class="size-8 text-dimmed" />
             <p class="font-medium text-highlighted">
               還沒有任何進度
@@ -505,13 +491,13 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
     </div>
 
     <!-- 存檔列 -->
-    <div class="fixed inset-x-0 bottom-0 z-40 border-t border-default bg-default/95 px-4 py-3 backdrop-blur">
+    <div class="fixed inset-x-0 bottom-0 z-40 border-t border-default bg-default/95 px-4 py-2 backdrop-blur">
       <div class="mx-auto flex max-w-7xl items-center justify-between gap-3">
-        <p class="truncate text-sm text-muted">
-          <span v-if="customerNamesDisplay">{{ customerNamesDisplay }} · </span>
-          {{ form.sopTitle || '尚未命名的議題' }}
+        <p class="truncate">
+          <span v-if="customerNamesDisplay" class="text-sm text-muted">{{ customerNamesDisplay }} · </span>
+          <span class="text-base font-semibold text-highlighted">{{ form.sopTitle || '尚未命名的議題' }}</span>
         </p>
-        <UButton icon="i-lucide-save" size="lg" :loading="saving" @click="save">
+        <UButton icon="i-lucide-save" size="md" :loading="saving" @click="save">
           儲存議題
         </UButton>
       </div>

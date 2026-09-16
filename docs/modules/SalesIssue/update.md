@@ -1,4 +1,25 @@
 <details>
+  <summary>版號2026.09.16.1500</summary>
+
+##### feat: 客戶別改回單選（不再比照 1.0 複選）
+      2.0 刻意的產品決策，跟下面 2026.09.14 那次「比照 1.0 改可複選」的方向相反——
+      即使已確認 1.0「選擇客戶別」（checkbox 表格）跟 D_WorkProcessCustomer／
+      SetWPOrderCustom 都設計成一筆議題可掛多個客戶，2.0 議題編輯頁還是改回單選：
+        - selectedCustomerNo: ref<string> 取代 selectedCustomerNos 陣列。
+        - USelectMenu 拿掉 multiple，直接綁單一 customerNo。
+        - 讀取時如果舊資料在 D_WorkProcessCustomer 掛了多個客戶，只取第一個
+          （GetSOPOrder.customerNo 優先，沒有才退回 GetWPOrderCustom 清單的第一筆）
+          當顯示值，其餘的不會出現在畫面上。
+        - 存檔時 SaveOrder 的 CustomerNo 與 SetWPOrderCustom 都只送這一筆——
+          舊議題如果原本掛了多個客戶，存檔後其餘客戶會被移除，不可逆。
+
+      app/pages/sales-center/sales-issue/issues/[wpno].vue
+
+      驗證：npm run typecheck 通過。
+
+</details>
+
+<details>
   <summary>版號2026.09.14.1400</summary>
 
 ##### feat: 客戶別比照 1.0 改為可複選
