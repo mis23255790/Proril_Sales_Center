@@ -168,70 +168,71 @@ const onApplyPass = async (passItem: 'CustSumAmtChk' | 'AvailableChk', memo: str
 
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <UFormField label="訂單日期" size="sm">
-              <UInput :model-value="header.訂單日期 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.訂單日期 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="客戶單號" size="sm">
-              <UInput :model-value="header.客戶單號 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.客戶單號 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="部門" size="sm">
-              <UInput :model-value="`${header.部門代號} ${header.depName ?? ''}`" readonly class="w-full" />
+              <UInput :model-value="`${header.部門代號} ${header.depName ?? ''}`" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="客戶" size="sm">
-              <UInput :model-value="`${header.客戶代號} ${header.客戶名稱}`" readonly class="w-full" />
+              <UInput :model-value="`${header.客戶代號} ${header.客戶名稱}`" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="交易幣別" size="sm">
-              <UInput :model-value="header.幣別 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.幣別 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="業務人員" size="sm">
-              <UInput :model-value="`${header.業務人員 ?? ''} ${header.業務名稱}`" readonly class="w-full" />
+              <UInput :model-value="`${header.業務人員 ?? ''} ${header.業務名稱}`" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="PackingList備註" size="sm" class="sm:col-span-2">
-              <UInput :model-value="header.packinglist備註 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.packinglist備註 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="匯率" size="sm">
-              <UInput :model-value="header.匯率 ?? undefined" readonly class="w-full" />
+              <UInput :model-value="header.匯率 ?? undefined" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="價格條件" size="sm">
-              <UInput :model-value="header.價格條件 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.價格條件 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="電話 / 傳真" size="sm">
-              <UInput :model-value="`${header.telNo ?? ''} / ${header.faxNo ?? ''}`" readonly class="w-full" />
+              <UInput :model-value="`${header.telNo ?? ''} / ${header.faxNo ?? ''}`" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="交易條件" size="sm">
-              <UInput :model-value="`${header.交易條件 ?? ''} ${header.交易條件名稱}`" readonly class="w-full" />
+              <UInput :model-value="`${header.交易條件 ?? ''} ${header.交易條件名稱}`" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="付款條件" size="sm">
               <div class="flex items-center gap-2">
-                <UInput :model-value="header.付款條件 ?? ''" readonly class="w-full" />
+                <UInput :model-value="header.付款條件 ?? ''" readonly variant="subtle" class="w-full" />
                 <UCheckbox v-model="paidCheck" label="已付款確認" />
               </div>
             </UFormField>
             <UFormField label="送貨地址一" size="sm" class="sm:col-span-2">
-              <UInput :model-value="header.送貨地址一 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.送貨地址一 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="附件檔案" size="sm">
-              <UInput :model-value="header.附件檔案" readonly class="w-full" />
+              <UInput :model-value="header.附件檔案" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="送貨地址二" size="sm" class="sm:col-span-2">
-              <UInput :model-value="header.送貨地址二 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.送貨地址二 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="運輸方式" size="sm">
-              <UInput :model-value="header.運輸方式 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.運輸方式 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="流程代號" size="sm">
-              <UInput :model-value="header.流程代號 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.流程代號 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="起始港口" size="sm">
-              <UInput :model-value="header.起始港口 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.起始港口 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
             <UFormField label="目的港口" size="sm">
-              <UInput :model-value="header.目的港口 ?? ''" readonly class="w-full" />
+              <UInput :model-value="header.目的港口 ?? ''" readonly variant="subtle" class="w-full" />
             </UFormField>
           </div>
         </div>
 
-        <!-- 訂單金額 / 信用額度 -->
+        <!-- 訂單金額 / 信用額度：訂單金額一定要填客戶金額，預設展開 -->
         <UAccordion
+          default-value="0"
           :items="[
             { label: '訂單金額', slot: 'amount' },
             { label: '信用額度', slot: 'credit' }
@@ -241,8 +242,8 @@ const onApplyPass = async (passItem: 'CustSumAmtChk' | 'AvailableChk', memo: str
             <div class="flex flex-col gap-2 p-2">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm text-muted">訂單金額</span>
-                <UInput :model-value="formatAmount(header.訂單金額)" readonly class="w-32" />
-                <span class="text-sm text-muted">客戶金額</span>
+                <UInput :model-value="formatAmount(header.訂單金額)" readonly variant="subtle" class="w-32" />
+                <span class="text-sm text-muted after:ms-0.5 after:text-error after:content-['*']">客戶金額</span>
                 <UInput v-model="customAmt" type="number" placeholder="輸入客戶金額" class="w-40" />
               </div>
               <div class="flex flex-wrap items-center gap-2">
@@ -262,9 +263,9 @@ const onApplyPass = async (passItem: 'CustSumAmtChk' | 'AvailableChk', memo: str
             <div class="flex flex-col gap-2 p-2">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm text-muted">信用額度</span>
-                <UInput :model-value="formatAmount(credit?.信用可超出額)" readonly class="w-32" />
+                <UInput :model-value="formatAmount(credit?.信用可超出額)" readonly variant="subtle" class="w-32" />
                 <span class="text-sm text-muted">信用餘額</span>
-                <UInput :model-value="formatAmount(credit?.信用餘額)" readonly class="w-32" />
+                <UInput :model-value="formatAmount(credit?.信用餘額)" readonly variant="subtle" class="w-32" />
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm text-muted">特規原因</span>
