@@ -30,3 +30,7 @@ export const getAuthToken = () => {
   if (import.meta.client) return localStorage.getItem('proril-token') || ''
   return ''
 }
+
+export const clearAuthToken = () => {
+  if (import.meta.client) localStorage.removeItem('proril-token')
+}

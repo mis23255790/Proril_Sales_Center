@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { NavigationMenuItem } from '@nuxt/ui'
+import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
 const { modules, modulePath, itemPath, appBaseLabel, loadUserFunctions, hasNoAccessibleModule } = useAppNavigation()
@@ -8,6 +8,15 @@ const { getCurrentUser } = useCurrentUser()
 const { getSystemByNo } = useSystemInfo()
 
 const collapsed = ref(false)
+
+const logout = () => {
+  clearAuthToken()
+  navigateTo('/login')
+}
+
+const userMenuItems = computed<DropdownMenuItem[][]>(() => [
+  [{ label: '登出', icon: 'i-lucide-log-out', onSelect: logout }]
+])
 
 /**
  * 側欄要顯示哪些功能是 DB 說了算（M_Function ∩ M_Permission），
@@ -81,7 +90,6 @@ const items = computed<NavigationMenuItem[][]>(() => [
       :max-size="26"
       :default-size="18"
       :collapsed-size="4"
-      :ui="{ footer: 'border-t border-default' }"
     >
       <template #header="{ collapsed: isCollapsed }">
         <AppLogo :collapsed="isCollapsed" />
@@ -109,16 +117,6 @@ const items = computed<NavigationMenuItem[][]>(() => [
           目前沒有任何可用功能，請洽系統管理員開通權限。
         </p>
       </template>
-
-      <template #footer="{ collapsed: isCollapsed }">
-        <UButton
-          icon="i-lucide-log-out"
-          :label="isCollapsed ? undefined : '登出'"
-          color="neutral"
-          variant="ghost"
-          block
-        />
-      </template>
     </UDashboardSidebar>
 
     <UDashboardPanel :ui="{ body: 'bg-white dark:bg-white' }">
@@ -130,7 +128,6 @@ const items = computed<NavigationMenuItem[][]>(() => [
 
           <template #right>
             <div class="flex items-center gap-3">
-              <span v-if="userName || account" class="text-sm text-gray-600 dark:text-gray-300">{{ userName || account }}</span>
               <img
                 v-if="systemImageUrl"
                 :src="systemImageUrl"
@@ -140,6 +137,16 @@ const items = computed<NavigationMenuItem[][]>(() => [
                 alt=""
               >
               <UColorModeButton />
+              <UDropdownMenu v-if="userName || account" :items="userMenuItems">
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  trailing-icon="i-lucide-chevron-down"
+                  class="text-sm text-gray-600 dark:text-gray-300"
+                >
+                  {{ userName || account }}
+                </UButton>
+              </UDropdownMenu>
             </div>
           </template>
         </UDashboardNavbar>
