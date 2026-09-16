@@ -180,10 +180,10 @@ const saveDepFunctions = async () => {
   }
 }
 
-/** 套用用的清單：勾哪幾項要套進目前這個人的樹。 */
+/** 套用用的第三棵樹，跟編輯共用節點資料、選取狀態分開，介面跟編輯一致。 */
 const applyOpen = ref(false)
-const applyItems = ref<{ key: string, label: string }[]>([])
-const applyChecked = ref(new Set<string>())
+const applySelected = ref(new Set<string>())
+const applyExpanded = ref(new Set<string>())
 
 const openApply = async () => {
   if (!depCode.value.trim()) {
@@ -199,9 +199,8 @@ const openApply = async () => {
   try {
     const res = await api.getDepFunctions(depCode.value.trim())
     const keys = selectedKeysFromDepFunctions(tree.value, res?.body ?? [])
-    const byKey = flattenTree(tree.value)
-    applyItems.value = [...keys].map(key => ({ key, label: byKey.get(key)?.label ?? key }))
-    applyChecked.value = new Set(keys)
+    applySelected.value = keys
+    applyExpanded.value = expandedKeysFor(tree.value, keys)
     applyOpen.value = true
   } catch (err) {
     console.log('load dep functions failed -->', err)
@@ -215,15 +214,10 @@ const openApply = async () => {
  * 也不會取消掉他原本就有的權限，是聯集不是覆蓋。
  */
 const applyDepFunctions = () => {
-  for (const key of applyChecked.value) selected.value.add(key)
-  for (const key of expandedKeysFor(tree.value, applyChecked.value)) expanded.value.add(key)
+  for (const key of applySelected.value) selected.value.add(key)
+  for (const key of expandedKeysFor(tree.value, applySelected.value)) expanded.value.add(key)
   applyOpen.value = false
   toast.add({ title: '已套用，記得按儲存', color: 'info' })
-}
-
-const toggleApply = (key: string) => {
-  if (applyChecked.value.has(key)) applyChecked.value.delete(key)
-  else applyChecked.value.add(key)
 }
 </script>
 
@@ -346,18 +340,18 @@ const toggleApply = (key: string) => {
     </UModal>
 
     <!-- 群組預設功能套用 -->
-    <UModal v-model:open="applyOpen" title="群組預設功能套用">
+    <UModal v-model:open="applyOpen" title="群組預設功能套用" :ui="{ content: 'max-w-3xl' }">
       <template #body>
-        <p v-if="!applyItems.length" class="py-4 text-sm text-muted">
-          這個群組還沒設定預設功能。
+        <p class="mb-3 text-sm text-muted">
+          預設帶入該群組的預設功能，可再微調。套用是聯集，不會取消目前這個人原本就有的權限。
         </p>
-        <div v-else class="max-h-[60vh] space-y-1 overflow-y-auto">
-          <UCheckbox
-            v-for="item in applyItems"
-            :key="item.key"
-            :model-value="applyChecked.has(item.key)"
-            :label="item.label"
-            @update:model-value="toggleApply(item.key)"
+        <div class="max-h-[60vh] overflow-y-auto rounded-lg border border-default p-3">
+          <PermissionTree
+            :nodes="tree"
+            :selected="applySelected"
+            :expanded="applyExpanded"
+            @toggle-select="(key: string) => applySelected.has(key) ? applySelected.delete(key) : applySelected.add(key)"
+            @toggle-expand="(key: string) => applyExpanded.has(key) ? applyExpanded.delete(key) : applyExpanded.add(key)"
           />
         </div>
       </template>
@@ -366,7 +360,7 @@ const toggleApply = (key: string) => {
         <UButton color="neutral" variant="outline" @click="applyOpen = false">
           取消
         </UButton>
-        <UButton :disabled="!applyItems.length" @click="applyDepFunctions">
+        <UButton @click="applyDepFunctions">
           套用
         </UButton>
       </template>

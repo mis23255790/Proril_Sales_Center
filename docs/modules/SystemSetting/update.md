@@ -1,4 +1,20 @@
 <details>
+  <summary>版號2026.09.16.0938</summary>
+
+##### refactor: 群組預設功能套用改用跟編輯一致的樹狀元件
+      permission-manager.vue 原本「群組預設功能編輯」用 PermissionTree 樹狀勾選，
+      「群組預設功能套用」卻是另一種扁平勾選清單（只列出群組範本裡已勾的項目、
+      看不到樹狀結構），同一頁兩種完全不同的互動方式。
+
+      改成套用也開同一棵 PermissionTree，用第三組獨立的 selected/expanded
+      （applySelected/applyExpanded），行為不變：預設帶入該群組範本、可再微調、
+      按套用是聯集塞進目前這個人的樹（不覆蓋、不取消既有勾選），套用後仍要
+      按「儲存」才寫進 M_Permission。
+
+      移除的 applyItems/applyChecked/toggleApply 沒有其他地方在用。
+</details>
+
+<details>
   <summary>版號2026.09.14.2330</summary>
 
 ##### feat!: FunctionNo 改成 AAABBCC 格式（int -> varchar(8)）
