@@ -201,6 +201,26 @@ public class VErpcustomerViewModel : VErpcustomer
     public string CustomerNo { get; set; } = string.Empty;
 }
 
+/// <summary>客戶情報 + 作者姓名（join M_User.Account）。1.0 對應 <c>CrmCustomerMemoViewModel</c>。</summary>
+public class CrmCustomerMemoViewModel : SC.CrmCustomerMemo
+{
+    public CrmCustomerMemoViewModel(SC.CrmCustomerMemo src)
+    {
+        Id = src.Id;
+        CustomerNo = src.CustomerNo;
+        MemoType = src.MemoType;
+        MemoDesc = src.MemoDesc;
+        FileName = src.FileName;
+        AStatus = src.AStatus;
+        Creator = src.Creator;
+        CreateTime = src.CreateTime;
+        Modifier = src.Modifier;
+        ModiTime = src.ModiTime;
+    }
+
+    public string CreatorName { get; set; } = string.Empty;
+}
+
 // ---------------------------------------------------------------- 客戶信用額度（銷貨檢索客戶頁籤）
 
 /// <summary>

@@ -886,6 +886,59 @@ public partial class WorkProcessApiController : BaseApiController
     }
 
     /// <summary>
+    /// 反過來查：這個客戶掛了哪些議題（客戶相關資訊頁的「議題」頁籤）。
+    ///
+    /// 參數是**內網**客戶代號。從 ERP 客戶清單點進客戶相關資訊、那個 ERP 客戶還沒建
+    /// 內網客戶時傳不出內網客編，這裡會回空清單——1.0 同樣如此（它的簽章連
+    /// erpCustomerNo 都沒收，前端有送也被忽略）。
+    /// </summary>
+    [HttpGet]
+    public CustomApiViewModel GetWPOrderForCustom(string? customerNo)
+    {
+        var ca = new CustomApiViewModel { IsSuccess = false };
+
+        WriteStepLog(nameof(GetWPOrderForCustom), $"customerNo:{customerNo}");
+
+        if (string.IsNullOrWhiteSpace(customerNo))
+        {
+            ca.IsSuccess = true;
+            ca.Body = new List<DWorkProcessesEx>();
+            return ca;
+        }
+
+        var target = customerNo.Trim();
+        var wpnos = scDb.DWorkProcessCustomers
+            .Where(c => c.AStatus == ActiveStatus.Active).ToList()
+            .Where(c => (c.CustomerNo ?? "").Trim() == target)
+            .ToList();
+
+        var userNameByAccount = scDb.MUsers.Where(u => u.IsEnable).ToList()
+            .GroupBy(u => (u.Account ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.First().UserName ?? "");
+
+        var wpByNo = scDb.DWorkProcesses
+            .Where(w => w.AStatus == ActiveStatus.Active).ToList()
+            .GroupBy(w => (w.Wpno ?? "").Trim())
+            .ToDictionary(g => g.Key, g => g.First());
+
+        // 作者取的是「客戶關聯那筆」的建立者，不是議題本身的建立者——1.0 join 的是
+        // D_WorkProcessCustomer.Creator，照搬。
+        var result = wpnos
+            .Where(c => wpByNo.ContainsKey((c.Wpno ?? "").Trim()))
+            .Select(c =>
+            {
+                userNameByAccount.TryGetValue((c.Creator ?? "").Trim(), out var userName);
+                return new DWorkProcessesEx(wpByNo[(c.Wpno ?? "").Trim()]) { UserName = userName ?? "" };
+            })
+            .ToList();
+
+        ca.IsSuccess = true;
+        ca.Body = result;
+        if (result.Count == 0) ca.Message = $"查無關鍵字客戶:{target} !!!";
+        return ca;
+    }
+
+    /// <summary>
     /// 整批覆寫議題的客戶。
     /// 與 1.0 的差異：允許空字串，代表「清空客戶」。
     /// 1.0 在空字串時直接回錯，所以在畫面上把客戶改回「未指定」是存不進去的。

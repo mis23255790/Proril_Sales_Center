@@ -107,7 +107,7 @@ const NAV_MODULES: AppNavModule[] = [
         groupName: '客戶',
         items: [
           {
-            label: '客戶維護',
+            label: '客戶檢索',
             path: 'sales-search/customer',
             icon: 'i-lucide-users',
             description: '查詢內網／ERP客戶，新增或編輯內網客戶資料與 ERP 對應',

@@ -3,9 +3,9 @@ import type { TableColumn } from '@nuxt/ui'
 import type { CustomerWithErp, ErpCustomer } from '~/types/customer'
 import { POTENTIAL_CUSTOM_OPTIONS } from '~/types/customer'
 
-definePageMeta({ title: '客戶維護' })
+definePageMeta({ title: '客戶檢索' })
 
-useSeoMeta({ title: '客戶維護 · PRORIL 業務中心' })
+useSeoMeta({ title: '客戶檢索 · PRORIL 業務中心' })
 
 const api = useCustomerApi()
 const toast = useToast()
@@ -242,6 +242,22 @@ const openEditModal = (row: CustomerWithErp) => {
   modalOpen.value = true
 }
 
+/**
+ * 客戶相關資訊（1.0 的 Mix/CustomerRelated）。整列點擊就是進這裡，編輯留在功能欄按鈕。
+ *
+ * 兩個客編都帶：內網客編給情報／議題用，ERP 客編給訂單／銷售／信用額度用，
+ * 那一頁分得很清楚，不能只帶一個。從 ERP 客戶頁籤點進來時內網客編可能是空的，
+ * 那一頁會自己用 ERP 客編反查。
+ */
+const openRelated = (customerNo?: string | null, erpCustomerNo?: string | null) =>
+  navigateTo({
+    path: appPath('sales-search/customer-related'),
+    query: {
+      customer: (customerNo ?? '').trim(),
+      erpCustomerNo: (erpCustomerNo ?? '').trim()
+    }
+  })
+
 const onSave = async () => {
   if (!form.value.shortName?.trim() && !form.value.longName?.trim()) {
     toast.add({ title: '請至少輸入客戶名稱或全名', color: 'warning' })
@@ -276,7 +292,7 @@ const onSave = async () => {
     <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold text-highlighted">
-          客戶維護
+          客戶檢索
         </h1>
         <p class="mt-1 text-sm text-muted">
           查詢內網客戶與 ERP 客戶，並可新增或編輯內網客戶資料、設定 ERP 客戶代碼對應。
@@ -347,12 +363,18 @@ const onSave = async () => {
         :columns="internalColumns"
         :loading="loading"
         :ui="{ tr: clickableRowTr, td: 'whitespace-nowrap' }"
-        @select="(_e: Event, row: any) => openEditModal(row.original)"
+        @select="(_e: Event, row: any) => openRelated(row.original.customerNo, row.original.erpcustomerNo)"
       >
         <template #actions-cell="{ row }">
           <div @click.stop>
-            <UButton size="xs" color="primary" variant="outline" @click="openEditModal(row.original)">
-              編輯
+            <UButton
+              size="xs"
+              color="primary"
+              variant="outline"
+              icon="i-lucide-square-pen"
+              @click="openEditModal(row.original)"
+            >
+              編輯基本資料
             </UButton>
           </div>
         </template>
@@ -369,12 +391,18 @@ const onSave = async () => {
         :columns="erpColumns"
         :loading="loading"
         :ui="{ tr: clickableRowTr, td: 'whitespace-nowrap' }"
-        @select="(_e: Event, row: any) => openFromErp(row.original)"
+        @select="(_e: Event, row: any) => openRelated(row.original.customerNo, row.original.ma001)"
       >
         <template #actions-cell="{ row }">
           <div @click.stop>
-            <UButton size="xs" color="primary" variant="outline" @click="openFromErp(row.original)">
-              {{ row.original.customerNo ? '編輯' : '建立客戶' }}
+            <UButton
+              size="xs"
+              color="primary"
+              variant="outline"
+              :icon="row.original.customerNo ? 'i-lucide-square-pen' : 'i-lucide-user-plus'"
+              @click="openFromErp(row.original)"
+            >
+              {{ row.original.customerNo ? '編輯基本資料' : '建立內網客戶' }}
             </UButton>
           </div>
         </template>
@@ -387,7 +415,7 @@ const onSave = async () => {
     </div>
 
     <!-- 新增／編輯客戶 -->
-    <UModal v-model:open="modalOpen" title="編輯客戶資訊" :ui="{ content: 'max-w-3xl' }">
+    <UModal v-model:open="modalOpen" title="客戶基本資料" :ui="{ content: 'max-w-3xl' }">
       <template #body>
         <div class="flex flex-col gap-4">
           <UFormField label="內網客戶代碼" size="sm">

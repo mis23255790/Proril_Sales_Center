@@ -41,12 +41,12 @@ dotnet run
 | `WorkProcessApi`（權限） | SetWPNoPermissionEdit / SetWPNoPermissionView / AddWPNoPermissionEdit / GetWPNoPermission |
 | `MainApi` | Login / GetCurrentUser / GetUserInfo / GetUserList |
 | `UploadApi` | SaveByFileName |
-| `CustomQueryApi` | GetCustom / GetERPCustom / SaveCustom |
+| `CustomQueryApi` | GetCustom / GetERPCustom / SaveCustom / GetCustomMemo / SetCustomMemo / DeleteCustomMemo |
 | `OrderInfoVerifyApi` | GetPOCheckView / GetConditionList / CheckCOPOrderInfo / COPOrderInfoPassCheck / SP_GetCredit / SP_GetCreditCRM / ExportXls |
 | `MainApi`（權限） | CheckUserPermissionLinkType |
 | `MainApi`（人員管理） | GetUserSetting / AddUser / UpdateUser / DeleteUser / ResetPassword / UnlockUser / GetAllUserList |
 | `MainApi`（權限管理） | GetMSystem / GetMFunction / GetMPermissionLinkType / GetPermissionLinkType / SetPermissionTree / SaveDepFunction / GetDepartmentList / GetUserFunctions |
-| `MixSalesShipApi` | GetSalesOrder / GetSalesOrder_1 / ExportXls / GetCustomerCredit / GetCustomerCreditCRM |
+| `MixSalesShipApi` | GetSalesOrder / GetSalesOrder_1 / ExportXls / GetCustomerCredit / GetCustomerCreditCRM / GetSalesTotal / GetCustomerUnfinOrder |
 | `SalesOrderUnFinishApi` | GetUnfinOrder / QueryUnfinOrder_1 / ExportXls |
 | `CommonApi` | GetDepFunction |
 
@@ -69,9 +69,11 @@ dotnet run
 - `OrderInfoVerifyApi.SP_GetCreditCRM` 後端搬了，但前端目前沒有呼叫（比照 1.0，
   該功能在 1.0 前端本來就沒被實際用到）。
 - 1.0 `MixSalesShipApiController` 底下不屬於銷貨檢索本頁的端點：`GetCOPOrder`（沒有畫面入口）、
-  `GetFinalQuotation`/`ExportCustomerPrice`（報價）、`GetSalesTotal`/`GetCustomerOrderTotal`/
-  `GetCustomerUnfinOrder`（客戶相關頁籤，`GetCustomerCredit`/`GetCustomerCreditCRM` 已搬，
-  其餘還沒有畫面）。它們屬於別的模組，搬那些模組時再處理。
+  `GetFinalQuotation`/`ExportCustomerPrice`（報價）。它們屬於別的模組，搬那些模組時再處理。
+  客戶相關頁籤那幾支（`GetSalesTotal`/`GetCustomerUnfinOrder`/`GetCustomerCredit`/
+  `GetCustomerCreditCRM`）已於 2026-09-16 隨客戶相關資訊搬完；
+  `GetCustomerOrderTotal` **刻意不搬**（過濾條件寫反、永遠回空清單，1.0 前端也整段註解，
+  是完整的死碼，見 `../docs/modules/Customer/logic.md`）。
 - 未完成訂單檢索頁面級功能權限檢查 `checkPermission(functionId)`（`MainApi/CheckUserPermission`）——
   跟銷貨檢索一樣，2.0 目前假設能進到路由就有權限，見
   `../docs/modules/SalesOrderUnfinish/logic.md`「尚未搬移」。
@@ -171,8 +173,7 @@ dotnet run
 
 1.0 這兩支是「客戶相關頁籤」底下唯二有實際查詢邏輯、且依賴已搬進來的 SP 的端點
 （`prc_COPGetCredit`/`prc_COPGetCredit_CRM`，跟訂單資料檢核的 `SP_GetCredit`/
-`SP_GetCreditCRM` 是同一支 SP），先一併搬過來；其餘客戶相關頁籤
-（`GetCustomerOrderTotal`/`GetCustomerUnfinOrder`）還沒有 2.0 畫面，維持沒搬。
+`SP_GetCreditCRM` 是同一支 SP），比其他客戶相關端點早一步搬過來。
 
 - **不再跨 controller 借用。** 1.0 在方法裡 `new OrderInfoVerifyApiController(...)` 借用
   它的 `SP_GetCredit`/`SP_GetCreditCRM`，2.0 直接內聯同一支 `EXEC`
@@ -180,8 +181,21 @@ dotnet run
 - **母公司簡稱/全名一樣是 cross join。** 額外 join `V_ERPCustomer.Ma001` 補
   `ParentCorpShortName`/`ParentCorpLongName`，查無對應列時整批消失（不是漏寫 left join，
   `Ma001` 對單一 `erpCustomerNo` 本來就最多一筆），照抄 1.0 行為。
-- **目前 2.0 前端沒有頁面呼叫這兩支**，跟 `OrderInfoVerifyApi.SP_GetCreditCRM` 一樣，
-  比照 1.0 只搬後端。
+- **2026-09-16 起 `GetCustomerCreditCRM` 有畫面在呼叫了**：客戶相關資訊的「信用額度」
+  頁籤（`/sales-center/sales-search/customer-related`）。`GetCustomerCredit`（舊版）
+  仍然沒有畫面用，比照 1.0——那邊畫面實際打的也是 CRM 版本。
+
+### 客戶相關資訊的另外兩支（`GetSalesTotal` / `GetCustomerUnfinOrder`）
+
+在 `MixSalesShipApiController.CustomerRelated.cs`，2026-09-16 隨客戶相關資訊搬進來。
+
+- 兩支都讀 `Proril_Sales_Center`（`scDb`）：`V_UnfinOrder` 2026-09-15 隨未完成訂單檢索
+  搬過去、`V_SalesTotal` 這次隨客戶相關資訊搬過去
+  （`../database/CustomerRelatedObjectsMigration.sql`）。
+- 兩支都用 **ERP 客戶代號**過濾，沒帶就回空清單（對齊 1.0，這兩支沒有「查全部客戶」的用途）。
+  `V_SalesTotal.CustomerNo` 這個欄名會騙人，存的是 ERP 客編不是內網客編。
+- **刻意回原始明細、不在後端分群**：端點形狀與 1.0 一字不差，彙總邏輯在前端
+  （`app/utils/customerRelated.ts`），細節見 `../docs/modules/Customer/logic.md`。
 
 ## 未完成訂單檢索（`SalesOrderUnFinishApi`）
 

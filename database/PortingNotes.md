@@ -125,18 +125,66 @@ CREATE VIEW 開頭寫的是舊名字 `V_Produce_English_All`（`sp_rename` 只�
    **在 `CREATE PROCEDURE` 當場**噴 Msg 468（參照的物件都存在，沒有延後解析可言）。
    後來整個庫的定序已經對齊（見「定序已對齊」那節），這個 `COLLATE DATABASE_DEFAULT`
    變成沒有作用，但**刻意留著**：它讓這支腳本在任何定序的目標庫都跑得起來。
-5. **`COP_SalesOrder` 在 `PRORIL_WEB` 還有另一個讀者：`V_SalesTotal`**
-   （1.0 `MixSalesShipApi/GetSalesTotal` 的客戶頁籤，2.0 還沒搬那支）。它留在舊庫讀舊庫，
-   不受影響；等那支也搬過來時要一併處理。因此 `COP_SalesOrder`**不算單一擁有者**，
-   切連線的前置條件比業務議題那批嚴格一點。
+5. ~~**`COP_SalesOrder` 在 `PRORIL_WEB` 還有另一個讀者：`V_SalesTotal`**~~
+   **已於 2026-09-16 解決**：`V_SalesTotal` 隨客戶相關資訊一起搬進 `Proril_Sales_Center`
+   （`CustomerRelatedObjectsMigration.sql`），`MixSalesShipApi/GetSalesTotal` 也改打
+   `SalesCenterDbContext`。2.0 這側已經沒有任何路徑會去讀舊庫的 `COP_SalesOrder`，
+   它現在**算單一擁有者**了。舊庫那份仍由 1.0 自己餵、自己讀，兩邊各自成長不互相同步。
 
 `TABLES.txt` 已把 `COP_SalesOrder` 收進 DACPAC schema 版控（`Tables/COP_SalesOrder.sql`），
 一樣是**收 schema 不等於切連線**：**測試區的物件雖然都到位了，`api/` 仍把 `CopSalesOrder`
-對映在 `ProrilWebDbContext`，SP 也還是在 `PRORIL_WEB` 執行。** 要切連線還缺兩件事：
-正式區的 `Proril_Sales_Center@51002` 還沒建、上面第 5 點的 `V_SalesTotal` 歸屬還沒解決。
+對映在 `ProrilWebDbContext`，SP 也還是在 `PRORIL_WEB` 執行。** 上面第 5 點的
+`V_SalesTotal` 歸屬已經解決，剩下的前置條件是正式區的 `Proril_Sales_Center@51002` 還沒建。
 
 1.0 另外還有一張 `COP_MDL_SalesOrder_1`（匯出時當 SP 結果形狀用的空殼表）：DB 裡 0 筆、
 沒有任何 View/SP 參照，2.0 匯出改用同一個 `CopSalesOrder` 型別，**這張表不搬**。
+
+## 客戶相關資訊：CRM_CustomerMemo + V_SalesTotal（第四階段，2026-09-16，測試區已執行）
+
+腳本是 `CustomerRelatedObjectsMigration.sql`，走同一支 `run-objects-migration.ps1`：
+
+```powershell
+.\scripts\run-objects-migration.ps1 -Script CustomerRelatedObjectsMigration.sql -Environment snapshot
+.\scripts\run-objects-migration.ps1 -Script CustomerRelatedObjectsMigration.sql -Environment snapshot -Execute
+```
+
+兩個物件，**是這批裡唯一完全不需要 ERP linked server 的一支**（只對本地資料操作，
+所以 dry-run 報 linked server 不存在也不影響它）：
+
+- **`V_SalesTotal`**（View）：客戶相關資訊「銷售」頁籤的年／月銷售統計。
+  只 `GROUP BY` 本地的 `COP_SalesOrder`，沒有其他依賴。搬它的理由見上一節第 5 點。
+- **`CRM_CustomerMemo`**（表 + 23 筆資料）：「情報」頁籤的內容。
+  1.0 全站 grep 過，讀寫它的只有 `CustomQueryApiController` 的
+  `GetCustomMemo` / `SetCustomMemo`，是**單一擁有者**，`api/` 已直接切 `SalesCenterDbContext`。
+  情報是使用者手打的，沒有來源可以重新產生，所以連資料一起複製、而且保留原始 `ID`
+  （`SetCustomMemo` 拿 `ID` 當更新鍵）。
+
+> **為什麼建表也走這支腳本、不走 `publish.ps1`**
+>
+> `Tables/` 底下那些 .sql 對照的是 `PRORIL_WEB` 的 schema，而 `Proril_Sales_Center`
+> 已經在好幾處**刻意**分岔：`FunctionNo` 從 int 改成 `varchar(8)`、定序對齊後一批
+> `nvarchar` 欄位的實際型別、`COP_CheckRule` 少一個欄位。對這個庫跑 publish
+> 會把那些分岔「修正」回去——2026-09-16 實際跑過 dry-run 驗證，部署預覽就是
+> 「`M_Function.FunctionNo` varchar(8) → int」「卸除 `COP_CheckRule.testDacPak`」
+> 這一整串，等於把權限控管打爛。
+>
+> 所以這個庫的建表一律走 `*ObjectsMigration.sql`（比照銷貨檢索的 `COP_SalesOrder`）。
+> `Tables/CRM_CustomerMemo.sql` 與 `TABLES.txt` 照樣要加，但那是 schema 版控與
+> `copy-snapshot-data.ps1` 的白名單，跟「這次怎麼把表建出來」是兩回事。
+
+> **順手修掉的既有問題：dacpac 根本建不起來**
+>
+> `Proril.SalesIssue.Database.sqlproj` 沒有排除非 schema 的 .sql，Microsoft.Build.Sql
+> 把 `checks/**` 與各支一次性搬移腳本全部當成 schema 物件解析，`dotnet build` 噴 63 個
+> SQL70001/SQL71006，`publish.ps1` 連 dry-run 都跑不到比對那一步。已加 `<Build Remove>`
+> 排除，build 恢復 0 錯 0 警告。
+>
+> 注意：**`DefaultItemExcludes` 沒有用**——SDK 的 props 在 `<Project Sdk="...">` 那行就
+> 匯入完了，等讀到 `PropertyGroup` 時 glob 早就展開過，只能用 `<Build Remove>`。
+>
+> 另外，T-SQL 的區塊註解**可以巢狀**，所以腳本檔頭的說明裡不能出現 `Tables/*.sql`
+> 這種寫法——那個 `/*` 會開一個永遠關不掉的註解，`SET PARSEONLY ON` 直接報
+> 「Missing end comment mark」。實際踩過一次。
 
 ## 已切連線：業務議題本體 + CRM_Customer + H_FileLink（2026-09-10）
 

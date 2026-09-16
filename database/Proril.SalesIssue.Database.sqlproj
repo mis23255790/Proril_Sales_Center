@@ -28,4 +28,24 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);.tmp/**</DefaultItemExcludes>
     <ProjectGuid>{00000000-0000-0000-0000-000000000000}</ProjectGuid>
   </PropertyGroup>
+
+  <!--
+    Microsoft.Build.Sql 預設把專案資料夾底下**所有** .sql 收進 Build 項目，當成 schema 解析。
+    這個專案只納管 Tables/，下面這些都不是 schema，要明確移除：
+      checks/**          資料正確性檢查用的查詢（scripts/check.ps1 執行）
+      *ObjectsMigration.sql / FunctionNoFormatMigration.sql / PermissionMasterSeed.sql
+                         一次性搬移／種子腳本，走 scripts/run-objects-migration.ps1 或手動執行
+
+    它們有 USE、變數宣告、多陳述式批次，本來就不是 DACPAC 能表達的東西，
+    留著會噴一堆 SQL70001/SQL71006，dacpac 建不出來、publish.ps1 連 dry-run 都跑不了。
+
+    用 <Build Remove> 而不是 DefaultItemExcludes：SDK 的 props 在 <Project Sdk="..."> 那行
+    就匯入完了，等到讀進 PropertyGroup 時 glob 早就展開過，設 DefaultItemExcludes 沒有作用。
+  -->
+  <ItemGroup>
+    <Build Remove="checks/**/*.sql" />
+    <Build Remove="*ObjectsMigration.sql" />
+    <Build Remove="FunctionNoFormatMigration.sql" />
+    <Build Remove="PermissionMasterSeed.sql" />
+  </ItemGroup>
 </Project>

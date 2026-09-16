@@ -9,11 +9,13 @@
     原樣複製一份到 Proril_Sales_Center 又是必要的一步，所以那些物件寫在
     database/ 底下的 *ObjectsMigration.sql，由這支負責執行。
 
-    目前有三支腳本：
+    目前有四支腳本：
       OrderCheckObjectsMigration.sql       訂單資料檢核：7 View + 5 SP + 1 函式 + 5 表
       SalesShippingObjectsMigration.sql    銷貨檢索：3 SP + 1 表
       SalesOrderUnfinishObjectsMigration.sql 未完成訂單檢索：1 View + 2 SP，沒有表
       （V_UnfinOrder 每次都直接查 ERP linked server，不落地快取，所以不用複製任何資料）
+      CustomerRelatedObjectsMigration.sql  客戶相關資訊：1 View（V_SalesTotal）+ 1 表（CRM_CustomerMemo）
+      （唯一不需要 linked server 的一支，只對本地資料操作）
 
     三支都是可重複執行的（CREATE TABLE 包 IF OBJECT_ID(...) IS NULL、
     CREATE OR ALTER PROCEDURE/VIEW/FUNCTION、資料複製區塊在表已有資料時自動跳過）。
@@ -21,7 +23,9 @@
     預設 dry-run：只做檢查、不改任何東西——
       1. 目標資料庫連得上，而且 Initial Catalog 跟腳本裡的 USE 一致
       2. linked server [192.168.1.200]（鼎新 ERP）在這個 instance 上存在
-         —— 兩支腳本的 View/SP 都靠它查 ERP，缺了語法能過但執行會失敗
+         —— 多數腳本的 View/SP 靠它查 ERP，缺了語法能過但執行會失敗。
+         例外是 CustomerRelatedObjectsMigration.sql，它只讀本地的 COP_SalesOrder，
+         這項報「不存在」也不影響它。
       3. 列出腳本會建立的物件，以及它們在目標端「已存在／不存在」
       4. 用 SET PARSEONLY ON 把整份腳本送進 SQL Server 驗一次語法
 
@@ -49,7 +53,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('OrderCheckObjectsMigration.sql', 'SalesShippingObjectsMigration.sql', 'SalesOrderUnfinishObjectsMigration.sql')]
+    [ValidateSet('OrderCheckObjectsMigration.sql', 'SalesShippingObjectsMigration.sql', 'SalesOrderUnfinishObjectsMigration.sql', 'CustomerRelatedObjectsMigration.sql')]
     [string]$Script,
     [ValidateSet('snapshot', 'snapshot-prod')][string]$Environment = 'snapshot',
     [switch]$Execute
@@ -57,7 +61,8 @@ param(
 
 . "$PSScriptRoot\_common.ps1"
 
-# 兩支腳本的 View/SP 都透過這個 linked server 查鼎新 ERP。
+# 多數腳本的 View/SP 透過這個 linked server 查鼎新 ERP
+# （CustomerRelatedObjectsMigration.sql 例外，只讀本地表）。
 $script:ErpLinkedServer = '192.168.1.200'
 
 function Get-MigrationScripts {

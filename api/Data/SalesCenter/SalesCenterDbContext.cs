@@ -18,6 +18,8 @@ public partial class SalesCenterDbContext : DbContext
 
     public virtual DbSet<CrmCustomer> CrmCustomers { get; set; }
 
+    public virtual DbSet<CrmCustomerMemo> CrmCustomerMemos { get; set; }
+
     public virtual DbSet<DWorkProcess> DWorkProcesses { get; set; }
 
     public virtual DbSet<DWorkProcessCustomer> DWorkProcessCustomers { get; set; }
@@ -194,6 +196,31 @@ public partial class SalesCenterDbContext : DbContext
                 .IsUnicode(false)
                 .HasDefaultValue("");
             entity.Property(e => e.ShortName).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<CrmCustomerMemo>(entity =>
+        {
+            entity.ToTable("CRM_CustomerMemo");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.AStatus)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasColumnName("aStatus");
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.Creator)
+                .HasMaxLength(40)
+                .IsUnicode(false);
+            entity.Property(e => e.CustomerNo)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.FileName).HasMaxLength(200);
+            entity.Property(e => e.MemoDesc).HasMaxLength(1000);
+            entity.Property(e => e.MemoType).HasMaxLength(40);
+            entity.Property(e => e.ModiTime).HasColumnType("datetime");
+            entity.Property(e => e.Modifier)
+                .HasMaxLength(40)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<DWorkProcess>(entity =>
@@ -586,6 +613,57 @@ public partial class SalesCenterDbContext : DbContext
             entity.HasNoKey();
             entity.Property(e => e.Id).HasColumnName("ID");
             entity.Property(e => e.CopSource).HasColumnName("COP_Source");
+        });
+
+        // 客戶相關資訊的兩個唯讀 View。scaffold 只掃 TABLES.txt 的資料表，不產 View 的對映，
+        // 所以跟上面的 UnfinOrder 一樣寫在這個手寫區塊（型別在 api/Data/CustomerRelatedEntities.cs）。
+        modelBuilder.Entity<VSalesTotal>(entity =>
+        {
+            entity.HasNoKey().ToView("V_SalesTotal");
+
+            entity.Property(e => e.CustomerNo)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Ym)
+                .HasMaxLength(32)
+                .HasColumnName("YM");
+            entity.Property(e => e.TotalQty).HasColumnType("numeric(38, 3)");
+            entity.Property(e => e.TotalAmt).HasColumnType("numeric(38, 6)");
+        });
+
+        // 每一欄都要明確 HasColumnName：資料庫定序是 Chinese_Taiwan_Stroke_BIN，
+        // 識別字比對是區分大小寫的，EF 預設會照屬性名產出 [Tc001]，對不上 DB 的 [TC001]。
+        // （UnfinOrder 不用是因為它走 FromSql，欄位由 DbDataReader 依名稱比對，不區分大小寫。）
+        modelBuilder.Entity<VUnfinOrder>(entity =>
+        {
+            entity.HasNoKey().ToView("V_UnfinOrder");
+
+            entity.Property(e => e.CopSource).HasColumnName("COP_Source");
+            entity.Property(e => e.Mq002).HasColumnName("MQ002");
+            entity.Property(e => e.Tc001).HasColumnName("TC001");
+            entity.Property(e => e.Tc002).HasColumnName("TC002");
+            entity.Property(e => e.Td003).HasColumnName("TD003");
+            entity.Property(e => e.Tc003).HasColumnName("TC003");
+            entity.Property(e => e.Tc004).HasColumnName("TC004");
+            entity.Property(e => e.Ma002).HasColumnName("MA002");
+            entity.Property(e => e.Tc006).HasColumnName("TC006");
+            entity.Property(e => e.Mv002).HasColumnName("MV002");
+            entity.Property(e => e.Tc010).HasColumnName("TC010");
+            entity.Property(e => e.Tc014).HasColumnName("TC014");
+            entity.Property(e => e.Tc016).HasColumnName("TC016");
+            entity.Property(e => e.Tc019).HasColumnName("TC019");
+            entity.Property(e => e.Td004).HasColumnName("TD004");
+            entity.Property(e => e.Td005).HasColumnName("TD005");
+            entity.Property(e => e.Td006).HasColumnName("TD006");
+            entity.Property(e => e.Td008).HasColumnName("TD008");
+            entity.Property(e => e.Td010).HasColumnName("TD010");
+            entity.Property(e => e.Td011).HasColumnName("TD011");
+            entity.Property(e => e.Td012).HasColumnName("TD012");
+            entity.Property(e => e.Tc008).HasColumnName("TC008");
+            entity.Property(e => e.Tc009).HasColumnName("TC009");
+            entity.Property(e => e.Ntd).HasColumnName("NTD");
+            entity.Property(e => e.Td013).HasColumnName("TD013");
+            entity.Property(e => e.Td024).HasColumnName("TD024");
         });
 
         OnModelCreatingPartial(modelBuilder);

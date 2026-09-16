@@ -163,14 +163,13 @@ usePermission().checkLinkTypePermission(410, 100)
 
 - 1.0 同一支 `MixSalesShipApiController` 底下的其他端點，它們屬於別的模組、
   2.0 前端目前也沒有呼叫：`GetCOPOrder`（早期/未用的全表查詢，畫面上沒有入口）、
-  `GetFinalQuotation` / `ExportCustomerPrice`（報價）、`GetSalesTotal` /
-  `GetCustomerOrderTotal` / `GetCustomerUnfinOrder`（客戶相關頁籤）。
-  其中 `GetSalesTotal` 走的 `V_SalesTotal` 也讀 `COP_SalesOrder`，
-  搬它的時候要一併處理那張表的歸屬。
-  `GetCustomerCredit` / `GetCustomerCreditCRM`（同樣是客戶相關頁籤）後端已搬進
-  `MixSalesShipApiController.CustomerCredit.cs`（依賴的 `prc_COPGetCredit(_CRM)`
-  跟訂單資料檢核共用），但 2.0 前端還沒有頁面呼叫，見 `../../../api/README.md`
-  「客戶信用額度」。
+  `GetFinalQuotation` / `ExportCustomerPrice`（報價）。
+  客戶相關頁籤那幾支（`GetSalesTotal` / `GetCustomerUnfinOrder` /
+  `GetCustomerCredit` / `GetCustomerCreditCRM`）已於 2026-09-16 隨客戶相關資訊搬完，
+  見 `../Customer/logic.md`；`GetCustomerOrderTotal` 是死碼，刻意不搬。
+  搬 `GetSalesTotal` 時一併把它走的 `V_SalesTotal` 搬進 `Proril_Sales_Center`
+  （`database/CustomerRelatedObjectsMigration.sql`），所以 `COP_SalesOrder`
+  在 2.0 這側已經沒有讀舊庫的路徑了。
 - 頁面級功能權限檢查 `checkPermission(functionId)`（`MainApi/CheckUserPermission`）——
   2.0 目前假設能進到路由就有權限，之後若要做選單/路由層級的權限守衛再補
 - `業務檢索`系統底下其他功能（報價、應收帳款、未完工訂單等，`MixSalesShip` 目錄下

@@ -93,7 +93,8 @@
 > 已核對「單一擁有者、之後可以放心切」且**已完成切連線**的表：業務議題 7 張（不含
 > `CRM_Customer`，只有 `WorkProcessApiController.cs`）、`CRM_Customer`（只有
 > `CustomQueryApiController.SaveCustom`；`WorkProcessApiController` 讀它組客戶顯示欄位，
-> 一併改讀 `SalesCenterDbContext`）、`H_FileLink`（只有 `UploadApiController` 內的
+> 一併改讀 `SalesCenterDbContext`）、`CRM_CustomerMemo`（客戶情報，只有
+> `CustomQueryApiController.Memo.cs`）、`H_FileLink`（只有 `UploadApiController` 內的
 > `AddFileLog`）、權限控管 3 張（`M_User`／`M_Permission`／`M_PermissionGroup`）。
 > `COP_PoCheck`/`COP_PoDetailCheck`/`COP_PassCheck`/
 > `COP_AvailableAmt`/`COP_ProductCheck` 應用層完全沒有直寫，只有預存程序
@@ -108,10 +109,20 @@
 > 可能是直接維護在 DB，遷移時沒有既有 CRUD 邏輯可搬，**同樣還沒切**。
 > `COP_SalesOrder`（銷貨檢索的 ERP 銷貨單快取）是 2026-09-14 新收進 DACPAC 的第 21 張，
 > 寫入者只有預存程序 `prc_ImportSalesOrder`（由 `prc_QuerySalesOrder(_1)` 呼叫，
-> 所以**銷貨檢索的「查詢」其實會寫資料**），但 `V_SalesTotal` 也在讀它、
-> 而那支 View 對應的 `MixSalesShipApi/GetSalesTotal` 還沒搬，**不算單一擁有者，還沒切**。
+> 所以**銷貨檢索的「查詢」其實會寫資料**）。原本另一個讀者 `V_SalesTotal` 已於
+> 2026-09-16 隨客戶相關資訊搬進新庫（`database/CustomerRelatedObjectsMigration.sql`），
+> 2.0 這側不再有讀舊庫的路徑，**現在算單一擁有者了，但 `api/` 還沒切**（`CopSalesOrder`
+> 仍對映在 `ProrilWebDbContext`，剩下的前置條件是正式區還沒建庫）。
 > 表 + 3 支 SP 的搬移腳本是 `database/SalesShippingObjectsMigration.sql`，
 > **測試區已執行完成**（走 `database/scripts/run-objects-migration.ps1`），正式區還沒建庫。
+
+> **`Proril_Sales_Center` 的建表一律走 `*ObjectsMigration.sql`，不要用 `publish.ps1`。**
+> `database/Tables/` 對照的是 `PRORIL_WEB` 的 schema，新庫已經刻意分岔好幾處
+> （`FunctionNo` 改 `varchar(8)`、定序對齊後的欄位型別、`COP_CheckRule` 少一欄），
+> 對新庫跑 publish 會把那些分岔「修正」回去，等於把權限控管打爛
+> —— dry-run 驗證過，見 `database/PortingNotes.md`「客戶相關資訊」那節。
+> `Tables/*.sql` 與 `TABLES.txt` 照樣要加，那是 schema 版控與
+> `copy-snapshot-data.ps1` 的白名單，跟「怎麼把表建出來」是兩回事。
 
 > **`Proril_Sales_Center` 的定序必須是 `Chinese_Taiwan_Stroke_BIN`**（與 `PRORIL_WEB` 相同）。
 > 測試區那份原本是建庫時沿用 instance 預設的 `SQL_Latin1_General_CP1_CI_AS`，

@@ -11,6 +11,11 @@ M_WorkProcessPhrase
 M_WorkProcessType
 CRM_Customer
 
+# 客戶相關資訊 (Customer / 舊 CustomerRelated)。來源：docs/modules/Customer/logic.md
+# 客戶「情報」的內容，唯一讀寫者是 CustomQueryApiController 的 GetCustomMemo / SetCustomMemo
+# （1.0 全站 grep 過，沒有第二個寫入者），跟 CRM_Customer 一樣是單一擁有者，已切連線。
+CRM_CustomerMemo
+
 # 訂單資料檢核 (OrderInfoVerify)。來源：docs/modules/OrderInfoVerify/logic.md
 COP_CheckRule
 COP_DepData

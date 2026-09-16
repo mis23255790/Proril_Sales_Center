@@ -12,9 +12,11 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 /// CRM_Customer 打 <see cref="scDb"/>（Proril_Sales_Center，已確認單一擁有者，
 /// 只有這支的 SaveCustom 在寫）；V_ERPCustomer 是唯讀 ERP 對照 view，
 /// 不在搬遷白名單裡，繼續留在 <c>db</c>（PRORIL_WEB）。
+///
+/// 客戶「情報」（CRM_CustomerMemo）的兩支端點在 CustomQueryApiController.Memo.cs。
 /// </summary>
 [Authorize]
-public class CustomQueryApiController : BaseApiController
+public partial class CustomQueryApiController : BaseApiController
 {
     public CustomQueryApiController(
         Proril.SalesIssue.Api.Data.ProrilWebDbContext db,
