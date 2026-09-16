@@ -3,7 +3,8 @@
  * 議題關鍵字（類別）維護。
  *
  * 對應舊系統 WorkProcess/KindMaintain。資料表是 M_WorkProcessPhrase，
- * 用 phraseType 分群：01 搜尋片語 / 02 流程類別 / 03 職能主題。
+ * 用 phraseType 分群：01 搜尋片語 / 02 流程類別 / 03 客戶別（DB 欄位仍叫職能主題，
+ * 只是畫面標籤跟著 docs/modules/SalesIssue/logic.md 講的實際用途改名）。
  */
 import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableColumn } from '@nuxt/ui'
@@ -27,7 +28,7 @@ const table = useTemplateRef('table')
 const PHRASE_TYPES: { code: string, name: string }[] = [
   { code: PHRASE_TYPE.PHRASE, name: '搜尋片語' },
   { code: PHRASE_TYPE.CATEGORY, name: '流程類別' },
-  { code: PHRASE_TYPE.JOB, name: '職能主題' }
+  { code: PHRASE_TYPE.JOB, name: '客戶別' }
 ]
 
 const activeType = ref<string>(PHRASE_TYPE.CATEGORY)
