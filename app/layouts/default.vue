@@ -119,7 +119,7 @@ const items = computed<NavigationMenuItem[][]>(() => [
       </template>
     </UDashboardSidebar>
 
-    <UDashboardPanel :ui="{ body: 'bg-white dark:bg-white' }">
+    <UDashboardPanel :ui="{ body: 'bg-white dark:bg-white min-h-0' }">
       <template #header>
         <UDashboardNavbar title="PRORIL 業務中心" :ui="{ root: 'bg-white dark:bg-white' }">
           <template #leading>

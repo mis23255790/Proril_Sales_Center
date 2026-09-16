@@ -41,6 +41,12 @@ const selectedCategoryCodes = ref<string[]>([])
 /** 已選的客戶別（customerNo），比照 1.0 可複選。 */
 const selectedCustomerNos = ref<string[]>([])
 
+/**
+ * 基本資料欄可左右收合成窄邊欄，讓進度紀錄拿到更多寬度；只在 xl 兩欄並排時有意義，
+ * 手機／平板單欄堆疊時欄位一律照常顯示（見 template 的 xl: 條件 class）。
+ */
+const basicInfoExpanded = ref(true)
+
 useSeoMeta({
   title: () => `${form.sopTitle || '新增議題'} · 業務議題 · PRORIL 業務中心`
 })
@@ -292,44 +298,69 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
 </script>
 
 <template>
-  <div class="pb-24">
+  <div class="flex flex-col pb-24 xl:h-full">
     <FullPageLoading :show="loading" />
 
-    <UBreadcrumb
-      :items="breadcrumbFor(appPath('sales-issue/issues'), isNew ? '新增議題' : `#${wpno}`)"
-      class="mb-4"
-    />
+    <div class="sticky top-0 z-20 mb-5 bg-white pb-2 dark:bg-white xl:shrink-0">
+      <UBreadcrumb
+        :items="breadcrumbFor(appPath('sales-issue/issues'), isNew ? '新增議題' : `#${wpno}`)"
+        class="mb-4"
+      />
 
-    <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div class="min-w-0">
-        <h1 class="truncate text-2xl font-bold text-highlighted">
-          {{ form.sopTitle || (isNew ? '新增議題' : `議題 #${wpno}`) }}
-        </h1>
-        <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
-          <span v-if="wpno !== NEW_ISSUE_WPNO">#{{ wpno }}</span>
-          <span v-if="issue?.userName">建立者 {{ issue.userName }}</span>
-          <span v-if="issue?.createTime">建立於 {{ toDateString(issue.createTime) }}</span>
-          <UBadge v-if="form.finFlag" color="success" variant="subtle" size="sm">
-            結案
-          </UBadge>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h1 class="truncate text-2xl font-bold text-highlighted">
+            {{ form.sopTitle || (isNew ? '新增議題' : `議題 #${wpno}`) }}
+          </h1>
+          <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
+            <span v-if="wpno !== NEW_ISSUE_WPNO">#{{ wpno }}</span>
+            <span v-if="issue?.userName">建立者 {{ issue.userName }}</span>
+            <span v-if="issue?.createTime">建立於 {{ toDateString(issue.createTime) }}</span>
+            <UBadge v-if="form.finFlag" color="success" variant="subtle" size="sm">
+              結案
+            </UBadge>
+          </div>
         </div>
-      </div>
 
-      <UButton icon="i-lucide-arrow-left" color="neutral" variant="outline" :to="appPath('sales-issue/issues')">
-        回議題列表
-      </UButton>
+        <UButton icon="i-lucide-arrow-left" color="neutral" variant="outline" :to="appPath('sales-issue/issues')">
+          回議題列表
+        </UButton>
+      </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-5 xl:grid-cols-3">
-      <!-- 基本資料 -->
-      <div class="xl:col-span-1">
+    <div class="flex flex-col gap-5 xl:min-h-0 xl:flex-1 xl:flex-row">
+      <!-- 基本資料：xl 可左右收合成窄邊欄，讓進度紀錄多拿一點寬度 -->
+      <div
+        class="xl:h-full xl:min-h-0 xl:shrink-0 xl:overflow-y-auto xl:transition-[width] xl:duration-200"
+        :class="basicInfoExpanded ? 'xl:w-[22rem]' : 'xl:w-16'"
+      >
         <div class="rounded-lg border border-default p-4">
-          <h2 class="mb-4 flex items-center gap-2 text-sm font-semibold text-highlighted">
-            <UIcon name="i-lucide-file-text" class="size-4 text-primary" />
-            基本資料
-          </h2>
+          <div
+            class="flex items-center gap-2 text-sm font-semibold text-highlighted"
+            :class="!basicInfoExpanded && 'xl:flex-col xl:gap-3'"
+          >
+            <div class="flex min-w-0 items-center gap-2" :class="!basicInfoExpanded && 'xl:hidden'">
+              <UIcon name="i-lucide-file-text" class="size-4 shrink-0 text-primary" />
+              <span class="truncate">基本資料</span>
+            </div>
+            <UIcon
+              v-if="!basicInfoExpanded"
+              name="i-lucide-file-text"
+              class="hidden size-4 shrink-0 text-primary xl:block"
+            />
+            <UButton
+              :icon="basicInfoExpanded ? 'i-lucide-panel-left-close' : 'i-lucide-panel-left-open'"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              class="hidden shrink-0 xl:inline-flex"
+              :class="basicInfoExpanded && 'ml-auto'"
+              :title="basicInfoExpanded ? '收合' : '展開'"
+              @click="basicInfoExpanded = !basicInfoExpanded"
+            />
+          </div>
 
-          <div class="flex flex-col gap-4">
+          <div class="mt-4 flex flex-col gap-4" :class="!basicInfoExpanded && 'xl:hidden'">
             <UFormField label="主題" required>
               <UInput v-model="form.sopTitle" placeholder="議題主題" class="w-full" />
             </UFormField>
@@ -381,8 +412,8 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
       </div>
 
       <!-- 進度時間軸 -->
-      <div class="xl:col-span-2">
-        <div class="mb-3 flex items-center justify-between gap-2">
+      <div class="min-w-0 xl:flex xl:h-full xl:min-h-0 xl:flex-1 xl:flex-col">
+        <div class="mb-3 flex items-center justify-between gap-2 xl:shrink-0">
           <h2 class="flex items-center gap-2 text-sm font-semibold text-highlighted">
             <UIcon name="i-lucide-history" class="size-4 text-primary" />
             進度紀錄
@@ -395,75 +426,77 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
           </UButton>
         </div>
 
-        <div v-if="!sortedDetails.length" class="flex flex-col items-center gap-2 rounded-lg border border-dashed border-default py-16 text-center">
-          <UIcon name="i-lucide-message-square-plus" class="size-8 text-dimmed" />
-          <p class="font-medium text-highlighted">
-            還沒有任何進度
-          </p>
-          <p class="text-sm text-muted">
-            新增第一則進度，記錄與客戶的往來內容。
-          </p>
-        </div>
+        <div class="xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+          <div v-if="!sortedDetails.length" class="flex flex-col items-center gap-2 rounded-lg border border-dashed border-default py-16 text-center">
+            <UIcon name="i-lucide-message-square-plus" class="size-8 text-dimmed" />
+            <p class="font-medium text-highlighted">
+              還沒有任何進度
+            </p>
+            <p class="text-sm text-muted">
+              新增第一則進度，記錄與客戶的往來內容。
+            </p>
+          </div>
 
-        <div v-else class="flex flex-col gap-3">
-          <div
-            v-for="detail in sortedDetails"
-            :key="detail.sno"
-            class="overflow-hidden rounded-lg border border-default"
-          >
-            <div class="flex flex-wrap items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2.5">
-              <UIcon name="i-lucide-calendar-days" class="size-4 shrink-0 text-primary" />
-              <span class="font-medium text-highlighted">
-                {{ detail.processCaption || `#${detail.sno}` }}
-              </span>
+          <div v-else class="flex flex-col gap-3">
+            <div
+              v-for="detail in sortedDetails"
+              :key="detail.sno"
+              class="overflow-hidden rounded-lg border border-default"
+            >
+              <div class="flex flex-wrap items-center gap-2 border-b border-default bg-elevated/40 px-4 py-2.5">
+                <UIcon name="i-lucide-calendar-days" class="size-4 shrink-0 text-primary" />
+                <span class="font-medium text-highlighted">
+                  {{ detail.processCaption || `#${detail.sno}` }}
+                </span>
 
-              <span class="ml-auto text-xs text-muted">
-                {{ detail.modifierName || detail.creatorName || '' }}
-                {{ toDateTimeString(detail.modiTime || detail.createTime) }}
-              </span>
+                <span class="ml-auto text-xs text-muted">
+                  {{ detail.modifierName || detail.creatorName || '' }}
+                  {{ toDateTimeString(detail.modiTime || detail.createTime) }}
+                </span>
 
-              <UButton
-                :icon="expanded[detail.sno] ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                :title="expanded[detail.sno] ? '收合' : '展開'"
-                @click="toggleExpanded(detail.sno)"
-              />
-              <UButton icon="i-lucide-pencil" color="primary" variant="ghost" size="xs" title="編輯" @click="editProgress(detail)" />
-              <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" title="刪除" @click="removeProgress(detail)" />
-            </div>
-
-            <div class="bg-white px-4 py-3">
-              <!-- 收合時裁掉高度並加漸層，讓使用者看得出來下面還有內容 -->
-              <div class="relative">
-                <IssueContentView
-                  :html="detail.processContent"
-                  :class="expanded[detail.sno] ? '' : 'max-h-40 overflow-hidden'"
-                  empty-text="（無內容）"
-                />
-                <button
-                  v-if="!expanded[detail.sno]"
-                  type="button"
-                  class="absolute inset-x-0 bottom-0 flex h-12 items-end justify-center bg-gradient-to-t from-white to-transparent pb-0.5 text-xs text-gray-500 hover:text-gray-800"
+                <UButton
+                  :icon="expanded[detail.sno] ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  :title="expanded[detail.sno] ? '收合' : '展開'"
                   @click="toggleExpanded(detail.sno)"
-                >
-                  展開全文
-                </button>
+                />
+                <UButton icon="i-lucide-pencil" color="primary" variant="ghost" size="xs" title="編輯" @click="editProgress(detail)" />
+                <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" title="刪除" @click="removeProgress(detail)" />
               </div>
 
-              <div v-if="attachmentsOf(detail).length" class="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
-                <UButton
-                  v-for="name in attachmentsOf(detail)"
-                  :key="name"
-                  icon="i-lucide-paperclip"
-                  color="neutral"
-                  variant="soft"
-                  size="xs"
-                  @click="downloadAttachment(detail, name)"
-                >
-                  {{ name }}
-                </UButton>
+              <div class="bg-white px-4 py-3">
+                <!-- 收合時裁掉高度並加漸層，讓使用者看得出來下面還有內容 -->
+                <div class="relative">
+                  <IssueContentView
+                    :html="detail.processContent"
+                    :class="expanded[detail.sno] ? '' : 'max-h-40 overflow-hidden'"
+                    empty-text="（無內容）"
+                  />
+                  <button
+                    v-if="!expanded[detail.sno]"
+                    type="button"
+                    class="absolute inset-x-0 bottom-0 flex h-12 items-end justify-center bg-gradient-to-t from-white to-transparent pb-0.5 text-xs text-gray-500 hover:text-gray-800"
+                    @click="toggleExpanded(detail.sno)"
+                  >
+                    展開全文
+                  </button>
+                </div>
+
+                <div v-if="attachmentsOf(detail).length" class="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+                  <UButton
+                    v-for="name in attachmentsOf(detail)"
+                    :key="name"
+                    icon="i-lucide-paperclip"
+                    color="neutral"
+                    variant="soft"
+                    size="xs"
+                    @click="downloadAttachment(detail, name)"
+                  >
+                    {{ name }}
+                  </UButton>
+                </div>
               </div>
             </div>
           </div>
