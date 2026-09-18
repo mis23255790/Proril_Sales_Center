@@ -38,20 +38,33 @@ public partial class WorkProcessApiController : BaseApiController
     /// <summary>
     /// 議題列表（編輯視角）。
     ///
-    /// startDate / endDate 保留在簽章上是為了相容前端既有呼叫，**目前不做任何事** ——
-    /// 1.0 在 2026-06-08 改成 order by 客戶別時就把這段過濾註解掉了。
-    /// 前端已改成自己對「最後修改時間」過濾。要恢復請一併更新前端的說明文字。
+    /// 2026-09-18 之前 startDate / endDate 雖然收但完全不做事（1.0 在 2026-06-08
+    /// 改成 order by 客戶別時把過濾註解掉，前端改成自己對「最後修改時間」過濾）。
+    /// 現在為了做後端分頁，日期區間與快速搜尋 (<paramref name="keyword"/>) 都改回
+    /// 後端過濾 —— 分頁的基準必須跟篩選條件一致，不然「切到第 2 頁」跟「篩日期」
+    /// 兩件事會互相打架。
+    ///
+    /// <paramref name="tab"/>：ongoing / finished / all（對應畫面的三個狀態頁籤），
+    /// 用來決定回傳哪個子集合，但三個頁籤各自的筆數 (Body2) 是以「篩選後、切頁籤前」
+    /// 的資料算出來的，不會因為目前選哪個頁籤而變動。
+    ///
+    /// <paramref name="pageIndex"/> 從 0 起算，<paramref name="pageSize"/> &lt;= 0
+    /// 代表不分頁（前端「全部」）。
     /// </summary>
     [HttpGet]
     public CustomApiViewModel GetSOPList_Edit(
         string? type2_phrase_name, string? type3_phrase_name,
         string? caption_name, string? content_name,
-        bool pub_only, string? startDate, string? endDate)
+        bool pub_only, string? startDate, string? endDate,
+        string? keyword = null, string? tab = null,
+        int pageIndex = 0, int pageSize = 20)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
 
         WriteStepLog(nameof(GetSOPList_Edit),
-            $"type2:{type2_phrase_name}, type3:{type3_phrase_name}, caption:{caption_name}, content:{content_name}, pub_only:{pub_only}");
+            $"type2:{type2_phrase_name}, type3:{type3_phrase_name}, caption:{caption_name}, content:{content_name}, "
+            + $"pub_only:{pub_only}, startDate:{startDate}, endDate:{endDate}, keyword:{keyword}, tab:{tab}, "
+            + $"pageIndex:{pageIndex}, pageSize:{pageSize}");
 
         var account = GetAccountByToken();
         var isAdmin = IsAdmin(account);
@@ -65,29 +78,87 @@ public partial class WorkProcessApiController : BaseApiController
         ca = GetSopListCore(type2_phrase_name, type3_phrase_name, caption_name, content_name, pub_only);
         if (!ca.IsSuccess) return ca;
 
-        if (isAdmin || isPublic) return ca;
-        if (ca.Body is not List<DWorkProcessesEx> sopList)
+        var sopList = ca.Body as List<DWorkProcessesEx> ?? new List<DWorkProcessesEx>();
+
+        if (!isAdmin && !isPublic)
         {
-            ca.IsSuccess = true;
+            // 逐議題的權限過濾：本人或全體帳號，且為「編輯」或「公開」層級
+            var permissions = scDb.DWorkProcessPermissions
+                .Where(p => p.EnableType == (byte)EWorkProcessPermission.Edit
+                         || p.EnableType == (byte)EWorkProcessPermission.Public)
+                .ToList()
+                .Where(p => (p.Account ?? "").Trim() == account
+                         || (p.Account ?? "").Trim() == PermissionConst.AccountForAll)
+                .Select(p => (p.Wpno ?? "").Trim())
+                .ToHashSet();
+
+            sopList = sopList
+                .Where(wp => permissions.Contains((wp.Wpno ?? "").Trim()))
+                .GroupBy(wp => wp.Wpno)
+                .Select(g => g.First())
+                .ToList();
+        }
+
+        // 最後修改起訖日：跟前端 rowTime 邏輯一致，沒有最後修改時間就退回建立時間
+        if (!string.IsNullOrWhiteSpace(startDate) && DateTime.TryParse(startDate, out var start))
+        {
+            sopList = sopList.Where(wp => (wp.LastModiTime ?? wp.ModiTime ?? wp.CreateTime) >= start.Date).ToList();
+        }
+        if (!string.IsNullOrWhiteSpace(endDate) && DateTime.TryParse(endDate, out var end))
+        {
+            var endExclusive = end.Date.AddDays(1);
+            sopList = sopList.Where(wp => (wp.LastModiTime ?? wp.ModiTime ?? wp.CreateTime) < endExclusive).ToList();
+        }
+
+        // 快速搜尋：涵蓋編號／主題／最新進度／人員／類別／客戶別，跟前端原本的欄位範圍一致
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var kw = keyword.Trim();
+            sopList = sopList.Where(wp =>
+                (wp.Wpno ?? "").Contains(kw)
+                || (wp.SopTitle ?? "").Contains(kw)
+                || (wp.ProcessCaption ?? "").Contains(kw)
+                || (wp.ProcessCaption2 ?? "").Contains(kw)
+                || (wp.UserName ?? "").Contains(kw)
+                || (wp.LastModifierName ?? "").Contains(kw)
+                || (wp.PhraseNameList ?? "").Contains(kw)
+                || (wp.CustomerName ?? "").Contains(kw)
+            ).ToList();
+        }
+
+        if (sopList.Count == 0)
+        {
+            ca.IsSuccess = false;
+            ca.Message = "查無工作流程項目資料!!!";
+            ca.Body = new List<DWorkProcessesEx>();
+            ca.Body2 = new SalesIssueListSummary();
             return ca;
         }
 
-        // 逐議題的權限過濾：本人或全體帳號，且為「編輯」或「公開」層級
-        var permissions = scDb.DWorkProcessPermissions
-            .Where(p => p.EnableType == (byte)EWorkProcessPermission.Edit
-                     || p.EnableType == (byte)EWorkProcessPermission.Public)
-            .ToList()
-            .Where(p => (p.Account ?? "").Trim() == account
-                     || (p.Account ?? "").Trim() == PermissionConst.AccountForAll)
-            .Select(p => (p.Wpno ?? "").Trim())
-            .ToHashSet();
+        var summary = new SalesIssueListSummary
+        {
+            OngoingCount = sopList.Count(wp => wp.FinFlag != true),
+            FinishedCount = sopList.Count(wp => wp.FinFlag == true),
+            AllCount = sopList.Count
+        };
 
-        ca.Body = sopList
-            .Where(wp => permissions.Contains((wp.Wpno ?? "").Trim()))
-            .GroupBy(wp => wp.Wpno)
-            .Select(g => g.First())
-            .ToList();
+        var tabFiltered = tab switch
+        {
+            "ongoing" => sopList.Where(wp => wp.FinFlag != true).ToList(),
+            "finished" => sopList.Where(wp => wp.FinFlag == true).ToList(),
+            _ => sopList
+        };
+        summary.TotalCount = tabFiltered.Count;
+
+        var ordered = tabFiltered.OrderByDescending(wp => wp.LastModiTime).ToList();
+        var paged = pageSize <= 0
+            ? ordered
+            : ordered.Skip(Math.Max(pageIndex, 0) * pageSize).Take(pageSize).ToList();
+
         ca.IsSuccess = true;
+        ca.Message = null;
+        ca.Body = paged;
+        ca.Body2 = summary;
         return ca;
     }
 

@@ -1,4 +1,44 @@
 <details>
+  <summary>版號2026.09.18.1000</summary>
+
+##### feat: 議題維護列表改後端分頁
+      GetSOPList_Edit 原本是後端一次撈全部（含權限過濾後的整包），前端拿到全量資料
+      用 UTable 的 getPaginationRowModel() 自己切頁；日期區間與快速搜尋更是純前端在
+      已載入的全量資料上過濾（後端那段過濾邏輯早被註解掉，見上面「查詢條件」章節）。
+      資料量成長後這個「後端全撈、前端切頁」的模式會讓每次查詢的網路傳輸量與瀏覽器
+      記憶體用量跟著全表大小線性增加，跟頁面上顯示多少筆完全脫鉤。
+
+      改成後端做 Skip/Take，但**維持既有查詢架構**（GetSopListCore 仍是全撈進記憶體、
+      LINQ to Objects 兜資料），只在回傳前切頁——資料庫負載沒有變小，只是網路傳輸量與
+      瀏覽器記憶體用量變小；真正做到 SQL 層級分頁是更大範圍的重寫，這次先不做。
+        - GetSOPList_Edit 新增 keyword / tab（ongoing|finished|all）/ pageIndex / pageSize，
+          日期區間與快速搜尋改回後端過濾（分頁的基準要跟篩選條件一致，
+          「後端只回第 2 頁」跟「前端只篩目前這批結果」是互斥的）。
+        - 新增 SalesIssueListSummary（body2）：三個狀態頁籤的筆數是「篩選後、
+          切頁籤前」算出來的，不會因為目前選哪個頁籤而變動；totalCount 才是目前
+          頁籤篩選後的筆數，前端拿來算分頁列的頁數。
+        - 前端 UTable 改成 manualPagination + rowCount，TablePaginationBar 加上
+          total prop（後端分頁時，getFilteredRowModel().rows.length 只會是當頁筆數，
+          不是總筆數）與每頁筆數選單（20 / 50 / 全部，PAGE_SIZE_OPTIONS /
+          ALL_PAGE_SIZE，app/utils/table.ts）。
+        - 副作用：表頭排序（點欄位標題）現在只在目前這一頁的資料內排序，不是全體
+          資料排序——後端已經把資料切頁，前端拿不到其他頁的內容可以排。
+
+      api/Models/ApiModels.cs
+      api/Controllers/SalesIssue/WorkProcessApiController.cs
+      app/types/api.ts
+      app/types/salesIssue.ts
+      app/composables/useSalesIssueApi.ts
+      app/utils/table.ts
+      app/components/common/TablePaginationBar.vue
+      app/pages/sales-center/sales-issue/issues/index.vue
+
+      驗證：瀏覽器手動測試（頁籤切換、每頁筆數 20/50/全部、換頁、關鍵字、日期區間、
+      清除條件）皆確認後端回傳的分頁與統計數字正確。
+
+</details>
+
+<details>
   <summary>版號2026.09.16.1500</summary>
 
 ##### feat: 客戶別改回單選（不再比照 1.0 複選）

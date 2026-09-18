@@ -4,6 +4,7 @@ import type {
   IssuePhraseLink,
   SalesIssue,
   SalesIssueDetail,
+  SalesIssueListSummary,
   WorkPhrase
 } from '~/types/salesIssue'
 import { DEFAULT_VER_NO } from '~/types/salesIssue'
@@ -20,15 +21,20 @@ export const SALES_ISSUE_FUNCTION_NO = '0070102'
 export const useSalesIssueApi = () => {
   const { apiFetch } = useApi()
 
-  const get = <T>(path: string, params?: Record<string, any>) =>
-    apiFetch<ApiResponse<T>>(path, { params })
+  const get = <T, B2 = any>(path: string, params?: Record<string, any>) =>
+    apiFetch<ApiResponse<T, B2>>(path, { params })
 
   const post = <T>(path: string, params?: Record<string, any>) =>
     apiFetch<ApiResponse<T>>(path, { method: 'POST', params })
 
   // ---------------------------------------------------------------- 議題列表
 
-  /** 議題列表（編輯視角，後端會做權限過濾）。空字串 = 不篩選。 */
+  /**
+   * 議題列表（編輯視角，後端會做權限過濾）。空字串 = 不篩選。
+   *
+   * 分頁、日期區間、快速搜尋都是後端做的（2026-09-18 起），三個狀態頁籤的筆數
+   * 在回傳的 body2（SalesIssueListSummary）。pageSize <= 0 代表不分頁，一次拿全部。
+   */
   const getIssueList = (filter: {
     category?: string
     customer?: string
@@ -37,15 +43,23 @@ export const useSalesIssueApi = () => {
     startDate?: string
     endDate?: string
     pubOnly?: boolean
+    keyword?: string
+    tab?: 'ongoing' | 'finished' | 'all'
+    pageIndex?: number
+    pageSize?: number
   } = {}) =>
-    get<SalesIssue[]>('/WorkProcessApi/GetSOPList_Edit', {
+    get<SalesIssue[], SalesIssueListSummary>('/WorkProcessApi/GetSOPList_Edit', {
       type2_phrase_name: filter.category ?? '',
       type3_phrase_name: filter.customer ?? '',
       caption_name: filter.caption ?? '',
       content_name: filter.content ?? '',
       pub_only: filter.pubOnly ?? false,
       startDate: filter.startDate ?? '',
-      endDate: filter.endDate ?? ''
+      endDate: filter.endDate ?? '',
+      keyword: filter.keyword ?? '',
+      tab: filter.tab ?? 'all',
+      pageIndex: filter.pageIndex ?? 0,
+      pageSize: filter.pageSize ?? 20
     })
 
   /**

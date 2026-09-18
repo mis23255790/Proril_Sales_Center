@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { h } from 'vue'
+import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableColumn } from '@nuxt/ui'
 import type { UnfinOrderQuery } from '~/composables/useSalesOrderUnfinishApi'
 import type { UnfinOrder, UnfinOrderRow } from '~/types/salesOrderUnfinish'
@@ -15,6 +16,8 @@ const api = useSalesOrderUnfinishApi()
 const { checkLinkTypePermission } = usePermission()
 const toast = useToast()
 const { breadcrumbFor, appPath } = useAppNavigation()
+const { pagination } = useTablePagination(20)
+const table = useTemplateRef('table')
 
 /** 90 天內資料，對照舊版 UI_InitQueryDate(..., 90)。 */
 const DEFAULT_DAYS = 90
@@ -119,6 +122,7 @@ const load = async () => {
     // 查無資料時後端回 isSuccess: false + 說明訊息，不是錯誤，當空清單處理。
     productRows.value = productRes?.isSuccess ? (productRes.body ?? []) : []
     soRows.value = soRes?.isSuccess ? (soRes.body ?? []) : []
+    pagination.value.pageIndex = 0
 
     if (productRes && !productRes.isSuccess && productRes.message) {
       toast.add({ title: '品號查詢無資料', description: productRes.message, color: 'warning' })
@@ -189,6 +193,11 @@ const onExport = async () => {
 // ---------------------------------------------------------------- 頁籤
 
 const activeTab = ref<'productDetail' | 'productGroup' | 'soDetail' | 'soGroup'>('productDetail')
+
+// 換頁籤時回到第一頁，否則在第 3 頁切到只有 1 頁的頁籤會看到空白表格。
+watch(activeTab, () => {
+  pagination.value.pageIndex = 0
+})
 
 const tabItems = [
   { label: '品號細項', value: 'productDetail', icon: 'i-lucide-list' },
@@ -532,6 +541,9 @@ const openSoDetail = async (row: UnfinOrderRow) => {
     <div class="overflow-x-auto rounded-lg border border-default">
       <UTable
         v-if="activeTab === 'productDetail'"
+        ref="table"
+        v-model:pagination="pagination"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
         :data="productDetailRows"
         :columns="productDetailColumns"
         :loading="loading"
@@ -546,6 +558,9 @@ const openSoDetail = async (row: UnfinOrderRow) => {
 
       <UTable
         v-else-if="activeTab === 'productGroup'"
+        ref="table"
+        v-model:pagination="pagination"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
         :data="productGroupRows"
         :columns="productGroupColumns"
         :loading="loading"
@@ -565,6 +580,9 @@ const openSoDetail = async (row: UnfinOrderRow) => {
 
       <UTable
         v-else-if="activeTab === 'soDetail'"
+        ref="table"
+        v-model:pagination="pagination"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
         :data="soDetailRows"
         :columns="soDetailColumns"
         :loading="loading"
@@ -579,6 +597,9 @@ const openSoDetail = async (row: UnfinOrderRow) => {
 
       <UTable
         v-else
+        ref="table"
+        v-model:pagination="pagination"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
         :data="soGroupRows"
         :columns="soGroupColumns"
         :loading="loading"
@@ -595,6 +616,8 @@ const openSoDetail = async (row: UnfinOrderRow) => {
           </p>
         </template>
       </UTable>
+
+      <TablePaginationBar :table="table" />
     </div>
 
     <QueryDetailModal

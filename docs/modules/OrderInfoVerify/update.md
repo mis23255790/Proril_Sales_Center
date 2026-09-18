@@ -1,4 +1,46 @@
 <details>
+  <summary>版號2026.09.18.1200</summary>
+
+##### feat: 訂單資料檢核列表改後端分頁
+      GetPOCheckView 原本是後端一次撈全部（V_POList join 品號明細後攤平），前端拿到全量
+      資料用 UTable 的 getPaginationRowModel() 自己切頁；兩個頁籤（未確認/已確認）也是
+      前端對全量 groups 用 confirmFlag 分兩組，沒有送到後端。已確認訂單這邊資料量上看
+      五千筆，每次查詢都要整包傳到瀏覽器，跟畫面實際顯示 20 筆完全脫鉤。
+
+      改成後端做 Skip/Take，但**分頁的單位是「訂單」，不是攤平後的品號明細列**——
+      GetPOCheckView 回傳的資料形狀不變（一個品號一列，同一張訂單重複表頭），
+      但 Skip/Take 是對 V_POList（一列一張訂單）在 join 品號明細**之前**做，不然同一張
+      訂單的品號會被切頁切散到不同頁。獨立出 GetFilteredOrders() 做訂單層級的篩選
+      （copSource/orderType/orderNo/customerNo/日期區間），GetPOCheckView 與
+      GetOrderInfoList（ExportXls 共用的查詢核心）共用這份「篩選後、切頁籤前」的訂單清單，
+      不用各自重撈一次 V_POList（這支查詢因為走 ERP linked server，實測要價 3~4 秒）。
+        - GetPOCheckView 新增 tab（notChecked|checked）/ pageIndex / pageSize；
+          不傳（明細 modal 的用法）就不篩、不分頁，回傳該訂單全部品號列，明細 modal
+          （OrderCheckDetailModal）完全不用改，行為不受影響。
+        - 新增 OrderInfoVerifySummary（body2）：兩個頁籤的訂單數是「篩選後、切頁籤前」
+          算出來的，不會因為目前選哪個頁籤而變動；totalCount 才是目前頁籤篩選後的訂單數，
+          前端拿來算分頁列的頁數，順便在頁籤按鈕上加了筆數徽章（原本沒有）。
+        - 前端 groupOrderInfoVerifyRows() 完全不用改——後端已經把資料範圍縮小到當頁的
+          訂單，前端照舊把攤平列 group 成一列一張訂單即可，不需要跟著大改。
+        - ExportXls／GetOrderInfoList 的既有呼叫（不分頁、匯出全部）不受影響，
+          pageIndex/pageSize/preFilteredOrders 都是新增的可選參數，預設值等於原本行為。
+        - 前端 UTable 改成 manualPagination + rowCount，比照業務議題列表
+          （見 SalesIssue/update.md 同一天的條目）沿用同一組 TablePaginationBar
+          （every-page 筆數選單 20/50/全部）與 onPaginationUpdate 寫法。
+
+      api/Models/ApiModels.cs
+      api/Controllers/SalesSearch/OrderInfoVerifyApiController.cs
+      app/types/orderInfoVerify.ts
+      app/composables/useOrderInfoVerifyApi.ts
+      app/pages/sales-center/sales-search/order-info-verify.vue
+
+      驗證：瀏覽器手動測試（頁籤切換、換頁、明細 modal 重新查詢）皆確認後端回傳的
+      分頁與統計數字正確，未確認/已確認訂單數與畫面徽章一致，明細 modal 打的
+      GetPOCheckView 請求 tab/pageSize 皆為空／0，資料未被截斷。
+
+</details>
+
+<details>
   <summary>版號2026.09.14.2100</summary>
 
 ##### feat(app): 表格整列可點擊進編輯畫面

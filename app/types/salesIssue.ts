@@ -75,6 +75,18 @@ export interface SalesIssueRow extends SalesIssue {
   customers: string[]
 }
 
+/**
+ * GetSOPList_Edit 分頁後的統計，對應後端 body2 (SalesIssueListSummary)。
+ * ongoing/finished/all 三個數字是「篩選後、切頁籤前」算出來的，不會因為目前選哪個頁籤而變動；
+ * totalCount 才是目前頁籤篩選後的筆數，用來算分頁列的總頁數。
+ */
+export interface SalesIssueListSummary {
+  totalCount: number
+  ongoingCount: number
+  finishedCount: number
+  allCount: number
+}
+
 /** D_WorkProcessDetail：議題底下的一則進度。 */
 export interface SalesIssueDetail {
   id: number

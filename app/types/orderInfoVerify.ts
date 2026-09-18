@@ -221,6 +221,18 @@ export interface CreditInfo {
   信用餘額: number
 }
 
+/**
+ * GetPOCheckView 分頁後的統計，對應後端 body2（OrderInfoVerifySummary）。
+ * 分頁的單位是「訂單」，不是攤平後的品號明細列。notCheckedCount/checkedCount 是
+ * 「篩選後、切頁籤前」以訂單數計算，不會因為目前選哪個頁籤而變動；totalCount 才是
+ * 目前頁籤篩選後的訂單數，用來算分頁列的總頁數。
+ */
+export interface OrderInfoVerifySummary {
+  totalCount: number
+  notCheckedCount: number
+  checkedCount: number
+}
+
 /** 依訂單分組後的一列，主表格顯示用。 */
 export interface OrderInfoVerifyGroup {
   key: string

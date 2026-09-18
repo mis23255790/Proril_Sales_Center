@@ -1,6 +1,6 @@
 import type { ApiResponse } from '~/types/api'
 import type { SalesShippingCustomer } from '~/types/salesShipping'
-import type { CopCheckRule, CreditInfo, OrderInfoVerifyRow } from '~/types/orderInfoVerify'
+import type { CopCheckRule, CreditInfo, OrderInfoVerifyRow, OrderInfoVerifySummary } from '~/types/orderInfoVerify'
 
 export type OrderInfoVerifyQuery = {
   copSource?: string
@@ -10,6 +10,12 @@ export type OrderInfoVerifyQuery = {
   /** YYYYMMDD，見 toCompactDate() */
   startDate?: string
   endDate?: string
+  /** 對應畫面的兩個頁籤，換算成後端的 ConfirmFlag N/Y。不傳（明細 modal 的用法）就不篩。 */
+  tab?: 'notChecked' | 'checked'
+  /** 0 起算。不傳時 toParams 會補 0，配合 pageSize 不傳（=0）＝不分頁，明細 modal 靠這個拿到單一訂單的完整品號清單。 */
+  pageIndex?: number
+  /** <= 0 代表不分頁。 */
+  pageSize?: number
 }
 
 /**
@@ -21,8 +27,8 @@ export type OrderInfoVerifyQuery = {
 export const useOrderInfoVerifyApi = () => {
   const { apiFetch } = useApi()
 
-  const get = <T>(path: string, params?: Record<string, any>) =>
-    apiFetch<ApiResponse<T>>(path, { params })
+  const get = <T, B2 = any>(path: string, params?: Record<string, any>) =>
+    apiFetch<ApiResponse<T, B2>>(path, { params })
 
   const toParams = (q: OrderInfoVerifyQuery) => ({
     copSource: q.copSource ?? '',
@@ -33,9 +39,20 @@ export const useOrderInfoVerifyApi = () => {
     endDate: q.endDate ?? ''
   })
 
-  /** 主查詢：訂單 + 明細 + 檢核狀態的攤平清單。 */
+  /**
+   * 主查詢：訂單 + 明細 + 檢核狀態的攤平清單。
+   *
+   * 分頁的單位是「訂單」，不是攤平後的品號明細列——tab/pageIndex/pageSize 不傳
+   * （明細 modal 的用法）就是不分頁，拿到單一訂單的完整品號清單。三個統計數字
+   * （目前頁籤筆數 + 兩個頁籤各自的訂單數）在 body2。
+   */
   const getPOCheckView = (query: OrderInfoVerifyQuery) =>
-    get<OrderInfoVerifyRow[]>('/OrderInfoVerifyApi/GetPOCheckView', toParams(query))
+    get<OrderInfoVerifyRow[], OrderInfoVerifySummary>('/OrderInfoVerifyApi/GetPOCheckView', {
+      ...toParams(query),
+      tab: query.tab ?? '',
+      pageIndex: query.pageIndex ?? 0,
+      pageSize: query.pageSize ?? 0
+    })
 
   /** 「檢核條件」說明清單。 */
   const getConditionList = () =>

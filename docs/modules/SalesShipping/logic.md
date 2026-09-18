@@ -132,6 +132,20 @@ usePermission().checkLinkTypePermission(410, 100)
 > 點進明細永遠看得到金額 —— 這是舊畫面的權限漏洞。2.0 統一用同一個 `showAmount`
 > 旗標控制外層四個頁籤與兩個 modal，明細 modal 也會照樣隱藏金額欄位。
 
+# 分頁（2026-09-18 起）：前端分頁，不是後端
+
+跟業務議題／訂單資料檢核不同，這裡**刻意不做後端分頁**：`prc_QuerySalesOrder(_1)`
+一開始就會執行 `prc_ImportSalesOrder` 從 ERP linked server 同步資料，是有副作用、
+逾時設 120 秒的重操作，不是單純的資料庫查詢。如果「切頁就打新的 API」，代表每次翻頁
+都要重新觸發一次 ERP 同步，成本跟前兩個模組的 EF 查詢完全不同量級。
+
+所以維持現行架構：SP 只在使用者按「查詢／全部／重設」或在篩選欄位按 Enter 時打一次
+（`load()` 用 `Promise.all` 打 `GetSalesOrder` + `GetSalesOrder_1` 兩次，跟改動前一樣），
+四個頁籤改成**前端** `getPaginationRowModel()` 分頁（`useTablePagination` +
+`TablePaginationBar`，每頁 20/50/全部），切頁與切頁籤都不會發新的網路請求，
+不會重複觸發 SP。`app/utils/table.ts` 的 `ALL_PAGE_SIZE`／`PAGE_SIZE_OPTIONS`
+與業務議題／訂單資料檢核共用同一組。
+
 # 查詢條件：哪些真的送到後端
 
 | 條件 | 誰處理 |

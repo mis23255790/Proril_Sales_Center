@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { h, resolveComponent } from 'vue'
-import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableColumn } from '@nuxt/ui'
-import type { CopCheckRule, OrderInfoVerifyGroup } from '~/types/orderInfoVerify'
+import type { CopCheckRule, OrderInfoVerifyGroup, OrderInfoVerifySummary } from '~/types/orderInfoVerify'
 import { ORDER_INFO_VERIFY_AMOUNT_LINK_TYPE, ORDER_INFO_VERIFY_FUNCTION_NO } from '~/types/orderInfoVerify'
 import type { SalesShippingCustomer } from '~/types/salesShipping'
 import { chkBadgeColor, chkBadgeLabel, feFinChk, groupOrderInfoVerifyRows } from '~/utils/orderInfoVerify'
@@ -71,9 +70,11 @@ const loadPermission = async () => {
 
 const groups = ref<OrderInfoVerifyGroup[]>([])
 
-const notCheckedGroups = computed(() => groups.value.filter(g => g.confirmFlag !== 'Y'))
-const checkedGroups = computed(() => groups.value.filter(g => g.confirmFlag === 'Y'))
+const EMPTY_SUMMARY: OrderInfoVerifySummary = { totalCount: 0, notCheckedCount: 0, checkedCount: 0 }
+/** 兩個頁籤各自的訂單數 + 目前頁籤篩選後的總筆數，後端算好放在 body2。 */
+const summary = ref<OrderInfoVerifySummary>({ ...EMPTY_SUMMARY })
 
+/** 送出目前的篩選條件、頁籤、分頁狀態，實際打 API 的唯一入口。 */
 const load = async () => {
   loading.value = true
   try {
@@ -81,20 +82,31 @@ const load = async () => {
       customerNo: filters.customerNo,
       orderType: filters.orderType.trim(),
       startDate: toCompactDate(filters.startDate),
-      endDate: toCompactDate(filters.endDate)
+      endDate: toCompactDate(filters.endDate),
+      tab: activeTab.value,
+      pageIndex: pagination.value.pageIndex,
+      // ALL_PAGE_SIZE 是前端「全部」選項的哨兵值，後端用 pageSize <= 0 代表不分頁
+      pageSize: pagination.value.pageSize >= ALL_PAGE_SIZE ? 0 : pagination.value.pageSize
     })
     groups.value = res?.isSuccess ? groupOrderInfoVerifyRows(res.body ?? []) : []
-    pagination.value.pageIndex = 0
+    summary.value = res?.body2 ?? { ...EMPTY_SUMMARY }
     if (res && !res.isSuccess && res.message) {
       toast.add({ title: '查無資料', description: res.message, color: 'warning' })
     }
   } catch (err) {
     console.log('order-info-verify load failed -->', err)
     groups.value = []
+    summary.value = { ...EMPTY_SUMMARY }
     toast.add({ title: '查詢失敗', color: 'error' })
   } finally {
     loading.value = false
   }
+}
+
+/** 篩選條件變更：跳回第一頁再查詢。分頁列自己翻頁則不會經過這裡，見 onPaginationUpdate。 */
+const search = () => {
+  pagination.value.pageIndex = 0
+  load()
 }
 
 onMounted(() => {
@@ -109,6 +121,18 @@ const onClickReset = () => {
   filters.orderType = ''
   filters.startDate = ''
   filters.endDate = ''
+  search()
+}
+
+/**
+ * UTable 分頁狀態變更的唯一入口（翻頁、切每頁筆數）。
+ * 不用 v-model:pagination + watch，是為了避免「篩選條件改變時順手把 pageIndex
+ * 歸零」又觸發一次 watch，多打一次一模一樣的 API。
+ */
+const onPaginationUpdate = (value?: { pageIndex: number, pageSize: number }) => {
+  if (!value) return
+  const sizeChanged = value.pageSize !== pagination.value.pageSize
+  pagination.value = sizeChanged ? { pageIndex: 0, pageSize: value.pageSize } : value
   load()
 }
 
@@ -140,7 +164,11 @@ const onExport = async (confirmFlag: 'Y' | 'N') => {
 // ---------------------------------------------------------------- 頁籤
 
 const activeTab = ref<'notChecked' | 'checked'>('notChecked')
-watch(activeTab, () => { pagination.value.pageIndex = 0 })
+
+const selectTab = (value: 'notChecked' | 'checked') => {
+  activeTab.value = value
+  search()
+}
 
 // ---------------------------------------------------------------- 欄位定義
 
@@ -266,7 +294,7 @@ const loadConditions = async () => {
     <div class="mb-4 rounded-lg border border-default bg-elevated/40 p-4">
       <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UFormField label="訂單單別" size="sm">
-          <UInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="load" />
+          <UInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="客戶別" size="sm">
@@ -293,7 +321,7 @@ const loadConditions = async () => {
         <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
           重設
         </UButton>
-        <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="load">
+        <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
           查詢
         </UButton>
       </div>
@@ -307,18 +335,24 @@ const loadConditions = async () => {
           :color="activeTab === 'notChecked' ? 'primary' : 'neutral'"
           :variant="activeTab === 'notChecked' ? 'solid' : 'outline'"
           size="sm"
-          @click="activeTab = 'notChecked'"
+          @click="selectTab('notChecked')"
         >
           未確認訂單
+          <UBadge :color="activeTab === 'notChecked' ? 'neutral' : 'primary'" variant="subtle" size="sm">
+            {{ summary.notCheckedCount }}
+          </UBadge>
         </UButton>
         <UButton
           icon="i-lucide-check-circle"
           :color="activeTab === 'checked' ? 'primary' : 'neutral'"
           :variant="activeTab === 'checked' ? 'solid' : 'outline'"
           size="sm"
-          @click="activeTab = 'checked'"
+          @click="selectTab('checked')"
         >
           已確認訂單
+          <UBadge :color="activeTab === 'checked' ? 'neutral' : 'primary'" variant="subtle" size="sm">
+            {{ summary.checkedCount }}
+          </UBadge>
         </UButton>
       </div>
       <UButton
@@ -333,12 +367,13 @@ const loadConditions = async () => {
     <div class="overflow-x-auto rounded-lg border border-default">
       <UTable
         ref="table"
-        v-model:pagination="pagination"
-        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-        :data="activeTab === 'notChecked' ? notCheckedGroups : checkedGroups"
+        :pagination="pagination"
+        :pagination-options="{ manualPagination: true, rowCount: summary.totalCount }"
+        :data="groups"
         :columns="columns"
         :loading="loading"
         :ui="{ tr: clickableRowTr, td: 'whitespace-nowrap' }"
+        @update:pagination="onPaginationUpdate"
         @select="(_e: Event, row: any) => openDetail(row.original)"
       >
         <template #actions-cell="{ row }">
@@ -355,7 +390,7 @@ const loadConditions = async () => {
         </template>
       </UTable>
 
-      <TablePaginationBar :table="table" />
+      <TablePaginationBar :table="table" :total="summary.totalCount" />
     </div>
 
     <OrderCheckDetailModal

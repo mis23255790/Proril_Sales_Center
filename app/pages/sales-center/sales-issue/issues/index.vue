@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableColumn } from '@nuxt/ui'
-import type { CrmCustomer, SalesIssueRow, WorkPhrase } from '~/types/salesIssue'
+import type { CrmCustomer, SalesIssueListSummary, SalesIssueRow, WorkPhrase } from '~/types/salesIssue'
 import { PHRASE_TYPE } from '~/types/salesIssue'
 import ConfirmDialog from '~/components/common/ConfirmDialog.vue'
 
@@ -21,22 +20,19 @@ const rows = ref<SalesIssueRow[]>([])
 const categories = ref<WorkPhrase[]>([])
 const customers = ref<CrmCustomer[]>([])
 
-/** 後端可以過濾的條件。改這些要重新查詢。 */
+const EMPTY_SUMMARY: SalesIssueListSummary = { totalCount: 0, ongoingCount: 0, finishedCount: 0, allCount: 0 }
+/** 三個狀態頁籤的筆數 + 目前頁籤篩選後的總筆數，後端算好放在 body2。 */
+const summary = ref<SalesIssueListSummary>({ ...EMPTY_SUMMARY })
+
+/**
+ * 查詢條件，全部都是後端過濾（含日期區間與快速搜尋，2026-09-18 起改回後端做，
+ * 分頁才有正確的基準——分頁跟「只篩前端目前結果」是互斥的）。改這些要重新查詢並跳回第一頁。
+ */
 const filters = reactive({
   category: '',
   customer: '',
   caption: '',
-  content: ''
-})
-
-/**
- * 前端才過濾的條件。
- *
- * 編輯期間：GetSOPList_Edit 雖然收 startDate / endDate，但後端那段
- * 過濾邏輯整段被註解掉了，傳上去等於沒作用 —— 所以改成在前端對
- * 最後修改時間過濾，使用者看到的行為才跟欄位名稱一致。
- */
-const localFilters = reactive({
+  content: '',
   keyword: '',
   startDate: '',
   endDate: ''
@@ -44,18 +40,50 @@ const localFilters = reactive({
 
 const activeTab = ref<'ongoing' | 'finished' | 'all'>('ongoing')
 
+/** 送出目前的篩選條件、頁籤、分頁狀態，實際打 API 的唯一入口。 */
 const load = async () => {
   loading.value = true
   try {
-    const res = await api.getIssueList(filters)
+    const res = await api.getIssueList({
+      ...filters,
+      tab: activeTab.value,
+      pageIndex: pagination.value.pageIndex,
+      // ALL_PAGE_SIZE 是前端「全部」選項的哨兵值，後端用 pageSize <= 0 代表不分頁
+      pageSize: pagination.value.pageSize >= ALL_PAGE_SIZE ? 0 : pagination.value.pageSize
+    })
     // 查無資料時後端回 isSuccess: false + 說明訊息，不是錯誤，不要跳 toast。
     rows.value = res?.isSuccess ? (res.body ?? []).map(toIssueRow) : []
+    summary.value = res?.body2 ?? { ...EMPTY_SUMMARY }
   } catch (err) {
     console.log('issues load failed -->', err)
     rows.value = []
+    summary.value = { ...EMPTY_SUMMARY }
   } finally {
     loading.value = false
   }
+}
+
+/** 篩選條件變更：跳回第一頁再查詢。分頁列自己翻頁則不會經過這裡，見 onPaginationUpdate。 */
+const search = () => {
+  pagination.value.pageIndex = 0
+  load()
+}
+
+const selectTab = (value: 'ongoing' | 'finished' | 'all') => {
+  activeTab.value = value
+  search()
+}
+
+/**
+ * UTable 分頁狀態變更的唯一入口（翻頁、切每頁筆數）。
+ * 不用 v-model:pagination + watch，是為了避免「篩選條件改變時順手把 pageIndex
+ * 歸零」又觸發一次 watch，多打一次一模一樣的 API。
+ */
+const onPaginationUpdate = (value?: { pageIndex: number, pageSize: number }) => {
+  if (!value) return
+  const sizeChanged = value.pageSize !== pagination.value.pageSize
+  pagination.value = sizeChanged ? { pageIndex: 0, pageSize: value.pageSize } : value
+  load()
 }
 
 const loadCategories = async () => {
@@ -126,58 +154,31 @@ const resetFilters = () => {
   filters.customer = ''
   filters.caption = ''
   filters.content = ''
-  localFilters.keyword = ''
-  localFilters.startDate = ''
-  localFilters.endDate = ''
-  load()
+  filters.keyword = ''
+  filters.startDate = ''
+  filters.endDate = ''
+  search()
 }
 
 const activeFilterCount = computed(() =>
   [filters.category, filters.customer, filters.caption, filters.content,
-    localFilters.keyword, localFilters.startDate, localFilters.endDate]
+    filters.keyword, filters.startDate, filters.endDate]
     .filter(Boolean).length
 )
 
-/** 用「最後修改時間」比對，沒有的話退回建立時間。 */
+/** 用「最後修改時間」比對，沒有的話退回建立時間，純顯示格式化用（篩選已經是後端做的）。 */
 const rowTime = (row: SalesIssueRow) => row.lastModiTime || row.modiTime || row.createTime || ''
 
-const dateFiltered = computed(() => {
-  const keyword = localFilters.keyword.trim().toLowerCase()
-
-  return rows.value.filter((row) => {
-    const date = toDateString(rowTime(row))
-    if (localFilters.startDate && date && date < localFilters.startDate) return false
-    if (localFilters.endDate && date && date > localFilters.endDate) return false
-
-    if (!keyword) return true
-    const haystack = [
-      row.wpno, row.sopTitle, row.descript, row.userName,
-      row.lastModifierName, ...row.categories, ...row.customers
-    ].join(' ').toLowerCase()
-    return haystack.includes(keyword)
-  })
-})
-
-const ongoing = computed(() => dateFiltered.value.filter(r => !r.finFlag))
-const finished = computed(() => dateFiltered.value.filter(r => r.finFlag))
-
-const visibleRows = computed(() => {
-  if (activeTab.value === 'ongoing') return ongoing.value
-  if (activeTab.value === 'finished') return finished.value
-  return dateFiltered.value
-})
-
 const tabItems = computed(() => [
-  { label: '進行中', value: 'ongoing', icon: 'i-lucide-circle-dot', count: ongoing.value.length },
-  { label: '結案', value: 'finished', icon: 'i-lucide-circle-check', count: finished.value.length },
-  { label: '全部', value: 'all', icon: 'i-lucide-list', count: dateFiltered.value.length }
+  { label: '進行中', value: 'ongoing', icon: 'i-lucide-circle-dot', count: summary.value.ongoingCount },
+  { label: '結案', value: 'finished', icon: 'i-lucide-circle-check', count: summary.value.finishedCount },
+  { label: '全部', value: 'all', icon: 'i-lucide-list', count: summary.value.allCount }
 ])
 
-// 換頁籤時回到第一頁，否則在第 3 頁切到只有 1 頁的頁籤會看到空白表格。
-watch(activeTab, () => {
-  pagination.value.pageIndex = 0
-})
-
+/**
+ * 表頭排序只在「目前這一頁」的資料內排序，不是全體資料排序 —— 後端已經把資料切頁，
+ * 前端拿不到其他頁的內容可以排。要做到全體排序得讓後端也收排序欄位，目前先不做。
+ */
 const sorting = ref([{ id: 'lastModiTime', desc: true }])
 
 /**
@@ -272,7 +273,7 @@ const removeIssue = async (row: SalesIssueRow) => {
             label-key="label"
             placeholder="全部類別"
             class="w-full"
-            @update:model-value="load"
+            @update:model-value="search"
           />
         </UFormField>
 
@@ -284,39 +285,40 @@ const removeIssue = async (row: SalesIssueRow) => {
             label-key="label"
             placeholder="全部客戶"
             class="w-full"
-            @update:model-value="load"
+            @update:model-value="search"
           />
         </UFormField>
 
         <UFormField label="標題 / 大綱關鍵字" size="sm">
-          <UInput v-model="filters.caption" placeholder="議題主題或內容說明" class="w-full" @keyup.enter="load" />
+          <UInput v-model="filters.caption" placeholder="議題主題或內容說明" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="內文關鍵字" size="sm">
-          <UInput v-model="filters.content" placeholder="進度內文" class="w-full" @keyup.enter="load" />
+          <UInput v-model="filters.content" placeholder="進度內文" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="最後修改（起）" size="sm">
-          <UInput v-model="localFilters.startDate" type="date" class="w-full" />
+          <UInput v-model="filters.startDate" type="date" class="w-full" @change="search" />
         </UFormField>
 
         <UFormField label="最後修改（迄）" size="sm">
-          <UInput v-model="localFilters.endDate" type="date" class="w-full" />
+          <UInput v-model="filters.endDate" type="date" class="w-full" @change="search" />
         </UFormField>
 
         <UFormField label="快速搜尋" size="sm" class="xl:col-span-2">
           <UInput
-            v-model="localFilters.keyword"
+            v-model="filters.keyword"
             icon="i-lucide-search"
-            placeholder="在目前結果中搜尋編號 / 主題 / 進度 / 人員"
+            placeholder="搜尋編號 / 主題 / 進度 / 人員 / 類別 / 客戶別"
             class="w-full"
+            @keyup.enter="search"
           />
         </UFormField>
       </div>
 
       <div class="mt-3 flex items-center justify-between gap-2">
         <p class="text-xs text-muted">
-          類別、客戶別、關鍵字會重新向後端查詢；日期與快速搜尋只篩選目前結果。
+          所有查詢條件都會重新向後端查詢；三個狀態頁籤的筆數也是後端算好的。
         </p>
         <div class="flex items-center gap-2">
           <UButton
@@ -329,7 +331,7 @@ const removeIssue = async (row: SalesIssueRow) => {
           >
             清除條件 ({{ activeFilterCount }})
           </UButton>
-          <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="load">
+          <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
             查詢
           </UButton>
         </div>
@@ -345,7 +347,7 @@ const removeIssue = async (row: SalesIssueRow) => {
         :color="activeTab === tab.value ? 'primary' : 'neutral'"
         :variant="activeTab === tab.value ? 'solid' : 'outline'"
         size="sm"
-        @click="activeTab = tab.value as typeof activeTab"
+        @click="selectTab(tab.value as typeof activeTab)"
       >
         {{ tab.label }}
         <UBadge :color="activeTab === tab.value ? 'neutral' : 'primary'" variant="subtle" size="sm">
@@ -357,13 +359,14 @@ const removeIssue = async (row: SalesIssueRow) => {
     <div class="overflow-hidden rounded-lg border border-default">
       <UTable
         ref="table"
-        v-model:pagination="pagination"
+        :pagination="pagination"
         v-model:sorting="sorting"
-        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-        :data="visibleRows"
+        :pagination-options="{ manualPagination: true, rowCount: summary.totalCount }"
+        :data="rows"
         :columns="columns"
         :loading="loading"
         :ui="{ tr: clickableRowTr, td: 'align-top whitespace-normal' }"
+        @update:pagination="onPaginationUpdate"
         @select="(_e: Event, row: any) => openIssue(row.original)"
       >
         <template #sopTitle-cell="{ row }">
@@ -453,7 +456,7 @@ const removeIssue = async (row: SalesIssueRow) => {
         </template>
       </UTable>
 
-      <TablePaginationBar :table="table" />
+      <TablePaginationBar :table="table" :total="summary.totalCount" />
     </div>
   </div>
 </template>

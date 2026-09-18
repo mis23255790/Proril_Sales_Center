@@ -1,4 +1,29 @@
 <details>
+  <summary>版號2026.09.18.1300</summary>
+
+##### feat: 銷貨檢索四個頁籤改前端分頁
+      原本完全沒有分頁，四個頁籤（品號細項/品號統計/銷貨單細項/銷貨單統計）都是後端
+      一次全撈、前端整批渲染，其中品號細項/銷貨單細項這兩個 tab 資料量可以到幾百筆。
+
+      跟業務議題／訂單資料檢核不一樣，這裡**沒有改成後端分頁**：`prc_QuerySalesOrder(_1)`
+      進來第一件事就是 `EXEC prc_ImportSalesOrder` 從 ERP linked server 同步資料，
+      是有副作用、逾時設 120 秒的重操作。如果比照前兩個模組做「切頁就打新的 API」，
+      代表每次翻頁都要重新觸發一次 ERP 同步，跟前兩個模組的 EF 查詢成本完全不同量級，
+      使用者已確認選擇維持現行的「查詢時打一次 SP、結果留在瀏覽器」架構。
+
+      改成前端 `getPaginationRowModel()` 分頁（`useTablePagination` + `TablePaginationBar`，
+      每頁 20/50/全部，跟業務議題／訂單資料檢核共用同一組 `app/utils/table.ts` 常數），
+      四個頁籤各自套用同一個 `pagination` 狀態，切頁籤時歸零頁碼（比照原本沒有分頁前
+      其他頁面的既有寫法）。切頁與切頁籤都不會發新的網路請求。
+
+      app/pages/sales-center/sales-search/shipping-inquiry.vue
+
+      驗證：瀏覽器手動測試（品號細項 374 筆分 20 筆/頁、切到品號統計頁籤）確認
+      不會觸發新的 GetSalesOrder/GetSalesOrder_1 請求。
+
+</details>
+
+<details>
   <summary>版號2026.09.15.1000</summary>
 
 ##### feat: 客戶信用額度（GetCustomerCredit/GetCustomerCreditCRM）搬進 api/

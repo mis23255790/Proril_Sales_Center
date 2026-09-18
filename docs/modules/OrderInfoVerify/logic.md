@@ -56,6 +56,28 @@ Nuxt 頁面 ──▶ useOrderInfoVerifyApi() ──▶ /api/proxy/... ──▶
 1.0 用 bootstrap-table 的 `exp` 展開箭頭，在列表裡巢狀顯示品號明細列。2.0 拿掉這層，
 品號明細只在「檢核結果」modal 的卡片區呈現。純 UI 呈現簡化，資料完整性不受影響。
 
+# 分頁（2026-09-18 起）：單位是訂單，不是攤平列
+
+`GetPOCheckView` 新增 `tab`（`notChecked`/`checked`，對應兩個頁籤）、`pageIndex`
+（0 起算）、`pageSize`（`<= 0` 代表不分頁）。**分頁一定要對 `V_POList`（一列一張訂單）
+做，不能對攤平後的品號明細列數做**——不然同一張訂單的品號會被切頁切散到不同頁，
+`groupOrderInfoVerifyRows()` 分組出來的訂單就會缺品號。`GetFilteredOrders()`
+（`copSource`/`orderType`/`orderNo`/`customerNo`/日期區間篩選）獨立出來，
+`GetPOCheckView` 跟 `GetOrderInfoList`（`ExportXls` 共用的查詢核心）共用同一份
+「篩選後、切頁籤前」的訂單清單，避免各自重撈一次 `V_POList`——這支查詢走 ERP linked
+server，實測要價 3~4 秒，不是可以隨便多查一次的成本。
+
+明細 modal（`OrderCheckDetailModal`）打同一支 `GetPOCheckView`，但不傳 `tab`/`pageSize`——
+`tab` 空字串等同不篩 `ConfirmFlag`，`pageSize <= 0` 等同不分頁，回傳該訂單全部品號列，
+不會被分頁截斷。`ExportXls`／`GetOrderInfoList` 的既有呼叫同理不受影響，
+新增的 `pageIndex`/`pageSize`/`preFilteredOrders` 參數預設值就是「維持原本一次全撈」。
+
+兩個頁籤的訂單數放在 `body2`（`OrderInfoVerifySummary`：`totalCount`/`notCheckedCount`/
+`checkedCount`），跟業務議題列表（`SalesIssue/logic.md`）同一套設計：
+notChecked/checkedCount 是「篩選後、切頁籤前」算出來的，不會因為目前選哪個頁籤而變動；
+`totalCount` 才是目前頁籤篩選後的訂單數。跟業務議題一樣，只在回傳前做 Skip/Take，
+沒有把查詢改寫成 SQL 層級的分頁，資料庫負載沒有變小，只是網路傳輸量與瀏覽器記憶體用量變小。
+
 # 檢核 modal 開啟時自己重新查詢
 
 `OrderCheckDetailModal` 不是被動吃父層傳進來的資料，而是在 `open`/`orderKey` 變動時

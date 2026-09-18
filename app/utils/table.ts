@@ -6,3 +6,18 @@
  */
 export const clickableRowTr
   = 'cursor-pointer hover:bg-elevated/50 hover:[&_td]:underline hover:[&_td_button]:no-underline hover:[&_td_a]:no-underline'
+
+/**
+ * 分頁列的「每頁筆數」選項用的「全部」哨兵值。
+ * 刻意用一個超大數字而不是 0 或 -1：不管是 tanstack 內建的 client-side
+ * getPaginationRowModel()（`rows.slice(0, pageSize)`）還是後端的 `Take(pageSize)`，
+ * 塞這個數字都會直接自然拿到全部資料，兩邊不用各寫一套特殊判斷。
+ */
+export const ALL_PAGE_SIZE = 1_000_000
+
+/** TablePaginationBar 的每頁筆數選單選項。 */
+export const PAGE_SIZE_OPTIONS = [
+  { label: '每頁 20 筆', value: 20 },
+  { label: '每頁 50 筆', value: 50 },
+  { label: '全部', value: ALL_PAGE_SIZE }
+]

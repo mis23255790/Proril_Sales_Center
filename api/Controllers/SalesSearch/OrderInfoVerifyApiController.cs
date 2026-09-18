@@ -34,25 +34,59 @@ public partial class OrderInfoVerifyApiController : BaseApiController
 
     /// <summary>
     /// 主查詢：訂單 + 明細 + 檢核狀態的攤平清單，一個品號一列，同一張訂單的多列共用同一份
-    /// 表頭與 <see cref="CopPoCheckExRule"/>。列表 tab 與明細 modal 共用這支，差別只在參數
+    /// 表頭與 <see cref="CopPoCheckExRule"/>。列表頁籤與明細 modal 共用這支，差別只在參數
     /// 是否篩到單一訂單。
     ///
     /// **與 1.0 的差異**：<c>Body</c> 直接放 <c>List&lt;VPoListDetailViewModel&gt;</c>，
     /// 不像 1.0 用 <c>JsonConvert.SerializeObject</c> 包成字串再讓前端 <c>JSON.parse</c>——
     /// <c>CustomApiViewModel.Body</c> 本來就是 <c>object?</c>，直接放物件即可，
     /// 前端 <c>$fetch</c> 拿到的就是陣列。
+    ///
+    /// 2026-09-18 起支援分頁，但**分頁的單位是「訂單」，不是攤平後的品號明細列**——
+    /// <paramref name="pageIndex"/>/<paramref name="pageSize"/> 是對 <see cref="GetFilteredOrders"/>
+    /// 回傳的 <c>V_POList</c>（一列一張訂單）做 Skip/Take，取到本頁的訂單之後才 join 明細，
+    /// 不然同一張訂單的品號會被切頁切散到不同頁。<paramref name="tab"/>（notChecked/checked）
+    /// 對應畫面的兩個頁籤，換算成 <c>ConfirmFlag</c> 的 N/Y；不傳（明細 modal 的用法）就
+    /// 不篩，回傳該訂單全部品號列。<paramref name="pageSize"/> &lt;= 0 代表不分頁——
+    /// 明細 modal 就是靠這個預設值拿到單一訂單的完整品號清單，不會被分頁截斷。
     /// </summary>
     [HttpGet]
-    public CustomApiViewModel GetPOCheckView(string? copSource, string? orderType, string? orderNo, string? customerNo, string? startDate, string? endDate)
+    public CustomApiViewModel GetPOCheckView(
+        string? copSource, string? orderType, string? orderNo, string? customerNo, string? startDate, string? endDate,
+        string? tab = null, int pageIndex = 0, int pageSize = 0)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
 
-        WriteStepLog(nameof(GetPOCheckView), $"copSource:{copSource}, orderType:{orderType}, orderNo:{orderNo}, customerNo:{customerNo}");
+        WriteStepLog(nameof(GetPOCheckView),
+            $"copSource:{copSource}, orderType:{orderType}, orderNo:{orderNo}, customerNo:{customerNo}, "
+            + $"tab:{tab}, pageIndex:{pageIndex}, pageSize:{pageSize}");
 
-        var list = GetOrderInfoList(copSource, orderType, orderNo, customerNo, startDate, endDate, null);
+        var allOrders = GetFilteredOrders(copSource, orderType, orderNo, customerNo, startDate, endDate);
+
+        var summary = new OrderInfoVerifySummary
+        {
+            NotCheckedCount = allOrders.Count(o => o.ConfirmFlag == "N"),
+            CheckedCount = allOrders.Count(o => o.ConfirmFlag == "Y")
+        };
+
+        var confirmFlag = tab switch
+        {
+            "checked" => "Y",
+            "notChecked" => "N",
+            _ => null
+        };
+        summary.TotalCount = confirmFlag switch
+        {
+            "Y" => summary.CheckedCount,
+            "N" => summary.NotCheckedCount,
+            _ => allOrders.Count
+        };
+
+        var list = GetOrderInfoList(copSource, orderType, orderNo, customerNo, startDate, endDate, confirmFlag, pageIndex, pageSize, allOrders);
 
         ca.IsSuccess = true;
         ca.Body = list;
+        ca.Body2 = summary;
         return ca;
     }
 
@@ -163,20 +197,15 @@ public partial class OrderInfoVerifyApiController : BaseApiController
     }
 
     /// <summary>
-    /// GetPOCheckView / ExportXls 共用的查詢核心，照抄 1.0 的多重 join。全部在記憶體
-    /// （LINQ to Objects）做，1.0 也是先 ToList() 幾張表再 join——這些 join 用了字串串接當
-    /// 複合鍵，SQL 端無法翻譯，本來就得先撈到記憶體。
+    /// 訂單層級的篩選（<c>V_POList</c> 一列一張訂單），GetPOCheckView 分頁與統計都靠這支——
+    /// 分頁、頁籤筆數都要以「訂單數」為單位，不能用攤平後的品號明細列數，
+    /// 所以獨立出來，讓 <see cref="GetPOCheckView"/> 跟 <see cref="GetOrderInfoList"/>
+    /// 共用同一份「篩選後、切頁籤前」的訂單清單，不用各自重撈一次。
     /// </summary>
-    private List<VPoListDetailViewModel> GetOrderInfoList(
+    private List<VPoList> GetFilteredOrders(
         string? copSource, string? orderType, string? orderNo, string? customerNo,
-        string? startDate, string? endDate, string? confirmFlag)
+        string? startDate, string? endDate)
     {
-        var checkRules = db.CopCheckRules.ToList();
-        var copPoCheckList = db.CopPoChecks.AsNoTracking().ToList()
-            .Select(c => new CopPoCheckExRule(c, checkRules)).ToList();
-        var copPoDetailCheckList = db.CopPoDetailChecks.AsNoTracking().ToList()
-            .Select(c => new CopPoDetailCheckExRule(c, checkRules)).ToList();
-
         var vpoQuery = db.VPoLists.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(copSource))
@@ -213,9 +242,44 @@ public partial class OrderInfoVerifyApiController : BaseApiController
             var endCompact = end.AddDays(1).ToString("yyyyMMdd");
             vpoList = vpoList.Where(v => string.Compare(v.訂單日期, endCompact, StringComparison.Ordinal) < 0).ToList();
         }
+
+        return vpoList;
+    }
+
+    /// <summary>
+    /// GetPOCheckView / ExportXls 共用的查詢核心，照抄 1.0 的多重 join。全部在記憶體
+    /// （LINQ to Objects）做，1.0 也是先 ToList() 幾張表再 join——這些 join 用了字串串接當
+    /// 複合鍵，SQL 端無法翻譯，本來就得先撈到記憶體。
+    ///
+    /// <paramref name="preFilteredOrders"/> 有值就直接用（GetPOCheckView 已經先呼叫過
+    /// <see cref="GetFilteredOrders"/>，不用再撈一次 <c>V_POList</c>）；ExportXls 沒有這份
+    /// 資料，傳 null 讓這裡自己查。<paramref name="pageSize"/> &lt;= 0 代表不分頁
+    /// （ExportXls 用預設值，永遠拿全部）。
+    /// </summary>
+    private List<VPoListDetailViewModel> GetOrderInfoList(
+        string? copSource, string? orderType, string? orderNo, string? customerNo,
+        string? startDate, string? endDate, string? confirmFlag,
+        int pageIndex = 0, int pageSize = 0, List<VPoList>? preFilteredOrders = null)
+    {
+        var checkRules = db.CopCheckRules.ToList();
+        var copPoCheckList = db.CopPoChecks.AsNoTracking().ToList()
+            .Select(c => new CopPoCheckExRule(c, checkRules)).ToList();
+        var copPoDetailCheckList = db.CopPoDetailChecks.AsNoTracking().ToList()
+            .Select(c => new CopPoDetailCheckExRule(c, checkRules)).ToList();
+
+        var vpoList = preFilteredOrders ?? GetFilteredOrders(copSource, orderType, orderNo, customerNo, startDate, endDate);
+
         if (!string.IsNullOrEmpty(confirmFlag))
         {
             vpoList = vpoList.Where(v => v.ConfirmFlag == confirmFlag).ToList();
+        }
+
+        // 分頁的單位是訂單（這裡的一列），要在 join 品號明細之前切，
+        // 不然同一張訂單的品號會被切頁切散到不同頁。
+        vpoList = vpoList.OrderBy(v => v.單別).ThenBy(v => v.單號).ThenBy(v => v.CopSource).ToList();
+        if (pageSize > 0)
+        {
+            vpoList = vpoList.Skip(Math.Max(pageIndex, 0) * pageSize).Take(pageSize).ToList();
         }
 
         var vpoDetailList = db.VPoDetailLists.AsNoTracking().ToList();

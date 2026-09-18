@@ -85,6 +85,32 @@ public class DWorkProcessesEx : SC.DWorkProcess
     public bool ViewStatus { get; set; }
 }
 
+/// <summary>
+/// GetSOPList_Edit 分頁後的統計，放在 <see cref="CustomApiViewModel.Body2"/>。
+/// 三個 tab 的筆數是「分頁前、篩選後」的統計，不會因為切頁改變；
+/// TotalCount 則是目前 tab 篩選後的筆數，給前端分頁列算頁數用。
+/// </summary>
+public class SalesIssueListSummary
+{
+    public int TotalCount { get; set; }
+    public int OngoingCount { get; set; }
+    public int FinishedCount { get; set; }
+    public int AllCount { get; set; }
+}
+
+/// <summary>
+/// GetPOCheckView 分頁後的統計，放在 <see cref="CustomApiViewModel.Body2"/>。
+/// 分頁的單位是「訂單」（V_POList 一列），不是攤平後的品號明細列——
+/// NotCheckedCount / CheckedCount 是「篩選後、切頁籤前」以訂單數計算，不會因為
+/// 目前選哪個頁籤而變動；TotalCount 才是目前頁籤篩選後的訂單數，給前端分頁列算頁數用。
+/// </summary>
+public class OrderInfoVerifySummary
+{
+    public int TotalCount { get; set; }
+    public int NotCheckedCount { get; set; }
+    public int CheckedCount { get; set; }
+}
+
 /// <summary>進度明細 + 建立者／修改者姓名。</summary>
 public class DWorkProcessDetailViewModel : SC.DWorkProcessDetail
 {
