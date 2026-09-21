@@ -37,5 +37,12 @@
   "Sso": {
     "//": "MainApi/LoginSso 專用的內部共用密鑰，只有 Nuxt server 端（server/api/auth/sso.post.ts）知道，瀏覽器拿不到。空值時該端點一律拒絕，避免變成免密碼登入的後門。",
     "InternalSecret": "<跟 Nuxt 環境變數 NUXT_SSO_INTERNAL_SECRET 設成同一組隨機字串>"
+  },
+
+  "Services": {
+    "ManufacturingCenter": {
+      "//": "Proril_Manufacturing_Center 還沒有對應端點，先留空。ManufacturingSerialNoLookupService 在空值時會直接丟例外，不會靜默失敗。API 上線後把根網址填進來即可，呼叫端不用改。",
+      "BaseUrl": ""
+    }
   }
 }

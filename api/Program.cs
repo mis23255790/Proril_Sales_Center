@@ -47,7 +47,14 @@ builder.Services.AddSingleton<JwtHelper>();
 builder.Services.AddSingleton<AesHelper>();
 builder.Services.AddSingleton<StoragePaths>();
 builder.Services.AddSingleton<LogHelper>();
+
+// Proril_Manufacturing_Center 還沒有對應端點，BaseUrl 現在是空的（見 appsettings），
+// 呼叫端 ManufacturingSerialNoLookupService 在空值時會丟例外，不在這裡註冊時就先擋下來
+// ——不然開發環境還沒設定這個服務，整個 api 會直接起不來。
+builder.Services.AddHttpClient("ManufacturingCenter");
+builder.Services.AddScoped<ManufacturingSerialNoLookupService>();
 builder.Services.AddHostedService<LogTimedHostedService>();
+builder.Services.AddHostedService<SerialNoSyncHostedService>();
 builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());
 
 /*
