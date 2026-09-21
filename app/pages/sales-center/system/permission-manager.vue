@@ -110,7 +110,9 @@ const expandAll = () => {
   walk(tree.value)
 }
 
-const collapseAll = () => { expanded.value = new Set() }
+const collapseAll = () => {
+  expanded.value = new Set()
+}
 
 const save = async () => {
   const value = account.value.trim()

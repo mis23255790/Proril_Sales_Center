@@ -56,7 +56,7 @@ const effectiveErpCustomerNo = computed(() =>
 const displayTitle = computed(() => {
   const name = customer.value?.shortName || erpCustomer.value?.ma002 || ''
   const no = effectiveCustomerNo.value || effectiveErpCustomerNo.value || '（未指定客戶）'
-  return name ? `${no}　${name}` : no
+  return name ? `${no}\u3000${name}` : no
 })
 
 const creditCurrency = computed(() => credits.value[0]?.幣別 ?? '')
@@ -313,7 +313,7 @@ const openIssue = (row: CustomerWorkProcessRow) => {
           {{ displayTitle }}
         </h1>
         <p class="mt-1 text-sm text-muted">
-          {{ customer?.longName || erpCustomer?.ma003 || '　' }}
+          {{ customer?.longName || erpCustomer?.ma003 || '\u3000' }}
         </p>
       </div>
       <UButton

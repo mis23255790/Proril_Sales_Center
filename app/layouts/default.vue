@@ -23,7 +23,9 @@ const userMenuItems = computed<DropdownMenuItem[][]>(() => [
  * 側欄要顯示哪些功能是 DB 說了算（M_Function ∩ M_Permission），
  * 在這裡載一次，之後整個站共用（見 useAppNavigation.loadUserFunctions）。
  */
-onMounted(() => { loadUserFunctions() })
+onMounted(() => {
+  loadUserFunctions()
+})
 
 /** 姓名不在 JWT 裡，要另外查；查不到就退回顯示帳號，不要整塊空著。 */
 const userName = ref('')

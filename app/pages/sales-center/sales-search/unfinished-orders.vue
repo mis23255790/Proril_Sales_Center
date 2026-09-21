@@ -3,10 +3,14 @@ import { h } from 'vue'
 import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableColumn } from '@nuxt/ui'
 import type { UnfinOrderQuery } from '~/composables/useSalesOrderUnfinishApi'
-import type { UnfinOrder, UnfinOrderRow } from '~/types/salesOrderUnfinish'
-import { UNFINISH_AMOUNT_LINK_TYPE, UNFINISH_FUNCTION_NO } from '~/types/salesOrderUnfinish'
+import {
+  type UnfinOrder,
+  type UnfinOrderRow,
+  UNFINISH_AMOUNT_LINK_TYPE,
+  UNFINISH_FUNCTION_NO,
+  isUnfinishDetailRow
+} from '~/types/salesOrderUnfinish'
 import type { SalesShippingCustomer } from '~/types/salesShipping'
-import { isUnfinishDetailRow } from '~/types/salesOrderUnfinish'
 
 definePageMeta({ title: '未完成訂單檢索' })
 

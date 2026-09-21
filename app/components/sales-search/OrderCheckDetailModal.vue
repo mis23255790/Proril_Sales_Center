@@ -48,7 +48,9 @@ const pagedRows = computed(() => {
   return filteredRows.value.slice(start, start + pageSize)
 })
 
-watch(filteredRows, () => { page.value = 1 })
+watch(filteredRows, () => {
+  page.value = 1
+})
 
 const load = async () => {
   if (!props.orderKey) return

@@ -54,10 +54,6 @@ export default defineNuxtConfig({
     }
   },
 
-  robots: {
-    disallow: process.env.NUXT_PUBLIC_BLOCK_ROBOTS === 'true' ? ['/'] : []
-  },
-
   compatibilityDate: '2026-06-30',
 
   eslint: {
@@ -67,5 +63,9 @@ export default defineNuxtConfig({
         braceStyle: '1tbs'
       }
     }
+  },
+
+  robots: {
+    disallow: process.env.NUXT_PUBLIC_BLOCK_ROBOTS === 'true' ? ['/'] : []
   }
 })
