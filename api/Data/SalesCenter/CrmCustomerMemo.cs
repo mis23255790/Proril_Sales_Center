@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Proril.SalesIssue.Api.Data.SalesCenter;

@@ -3,11 +3,11 @@ using System.Collections.Generic;
 
 namespace Proril.SalesIssue.Api.Data.SalesCenter;
 
-public partial class MFunction
+public partial class MFunctionBakFunctionNo
 {
     public int Id { get; set; }
 
-    public string FunctionNo { get; set; } = null!;
+    public int FunctionNo { get; set; }
 
     public string? FunctionName { get; set; }
 

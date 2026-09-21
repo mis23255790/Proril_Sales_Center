@@ -3,13 +3,13 @@ using System.Collections.Generic;
 
 namespace Proril.SalesIssue.Api.Data.SalesCenter;
 
-public partial class MPermission
+public partial class MPermissionBakFunctionNo
 {
     public int Id { get; set; }
 
     public string? LinkNumber { get; set; }
 
-    public string FunctionNo { get; set; } = null!;
+    public int FunctionNo { get; set; }
 
     public string? Creator { get; set; }
 

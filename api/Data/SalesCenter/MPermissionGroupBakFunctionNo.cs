@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Proril.SalesIssue.Api.Data.SalesCenter;
 
-public partial class MPermissionGroup
+public partial class MPermissionGroupBakFunctionNo
 {
     public int Id { get; set; }
 
@@ -11,7 +11,7 @@ public partial class MPermissionGroup
 
     public string? GroupNo { get; set; }
 
-    public string? FunctionNo { get; set; }
+    public int? FunctionNo { get; set; }
 
     public byte? LinkType { get; set; }
 
