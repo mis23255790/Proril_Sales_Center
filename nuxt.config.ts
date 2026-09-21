@@ -8,12 +8,6 @@ export default defineNuxtConfig({
     '@nuxtjs/robots'
   ],
 
-  devtools: {
-    enabled: true
-  },
-
-  css: ['~/assets/css/main.css'],
-
   // components/ 底下用子目錄分共用（common/）與模組（sales-issue/、sales-search/…），
   // 純粹整理檔案位置。pathPrefix:false 讓元件標籤名照舊只看檔名（例如
   // common/AppLogo.vue 還是 <AppLogo>），不會因為換資料夾就變成 <CommonAppLogo>，
@@ -21,6 +15,12 @@ export default defineNuxtConfig({
   components: [
     { path: '~/components', pathPrefix: false }
   ],
+
+  devtools: {
+    enabled: true
+  },
+
+  css: ['~/assets/css/main.css'],
 
   runtimeConfig: {
     // 以下只在 server 端讀得到（code 換 token 要帶 client secret，不能進瀏覽器）
