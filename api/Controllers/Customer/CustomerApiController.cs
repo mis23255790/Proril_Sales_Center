@@ -18,20 +18,26 @@ namespace Proril.SalesIssue.Api.Controllers.Customer;
 [Authorize]
 public class CustomerApiController : BaseApiController
 {
+    // D_CustormerOrder / D_MailDetail 目前只有這支在用，還沒搬到 Proril_Sales_Center
+    // （沒有既有的 ObjectsMigration 腳本），BaseApiController 不再帶 ProrilWebDbContext，
+    // 這支自己單獨注入一份。VCopCustomer 已經搬過去了，打 scDb（見 GetCustomerList_2）。
+    private readonly ProrilWebDbContext db;
+
     public CustomerApiController(
         ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
-        ILogger<CustomerApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<CustomerApiController> logger) : base(scDb, jwtHelper, logger)
     {
+        this.db = db;
     }
 
     // ------------------------------------------------------------------ 客戶資料
 
     /// <summary>客戶資料維護頁用的全量清單。</summary>
-    [HttpGet]
-    public List<MCustomer> GetCustomerList()
-        => db.MCustomers.ToList();
+    // [HttpGet]
+    // public List<MCustomer> GetCustomerList()
+    //     => db.MCustomers.ToList();
 
     /// <summary>
     /// 依代號/全名/簡稱查 ERP 同步過來的客戶清單（V_COP_Customer）。
@@ -46,7 +52,7 @@ public class CustomerApiController : BaseApiController
 
         WriteStepLog(nameof(GetCustomerList_2), $"customerNo:{customerNo}, customerName:{customerName}, customerShortName:{customerShortName}");
 
-        var query = db.VCopCustomers.AsNoTracking().AsQueryable();
+        var query = scDb.VCopCustomers.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrEmpty(customerNo))
         {
@@ -72,122 +78,122 @@ public class CustomerApiController : BaseApiController
     // ------------------------------------------------------------------ 任務信件往來記錄
 
     /// <summary>單一任務(missionNo)底下的信件往來記錄，依 Sort 排序。</summary>
-    [HttpGet]
-    public CustomApiViewModel GetMailList(string missionNo)
-    {
-        var ca = new CustomApiViewModel { IsSuccess = false };
+    // [HttpGet]
+    // public CustomApiViewModel GetMailList(string missionNo)
+    // {
+    //     var ca = new CustomApiViewModel { IsSuccess = false };
 
-        WriteStepLog(nameof(GetMailList), $"missionNo:{missionNo}");
+    //     WriteStepLog(nameof(GetMailList), $"missionNo:{missionNo}");
 
-        var coNo = db.DCustormerOrders.Where(o => o.MissionNo == missionNo).Select(o => o.CoNo).First();
+    //     var coNo = db.DCustormerOrders.Where(o => o.MissionNo == missionNo).Select(o => o.CoNo).First();
 
-        ca.IsSuccess = true;
-        ca.Body = db.DMailDetails.AsNoTracking().Where(m => m.CoNo == coNo).OrderBy(m => m.Sort).ToList();
-        return ca;
-    }
+    //     ca.IsSuccess = true;
+    //     ca.Body = db.DMailDetails.AsNoTracking().Where(m => m.CoNo == coNo).OrderBy(m => m.Sort).ToList();
+    //     return ca;
+    // }
 
     /// <summary>把一筆信件記錄跟前一筆/後一筆交換排序。</summary>
-    [HttpGet]
-    public CustomApiViewModel ChangeMailSort(string mdNo, bool isUp)
-    {
-        var ca = new CustomApiViewModel { IsSuccess = false };
+    // [HttpGet]
+    // public CustomApiViewModel ChangeMailSort(string mdNo, bool isUp)
+    // {
+    //     var ca = new CustomApiViewModel { IsSuccess = false };
 
-        WriteStepLog(nameof(ChangeMailSort), $"mdNo:{mdNo}, isUp:{isUp}");
+    //     WriteStepLog(nameof(ChangeMailSort), $"mdNo:{mdNo}, isUp:{isUp}");
 
-        var current = db.DMailDetails.First(m => m.MdNo == mdNo);
-        var sort = current.Sort;
+    //     var current = db.DMailDetails.First(m => m.MdNo == mdNo);
+    //     var sort = current.Sort;
 
-        if (sort == 1 && isUp)
-        {
-            ca.Message = "已至頂部";
-            return ca;
-        }
+    //     if (sort == 1 && isUp)
+    //     {
+    //         ca.Message = "已至頂部";
+    //         return ca;
+    //     }
 
-        var newSort = isUp ? sort - 1 : sort + 1;
-        var swap = db.DMailDetails.FirstOrDefault(m => m.CoNo == current.CoNo && m.Sort == newSort);
+    //     var newSort = isUp ? sort - 1 : sort + 1;
+    //     var swap = db.DMailDetails.FirstOrDefault(m => m.CoNo == current.CoNo && m.Sort == newSort);
 
-        if (swap != null)
-        {
-            current.Sort = swap.Sort;
-            swap.Sort = sort;
-        }
-        else
-        {
-            current.Sort = newSort;
-        }
+    //     if (swap != null)
+    //     {
+    //         current.Sort = swap.Sort;
+    //         swap.Sort = sort;
+    //     }
+    //     else
+    //     {
+    //         current.Sort = newSort;
+    //     }
 
-        db.SaveChanges();
-        ca.IsSuccess = true;
-        return ca;
-    }
+    //     db.SaveChanges();
+    //     ca.IsSuccess = true;
+    //     return ca;
+    // }
 
     /// <summary>刪除一筆信件記錄。</summary>
-    [HttpGet]
-    public CustomApiViewModel DeleteMail(string mdNo)
-    {
-        var ca = new CustomApiViewModel { IsSuccess = false };
+    // [HttpGet]
+    // public CustomApiViewModel DeleteMail(string mdNo)
+    // {
+    //     var ca = new CustomApiViewModel { IsSuccess = false };
 
-        WriteStepLog(nameof(DeleteMail), $"mdNo:{mdNo}");
+    //     WriteStepLog(nameof(DeleteMail), $"mdNo:{mdNo}");
 
-        var mail = db.DMailDetails.FirstOrDefault(m => m.MdNo == mdNo);
-        if (mail is null)
-        {
-            ca.Message = "查無此筆資料";
-            return ca;
-        }
+    //     var mail = db.DMailDetails.FirstOrDefault(m => m.MdNo == mdNo);
+    //     if (mail is null)
+    //     {
+    //         ca.Message = "查無此筆資料";
+    //         return ca;
+    //     }
 
-        db.DMailDetails.Remove(mail);
-        db.SaveChanges();
-        ca.IsSuccess = true;
-        return ca;
-    }
+    //     db.DMailDetails.Remove(mail);
+    //     db.SaveChanges();
+    //     ca.IsSuccess = true;
+    //     return ca;
+    // }
 
     /// <summary>新增一筆信件記錄，接在該任務對應客戶訂單的信件清單最後。</summary>
-    [HttpGet]
-    public CustomApiViewModel AddMail([FromQuery] DMailDetailViewModel mailModel)
-    {
-        var ca = new CustomApiViewModel { IsSuccess = false };
+    // [HttpGet]
+    // public CustomApiViewModel AddMail([FromQuery] DMailDetailViewModel mailModel)
+    // {
+    //     var ca = new CustomApiViewModel { IsSuccess = false };
 
-        WriteStepLog(nameof(AddMail), $"missionNo:{mailModel.MissionNo}");
+    //     WriteStepLog(nameof(AddMail), $"missionNo:{mailModel.MissionNo}");
 
-        var coNo = db.DCustormerOrders.Where(o => o.MissionNo == mailModel.MissionNo).Select(o => o.CoNo).First();
+    //     var coNo = db.DCustormerOrders.Where(o => o.MissionNo == mailModel.MissionNo).Select(o => o.CoNo).First();
 
-        // 找目前最大 Sort +1；db.DMailDetails 是 IQueryable，LastOrDefault() 沒辦法轉譯成
-        // SQL（EF Core 不支援），改用 OrderByDescending + FirstOrDefault 達到同樣效果。
-        var lastSort = db.DMailDetails.Where(m => m.CoNo == coNo)
-            .OrderByDescending(m => m.Sort)
-            .Select(m => (int?)m.Sort)
-            .FirstOrDefault();
+    //     // 找目前最大 Sort +1；db.DMailDetails 是 IQueryable，LastOrDefault() 沒辦法轉譯成
+    //     // SQL（EF Core 不支援），改用 OrderByDescending + FirstOrDefault 達到同樣效果。
+    //     var lastSort = db.DMailDetails.Where(m => m.CoNo == coNo)
+    //         .OrderByDescending(m => m.Sort)
+    //         .Select(m => (int?)m.Sort)
+    //         .FirstOrDefault();
 
-        mailModel.MdNo = Guid.NewGuid().ToString();
-        mailModel.CreateTime = DateTime.Now;
-        mailModel.CoNo = coNo;
-        mailModel.Sort = (lastSort ?? 0) + 1;
+    //     mailModel.MdNo = Guid.NewGuid().ToString();
+    //     mailModel.CreateTime = DateTime.Now;
+    //     mailModel.CoNo = coNo;
+    //     mailModel.Sort = (lastSort ?? 0) + 1;
 
-        db.DMailDetails.Add(mailModel);
-        db.SaveChanges();
+    //     db.DMailDetails.Add(mailModel);
+    //     db.SaveChanges();
 
-        ca.IsSuccess = true;
-        ca.Body = mailModel;
-        return ca;
-    }
+    //     ca.IsSuccess = true;
+    //     ca.Body = mailModel;
+    //     return ca;
+    // }
 
     /// <summary>更新一筆信件記錄的內容。</summary>
-    [HttpGet]
-    public CustomApiViewModel UpdateMail([FromQuery] DMailDetail mailModel)
-    {
-        var ca = new CustomApiViewModel { IsSuccess = false };
+    // [HttpGet]
+    // public CustomApiViewModel UpdateMail([FromQuery] DMailDetail mailModel)
+    // {
+    //     var ca = new CustomApiViewModel { IsSuccess = false };
 
-        WriteStepLog(nameof(UpdateMail), $"mdNo:{mailModel.MdNo}");
+    //     WriteStepLog(nameof(UpdateMail), $"mdNo:{mailModel.MdNo}");
 
-        var mail = db.DMailDetails.First(m => m.MdNo == mailModel.MdNo);
-        mail.CreateTime = DateTime.Now;
-        mail.Content = mailModel.Content;
-        mail.MdType = mailModel.MdType;
-        mail.Sort = mailModel.Sort;
+    //     var mail = db.DMailDetails.First(m => m.MdNo == mailModel.MdNo);
+    //     mail.CreateTime = DateTime.Now;
+    //     mail.Content = mailModel.Content;
+    //     mail.MdType = mailModel.MdType;
+    //     mail.Sort = mailModel.Sort;
 
-        db.SaveChanges();
-        ca.IsSuccess = true;
-        return ca;
-    }
+    //     db.SaveChanges();
+    //     ca.IsSuccess = true;
+    //     return ca;
+    // }
 }

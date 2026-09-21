@@ -5,6 +5,7 @@ using Proril.SalesIssue.Api.Controllers.Shared;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
+using CopSalesOrder = Proril.SalesIssue.Api.Data.SalesCenter.CopSalesOrder;
 
 namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 
@@ -27,11 +28,11 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 public partial class MixSalesShipApiController : BaseApiController
 {
     public MixSalesShipApiController(
-        ProrilWebDbContext db,
+        // ProrilWebDbContext db,
         Data.SalesCenter.SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<MixSalesShipApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<MixSalesShipApiController> logger) : base(scDb, jwtHelper, logger)
     {
         _paths = paths;
     }
@@ -99,9 +100,9 @@ public partial class MixSalesShipApiController : BaseApiController
         string? startDate, string? endDate, string? serialNo, string? poNo, string? inPlanNumber,
         string? groupName, string? groupDesc)
     {
-        db.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
+        scDb.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
 
-        return db.CopSalesOrders
+        return scDb.CopSalesOrders
             .FromSqlInterpolated($@"EXEC prc_QuerySalesOrder
                 {customerNo ?? ""}, {productType ?? ""}, {productNo ?? ""}, {productName ?? ""}, {productSpec ?? ""},
                 {startDate ?? ""}, {endDate ?? ""},
@@ -117,9 +118,9 @@ public partial class MixSalesShipApiController : BaseApiController
         string? orderType, string? orderNo, string? inPlanNumber,
         string? groupName, string? groupDesc)
     {
-        db.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
+        scDb.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
 
-        return db.CopSalesOrders
+        return scDb.CopSalesOrders
             .FromSqlInterpolated($@"EXEC prc_QuerySalesOrder_1
                 {customerNo ?? ""}, {productType ?? ""}, {productNo ?? ""}, {productName ?? ""}, {productSpec ?? ""},
                 {startDate ?? ""}, {endDate ?? ""},

@@ -19,10 +19,10 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 public partial class CustomQueryApiController : BaseApiController
 {
     public CustomQueryApiController(
-        Proril.SalesIssue.Api.Data.ProrilWebDbContext db,
+        // Proril.SalesIssue.Api.Data.ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
-        ILogger<CustomQueryApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<CustomQueryApiController> logger) : base(scDb, jwtHelper, logger)
     {
     }
 
@@ -42,7 +42,7 @@ public partial class CustomQueryApiController : BaseApiController
         WriteStepLog(nameof(GetCustom), $"customNo:{customNo}, erpCustomNo:{erpCustomNo}, includeErp:{includeErpCustom}");
 
         var customers = scDb.CrmCustomers.Where(c => c.AStatus == ActiveStatus.Active).ToList();
-        var erpCustomers = db.VErpcustomers.ToList();
+        var erpCustomers = scDb.VErpcustomers.ToList();
 
         var erpByNo = erpCustomers
             .GroupBy(e => (e.Ma001 ?? "").Trim())
@@ -99,7 +99,7 @@ public partial class CustomQueryApiController : BaseApiController
             .GroupBy(c => (c.ErpcustomerNo ?? "").Trim())
             .ToDictionary(g => g.Key, g => g.First());
 
-        var list = db.VErpcustomers
+        var list = scDb.VErpcustomers
             .ToList()
             .GroupBy(e => (e.Ma001 ?? "").Trim())
             .Select(g => g.First())

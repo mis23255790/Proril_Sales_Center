@@ -13,8 +13,8 @@ namespace Proril.SalesIssue.Api.Controllers.SalesIssue;
 ///
 /// 議題本身（D_WorkProcess* / M_WorkProcessPhrase / M_WorkProcessType / CRM_Customer）
 /// 打 <see cref="scDb"/>（Proril_Sales_Center，已確認單一擁有者，可以放心切）；
-/// M_User / M_Permission 這兩張表仍留在 <c>db</c>（PRORIL_WEB），只唯讀，
-/// 見 CLAUDE.md 「已核對」段落，寫入邏輯還在 1.0，不要對它們加寫入。
+/// M_User / M_Permission 這兩張表 2026-09-14 已隨權限控管搬遷一起切到 <see cref="scDb"/>，
+/// 這支不再需要 <c>ProrilWebDbContext</c>，見 CLAUDE.md 「權限控管已完成搬遷」段落。
 /// </summary>
 [Authorize]
 public partial class WorkProcessApiController : BaseApiController
@@ -24,11 +24,10 @@ public partial class WorkProcessApiController : BaseApiController
     private readonly StoragePaths _paths;
 
     public WorkProcessApiController(
-        Proril.SalesIssue.Api.Data.ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<WorkProcessApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<WorkProcessApiController> logger) : base(scDb, jwtHelper, logger)
     {
         _paths = paths;
     }

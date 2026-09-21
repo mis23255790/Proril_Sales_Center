@@ -214,13 +214,16 @@ SET @CreateTime = GETDATE()
 		TH.TH001 銷貨單別,TH.TH002 銷貨單號,TH.TH003 銷貨序號,TH.TH004 品號,TH.TH005 品名,
 		TH.TH006 規格,TH.TH009 單位,TH.TH007 倉別,TH.TH008 數量,TH.TH012 單價,
 		TH.TH013 金額,TG.TG011 幣別,TG.TG012 匯率,TH.TH037 本幣未稅金額,TH.TH038 本幣稅額,
-		TH.TH024 贈品數量,TH.TH014 訂單單別,TH.TH015 訂單單號,TH.TH016 訂單序號,TH.TH018 備註, TC.TC012 客戶單號, TB.SerialNosJson 銘版序號,
+		TH.TH024 贈品數量,TH.TH014 訂單單別,TH.TH015 訂單單號,TH.TH016 訂單序號,TH.TH018 備註, TC.TC012 客戶單號, NULL 銘版序號,
 		'' 製令單別,'' 製令單號,RTRIM(TA.TA033) AS PlanNumber,TG.TG004 as 客戶代號,MA.MA002 as 客戶名稱,
 		'','Y',@Creator,@CreateTime--,*
-		--  select * 
-		FROM [192.168.1.200].TWPR.dbo.COPTH TH 
+		--  select *
+		FROM [192.168.1.200].TWPR.dbo.COPTH TH
 --		LEFT JOIN [192.168.1.200].PBS.dbo.OrderDTB TB ON TB.OrderNo = rtrim(TH.TH014+'-'+TH.TH015) AND TB.OrderSeq = TH.TH016
-        LEFT join PRORIL_WEB.dbo.NPS_D_Order TB on TB.OrderType+'-'+ rtrim(TB.OrderNo)+TB.OrderSno = TH.TH014 + '-'+ RTRIM(TH.TH015) + TH.TH016
+        -- 2026-09-21 註解掉：PRORIL_WEB.dbo.NPS_D_Order 的跨庫 JOIN 在部分環境（51002）執行帳號
+        -- 對 PRORIL_WEB 沒有 SELECT 權限會直接失敗；SerialNosJson 改由 SerialNoSyncHostedService
+        -- 排程另外補寫，見 api/Services/SerialNoSyncHostedService.cs。
+        -- LEFT join PRORIL_WEB.dbo.NPS_D_Order TB on TB.OrderType+'-'+ rtrim(TB.OrderNo)+TB.OrderSno = TH.TH014 + '-'+ RTRIM(TH.TH015) + TH.TH016
 -- 		LEFT JOIN [192.168.1.200].PRORIL.dbo.MOCTA TA ON TH.TH014 = TA.TA026 and TH.TH015 = TA.TA027 and TH.TH016 = TA.TA028 AND TH.TH004 = TA.TA006 AND TA.TA013 ='Y' AND  TA.TA011 = 'Y'-- 製令單 AND  TA.TA011 <> 'y'
 		LEFT JOIN (SELECT DISTINCT TA001,TA002,TA026,TA027,TA028,TA006,TA033 FROM [192.168.1.200].PRORIL.dbo.MOCTA WHERE TA013 ='Y' AND  TA011 = 'Y') TA ON TH.TH014 = TA.TA026 and TH.TH015 = TA.TA027 and TH.TH016 = TA.TA028 AND TH.TH004 = TA.TA006
 		LEFT JOIN [192.168.1.200].PRORIL.dbo.COPTC TC ON TC.TC001 = TH.TH014 AND TC.TC002 = TH.TH015
@@ -249,13 +252,14 @@ SET @CreateTime = GETDATE()
 		TH.TH001 銷貨單別,TH.TH002 銷貨單號,TH.TH003 銷貨序號,TH.TH004 品號,TH.TH005 品名,
 		TH.TH006 規格,TH.TH009 單位,TH.TH007 倉別,TH.TH008 數量,TH.TH012 單價,
 		TH.TH013 金額,TG.TG011 幣別,TG.TG012 匯率,TH.TH037 本幣未稅金額,TH.TH038 本幣稅額,
-		TH.TH024 贈品數量,TH.TH014 訂單單別,TH.TH015 訂單單號,TH.TH016 訂單序號,TH.TH018 備註, TC.TC012 客戶單號,TB.SerialNosJson 銘版序號,
+		TH.TH024 贈品數量,TH.TH014 訂單單別,TH.TH015 訂單單號,TH.TH016 訂單序號,TH.TH018 備註, TC.TC012 客戶單號,NULL 銘版序號,
 		'' 製令單別,'' 製令單號,RTRIM(TA.TA033) AS PlanNumber,TG.TG004 as 客戶代號,MA.MA002 as 客戶名稱,
 		'','Y',@Creator,@CreateTime--,*
---      select * 
-		FROM [192.168.1.200].PRORIL.dbo.COPTH TH 
+--      select *
+		FROM [192.168.1.200].PRORIL.dbo.COPTH TH
 --		LEFT JOIN [192.168.1.200].PBS.dbo.OrderDTB TB ON TB.OrderNo = rtrim(TH.TH014+'-'+TH.TH015) AND TB.OrderSeq = TH.TH016
-        LEFT join PRORIL_WEB.dbo.NPS_D_Order TB on TB.OrderType+'-'+ rtrim(TB.OrderNo)+TB.OrderSno = TH.TH014 + '-'+ RTRIM(TH.TH015) + TH.TH016
+        -- 2026-09-21 註解掉，理由同上一個 INSERT（國外銷貨單）那段。
+        -- LEFT join PRORIL_WEB.dbo.NPS_D_Order TB on TB.OrderType+'-'+ rtrim(TB.OrderNo)+TB.OrderSno = TH.TH014 + '-'+ RTRIM(TH.TH015) + TH.TH016
 --		LEFT JOIN [192.168.1.200].PRORIL.dbo.MOCTA TA ON TH.TH014 = TA.TA026 and TH.TH015 = TA.TA027 and TH.TH016 = TA.TA028 AND TH.TH004 = TA.TA006 AND TA.TA013 ='Y' AND  TA.TA011 = 'Y' --AND  TA.TA011 <> 'y'-- 製令單
 		LEFT JOIN (SELECT DISTINCT TA001,TA002,TA026,TA027,TA028,TA006,TA033 FROM [192.168.1.200].PRORIL.dbo.MOCTA WHERE TA013 ='Y' AND  TA011 = 'Y') TA ON TH.TH014 = TA.TA026 and TH.TH015 = TA.TA027 and TH.TH016 = TA.TA028 AND TH.TH004 = TA.TA006
 		LEFT JOIN [192.168.1.200].PRORIL.dbo.COPTC TC ON TC.TC001 = TH.TH014 AND TC.TC002 = TH.TH015

@@ -16,6 +16,9 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 [Authorize]
 public partial class MainApiController : BaseApiController
 {
+    // M_Department 仍唯讀打 PRORIL_WEB（1.0 OrgApiController 還在寫，見 CLAUDE.md），
+    // BaseApiController 不再帶 ProrilWebDbContext，這支自己單獨注入一份，只給這個用途。
+    private readonly ProrilWebDbContext db;
     private readonly AesHelper _aes;
     private readonly string _ssoInternalSecret;
 
@@ -25,8 +28,9 @@ public partial class MainApiController : BaseApiController
         JwtHelper jwtHelper,
         AesHelper aes,
         IConfiguration configuration,
-        ILogger<MainApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<MainApiController> logger) : base(scDb, jwtHelper, logger)
     {
+        this.db = db;
         _aes = aes;
         _ssoInternalSecret = configuration.GetValue<string>("Sso:InternalSecret") ?? "";
     }

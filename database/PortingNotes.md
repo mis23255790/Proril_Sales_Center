@@ -399,7 +399,7 @@ CLAUDE.md 講得很白：這兩張表**要嘛連同 1.0 對應的兩支 Controll
 | `M_System` | `PRORIL_WEB`（唯讀） | 應用層完全沒有寫入路徑，直接維護在 DB，沒有 CRUD 可搬 |
 | `M_Function` | `PRORIL_WEB`（唯讀） | 同上 |
 | `M_PermissionLinkType` | `PRORIL_WEB`（唯讀） | 1.0 `Controllers/Query/FileQueryApiController.cs:356` 會 `Add`，不是單一擁有者 |
-| `M_Department` | `PRORIL_WEB`（唯讀） | 1.0 `Controllers/System/OrgApiController.cs`（組織維護）在寫 |
+| `M_Department` | `PRORIL_WEB`（唯讀） | 1.0 `Controllers/System/OrgApiController.cs`（組織維護）在寫，`api/` 沒有切連線；但 schema+資料的快照已存在於兩邊 `Proril_Sales_Center`，見文末「M_Department：快照對齊」 |
 
 上面這張表是逐一 grep 1.0 全部 Controller 核對出來的，不是只看已知模組。
 因為讀寫分兩個庫，權限樹那幾支 API 的併表一律先各自 `ToList()` 再用 LINQ to Objects 併，
@@ -615,3 +615,31 @@ migration 會先把 4 張表複製成 `*_bak_FunctionNo`。腳本**不可重入*
 > **還沒處理的不一致**：`MainApi/AddUser` 與 `MainApi/ResetPassword` 仍然會寫入
 > `AES(帳號)` 當密碼。在純 SSO 的前提下這兩段已經沒有意義，新建的帳號反而會是
 > 45 個帳號裡唯一有密碼的。要嘛把那兩段拿掉、要嘛連 `MainApi/Login` 一起下架。
+
+## M_Department：兩邊 Proril_Sales_Center 快照對齊（2026-09-21）
+
+**這不是規劃內的遷移，`api/` 沒有變動**：上面「表的歸屬」那節與 `CLAUDE.md` 都明記
+`M_Department` 應該**只留在 `PRORIL_WEB`（唯讀）**——1.0 `Controllers/System/OrgApiController.cs`
+（組織維護）還在寫它，不是單一擁有者，不能切連線。這一點沒有改變，`OrgApiController`
+與 `api/` 的 `MDepartment` 對映（若有）現在、以後都繼續打 `ProrilWebDbContext`。
+
+`M_Department` 的 schema 本來就已經在 DACPAC 白名單裡（`TABLES.txt` / `Tables/M_Department.sql`），
+但比對 50002／51002 兩邊 `Proril_Sales_Center` 的實際 table 清單時發現：**51002 已經有這張表
+（11 筆），50002 沒有**——不確定是何時、由誰、用什麼方式建的，這份文件之前也沒有紀錄。
+使用者確認要讓兩邊資料庫的 table 清單彼此一致，於是把它當成**單向快照複製到 50002**：
+
+- schema：`bcp` 匯出/匯入前先用 `Tables/M_Department.sql` 的定義在 50002 建表，
+  PK 改名對齊正本 `PK__M_Depart__3214EC2799095914`（原本用 `sp_rename` 建成
+  `PK_M_Department`，已修正，避免之後 `drift.ps1`／`publish.ps1` 誤判成 schema 差異）。
+- 資料：11 筆用 `bcp ... -E` 搬過去（保留原始 `ID`），`CHECKSUM_AGG(BINARY_CHECKSUM(*))`
+  兩邊比對一致（`2050093221`）。
+- 兩邊 collation 都已是 `Chinese_Taiwan_Stroke_BIN`，`DepName`/`Directions` 維持
+  `PRORIL_WEB` 原本的 `varchar`，沒有「為什麼有 9 個欄位型別跟來源不一樣」那節的
+  nvarchar 覆寫問題。
+
+**這只是快照，不是切連線，兩邊也不會自動同步**：跟 `COP_*` 那幾張表一樣，之後
+`PRORIL_WEB.M_Department` 新增/修改的部門都不會自動進到任一邊的 `Proril_Sales_Center`。
+哪天真的要讓 `M_Department` 切連線（改成單一擁有者），得先重新核對
+`OrgApiController` 是不是仍是唯一寫入者，照 `M_User`/`M_Permission` 那次的完整流程走
+（Controller 邏輯搬過來、`api/` 改注入 `SalesCenterDbContext`），不能只看這次的表快照
+就當作已經遷移完成。

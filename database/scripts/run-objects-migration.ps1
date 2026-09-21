@@ -16,6 +16,7 @@
       （V_UnfinOrder 每次都直接查 ERP linked server，不落地快取，所以不用複製任何資料）
       CustomerRelatedObjectsMigration.sql  客戶相關資訊：1 View（V_SalesTotal）+ 1 表（CRM_CustomerMemo）
       （唯一不需要 linked server 的一支，只對本地資料操作）
+      CustomerViewObjectsMigration.sql     客戶查詢：1 View（V_COP_Customer），依賴 linked server，沒有表
 
     三支都是可重複執行的（CREATE TABLE 包 IF OBJECT_ID(...) IS NULL、
     CREATE OR ALTER PROCEDURE/VIEW/FUNCTION、資料複製區塊在表已有資料時自動跳過）。
@@ -53,7 +54,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('OrderCheckObjectsMigration.sql', 'SalesShippingObjectsMigration.sql', 'SalesOrderUnfinishObjectsMigration.sql', 'CustomerRelatedObjectsMigration.sql')]
+    [ValidateSet('OrderCheckObjectsMigration.sql', 'SalesShippingObjectsMigration.sql', 'SalesOrderUnfinishObjectsMigration.sql', 'CustomerRelatedObjectsMigration.sql', 'CustomerViewObjectsMigration.sql')]
     [string]$Script,
     [ValidateSet('snapshot', 'snapshot-prod')][string]$Environment = 'snapshot',
     [switch]$Execute

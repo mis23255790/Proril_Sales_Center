@@ -406,7 +406,7 @@ const openSoDetail = async (row: CopSalesOrderRow) => {
   <div>
     <FullPageLoading :show="loading" />
 
-    <UBreadcrumb :items="breadcrumbFor(appPath('sales-search/shipping-inquiry'))" class="mb-4" />
+    <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/shipping-inquiry'))" class="mb-4" />
 
     <div class="mb-5">
       <h1 class="text-2xl font-bold text-highlighted">

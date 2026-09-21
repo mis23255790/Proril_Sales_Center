@@ -16,11 +16,20 @@
     <!-- 目標為 SQL Server 2022 (實測 16.0.4265.3) -->
     <DSP>Microsoft.Data.Tools.Schema.Sql.Sql160DatabaseSchemaProvider</DSP>
     <!--
-      PRORIL_WEB 是 case-sensitive collation。1028 = zh-TW，CS = case sensitive。
-      若 scripts/extract.ps1 回報的 collation 與此不符，請依它的提示修正這一行，
-      否則 build 出來的 dacpac 會在部署時把整個 DB 的定序視為差異。
+      ModelCollation 只接受 {LCID},{CI|CS}，不支援 BIN（官方文件的 Allowed values
+      就只有 CI/CS 兩種），1028,CS 只是拿來給 DACPAC 內部比對識別字大小寫用，跟
+      實際部署定序無關，維持原樣即可。
     -->
     <ModelCollation>1028,CS</ModelCollation>
+    <!--
+      真正決定「模型預設定序」、會拿去跟目標資料庫比對 (SQL72030) 的是這個屬性。
+      沒設的話預設是 SQL_Latin1_General_CP1_CI_AS（不分大小寫），對 PRORIL_WEB /
+      Proril_Sales_Center 實際用的 Chinese_Taiwan_Stroke_BIN（binary，見
+      database/PortingNotes.md「定序已對齊」）會被 SqlPackage 判定定序不相容而擋下來。
+      TargetDatabaseSet=False 已經不讓 publish 動資料庫層級設定，這裡只是讓模型
+      認知跟目標一致，不會產生 ALTER DATABASE COLLATE 之類的部署動作。
+    -->
+    <DefaultCollation>Chinese_Taiwan_Stroke_BIN</DefaultCollation>
     <!-- 只納管白名單裡的表，不設定資料庫層級選項，避免 publish 時去動 DB 本身的設定 -->
     <TargetDatabaseSet>False</TargetDatabaseSet>
     <ValidateCasingOnIdentifiers>False</ValidateCasingOnIdentifiers>

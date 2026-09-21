@@ -274,7 +274,7 @@ const loadConditions = async () => {
   <div>
     <FullPageLoading :show="loading" />
 
-    <UBreadcrumb :items="breadcrumbFor(appPath('sales-search/order-info-verify'))" class="mb-4" />
+    <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/order-info-verify'))" class="mb-4" />
 
     <div class="mb-5 flex items-start justify-between gap-2">
       <div>

@@ -305,7 +305,7 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
     <FullPageLoading :show="loading" />
 
     <div class="sticky top-0 z-20 mb-4 flex flex-wrap items-center justify-between gap-3 bg-white pb-2 dark:bg-white xl:shrink-0">
-      <UBreadcrumb :items="breadcrumbFor(appPath('sales-issue/issues'), isNew ? '新增議題' : `#${wpno}`)" />
+      <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-issue/issues'), isNew ? '新增議題' : `#${wpno}`)" />
 
       <UButton icon="i-lucide-arrow-left" color="neutral" variant="outline" :to="appPath('sales-issue/issues')">
         回議題列表

@@ -26,11 +26,23 @@ export const useApi = () => {
   return { apiFetch }
 }
 
-export const getAuthToken = () => {
-  if (import.meta.client) return localStorage.getItem('proril-token') || ''
-  return ''
+/**
+ * token 存在 cookie（而不是 localStorage），SSR 階段才讀得到，
+ * auth.global.ts 才能在 server 端就把未登入者擋掉，不會讓受保護頁面的完整 HTML
+ * 在 hydrate 完成前先送到瀏覽器。
+ */
+const authTokenCookie = () => useCookie<string | null>('proril-token', {
+  path: '/',
+  sameSite: 'lax',
+  maxAge: 60 * 60 * 24
+})
+
+export const getAuthToken = () => authTokenCookie().value || ''
+
+export const setAuthToken = (token: string) => {
+  authTokenCookie().value = token
 }
 
 export const clearAuthToken = () => {
-  if (import.meta.client) localStorage.removeItem('proril-token')
+  authTokenCookie().value = null
 }

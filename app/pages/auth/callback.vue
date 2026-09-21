@@ -51,7 +51,7 @@ onMounted(async () => {
       return
     }
 
-    localStorage.setItem('proril-token', result.token)
+    setAuthToken(result.token)
     await navigateTo('/sales-center')
   } catch (err: any) {
     console.log('SSO callback failed -->', err)

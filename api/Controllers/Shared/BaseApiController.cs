@@ -21,15 +21,16 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 [Route("[controller]/[action]")]
 public abstract class BaseApiController : ControllerBase
 {
-    protected readonly ProrilWebDbContext db;
+    // protected readonly ProrilWebDbContext db;
     protected readonly SalesCenterDbContext scDb;
     protected readonly JwtHelper jwtHelper;
     private readonly ILogger _logger;
 
     protected BaseApiController(
-        ProrilWebDbContext db, SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
+        // ProrilWebDbContext db, SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
+        SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
     {
-        this.db = db;
+        // this.db = db;
         this.scDb = scDb;
         this.jwtHelper = jwtHelper;
         _logger = logger;

@@ -287,7 +287,7 @@ const onSave = async () => {
   <div>
     <FullPageLoading :show="loading" />
 
-    <UBreadcrumb :items="breadcrumbFor(appPath('sales-search/customer'))" class="mb-4" />
+    <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/customer'))" class="mb-4" />
 
     <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div>

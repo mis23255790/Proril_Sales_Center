@@ -15,6 +15,19 @@
       }
     },
     {
+      "name": "api: 偵錯 Production (localhost:5211)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-api",
+      "program": "${workspaceFolder}/api/bin/Debug/net8.0/Proril.SalesIssue.Api.dll",
+      "cwd": "${workspaceFolder}/api",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Production",
+        "ASPNETCORE_URLS": "http://localhost:5211"
+      }
+    },
+    {
       "name": "app: Edge 偵錯 (localhost:3000)",
       "type": "pwa-msedge",
       "request": "launch",
@@ -27,6 +40,16 @@
       "request": "launch",
       "url": "http://localhost:3000",
       "webRoot": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug Full Stack (API + Chrome)",
+      "configurations": ["api: 偵錯 (localhost:5211)", "app: Chrome 偵錯 (localhost:3000)"]
+    },
+    {
+      "name": "Debug Full Stack (API + Edge)",
+      "configurations": ["api: 偵錯 (localhost:5211)", "app: Edge 偵錯 (localhost:3000)"]
     }
   ]
 }

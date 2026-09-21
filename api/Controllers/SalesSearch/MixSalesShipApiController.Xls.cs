@@ -2,6 +2,7 @@ using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Models;
+using CopSalesOrder = Proril.SalesIssue.Api.Data.SalesCenter.CopSalesOrder;
 
 namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 

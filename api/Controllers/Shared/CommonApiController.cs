@@ -15,10 +15,9 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 public class CommonApiController : BaseApiController
 {
     public CommonApiController(
-        ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
-        ILogger<CommonApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<CommonApiController> logger) : base(scDb, jwtHelper, logger)
     {
     }
 

@@ -5,6 +5,7 @@ using Proril.SalesIssue.Api.Controllers.Shared;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
+using Proril.SalesIssue.Api.Services;
 
 namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 
@@ -18,21 +19,29 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 /// 純讀）。Controller 只負責把參數傳進去、把結果集原樣回傳。
 ///
 /// 只搬未完成訂單檢索這一頁會用到的三支端點（GetUnfinOrder / QueryUnfinOrder_1 / ExportXls）。
+///
+/// <c>SerialNosJson</c>（銘版序號）原本是 SP 背後的 V_UnfinOrder 用跨庫 LEFT JOIN
+/// 即時查 PRORIL_WEB.dbo.NPS_D_Order，51002 執行帳號對 PRORIL_WEB 沒有 SELECT 權限會
+/// 直接失敗，已把那段 JOIN 拿掉，改成這裡呼叫 <see cref="ManufacturingSerialNoLookupService"/>
+/// 在應用層 left join 回去（見 <see cref="ApplySerialNos"/>）。
 /// </summary>
 [Authorize]
 public partial class SalesOrderUnFinishApiController : BaseApiController
 {
     public SalesOrderUnFinishApiController(
-        ProrilWebDbContext db,
+        // ProrilWebDbContext db,
         Data.SalesCenter.SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<SalesOrderUnFinishApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ManufacturingSerialNoLookupService serialNoLookup,
+        ILogger<SalesOrderUnFinishApiController> logger) : base(scDb, jwtHelper, logger)
     {
         _paths = paths;
+        _serialNoLookup = serialNoLookup;
     }
 
     private readonly StoragePaths _paths;
+    private readonly ManufacturingSerialNoLookupService _serialNoLookup;
 
     /// <summary>依品號（TD004）分群的查詢，餵給「品號細項」「品號統計」兩個頁籤。</summary>
     [HttpGet]
@@ -47,10 +56,10 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
         WriteStepLog(nameof(GetUnfinOrder), $"productNo:{productNo}, productName:{productName}, groupName:{groupName}");
 
         ca.IsSuccess = true;
-        ca.Body = FilterByOrderType(
+        ca.Body = ApplySerialNos(FilterByOrderType(
             CallQueryUnfinOrder(inCopSource, inCustomerNo, productType, productNo, productName, productSpec,
                 startDate, endDate, deliveryStartDate, deliveryEndDate, serialNo, poNo, inPlanNumber, groupName, groupDesc),
-            orderType);
+            orderType));
         return ca;
     }
 
@@ -72,10 +81,10 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
         WriteStepLog(nameof(QueryUnfinOrder_1), $"productNo:{productNo}, poNo:{poNo}, groupName:{groupName}");
 
         ca.IsSuccess = true;
-        ca.Body = FilterByOrderType(
+        ca.Body = ApplySerialNos(FilterByOrderType(
             CallQueryUnfinOrder1(inCopSource, inCustomerNo, productType, productNo, productName, productSpec,
                 startDate, endDate, deliveryStartDate, deliveryEndDate, serialNo, poNo, inPlanNumber, groupName, groupDesc),
-            orderType);
+            orderType));
         return ca;
     }
 
@@ -145,4 +154,26 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
         => string.IsNullOrWhiteSpace(orderType)
             ? rows
             : rows.Where(x => x.FooterFlag == "Y" || x.Tc001 == orderType).ToList();
+
+    /// <summary>
+    /// 補上 <see cref="UnfinOrder.SerialNosJson"/>。V_UnfinOrder 已經拿掉對
+    /// PRORIL_WEB.dbo.NPS_D_Order 的跨庫 JOIN（見類別註解），改成這裡用同一套
+    /// key 規則（OrderType-RTRIM(OrderNo)+OrderSno）在應用層 left join 回去。
+    /// </summary>
+    private List<UnfinOrder> ApplySerialNos(List<UnfinOrder> rows)
+    {
+        if (rows.Count == 0) return rows;
+
+        var serialNos = _serialNoLookup.GetSerialNos();
+        foreach (var row in rows)
+        {
+            var key = $"{row.Tc001}-{row.Tc002?.Trim()}{row.Td003}";
+            if (serialNos.TryGetValue(key, out var json))
+            {
+                row.SerialNosJson = json;
+            }
+        }
+
+        return rows;
+    }
 }

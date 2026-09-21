@@ -24,7 +24,7 @@ const breadcrumbItems = [
 
 <template>
   <div>
-    <UBreadcrumb :items="breadcrumbItems" class="mb-4" />
+    <UBreadcrumb v-if="false" :items="breadcrumbItems" class="mb-4" />
 
     <h1 class="mb-6 text-2xl font-bold text-highlighted">
       {{ item.label }}

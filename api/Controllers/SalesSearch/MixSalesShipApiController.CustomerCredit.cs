@@ -33,10 +33,10 @@ public partial class MixSalesShipApiController
         WriteStepLog(nameof(GetCustomerCredit), $"erpCustomerNo:{erpCustomerNo}");
 
         var account = GetAccountByToken();
-        var credits = db.Set<CopGetCredit>()
+        var credits = scDb.Set<CopGetCredit>()
             .FromSqlInterpolated($"EXEC prc_COPGetCredit {erpCustomerNo ?? ""}, {account}")
             .ToList();
-        var parents = db.VErpcustomers.Where(v => v.Ma001 == erpCustomerNo).ToList();
+        var parents = scDb.VErpcustomers.Where(v => v.Ma001 == erpCustomerNo).ToList();
 
         ca.IsSuccess = true;
         ca.Body = JoinParent(credits, parents, (c, p) => new CustomerCreditRow(c, p?.Ma002, p?.Ma003));
@@ -53,10 +53,10 @@ public partial class MixSalesShipApiController
         WriteStepLog(nameof(GetCustomerCreditCRM), $"erpCustomerNo:{erpCustomerNo}");
 
         var account = GetAccountByToken();
-        var credits = db.Set<CopGetCreditCrm>()
+        var credits = scDb.Set<CopGetCreditCrm>()
             .FromSqlInterpolated($"EXEC prc_COPGetCredit_CRM {erpCustomerNo ?? ""}, {account}")
             .ToList();
-        var parents = db.VErpcustomers.Where(v => v.Ma001 == erpCustomerNo).ToList();
+        var parents = scDb.VErpcustomers.Where(v => v.Ma001 == erpCustomerNo).ToList();
 
         ca.IsSuccess = true;
         ca.Body = JoinParent(credits, parents, (c, p) => new CustomerCreditCrmRow(c, p?.Ma002, p?.Ma003));
@@ -70,6 +70,7 @@ public partial class MixSalesShipApiController
     /// 最多一筆，等同「有母公司資料才顯示」，照抄既有行為。
     /// </summary>
     private static List<TRow> JoinParent<TCredit, TRow>(
-        List<TCredit> credits, List<VErpcustomer> parents, Func<TCredit, VErpcustomer?, TRow> selector)
+        List<TCredit> credits, List<Proril.SalesIssue.Api.Data.SalesCenter.VErpcustomer> parents,
+        Func<TCredit, Proril.SalesIssue.Api.Data.SalesCenter.VErpcustomer?, TRow> selector)
         => (from credit in credits from parent in parents select selector(credit, parent)).ToList();
 }

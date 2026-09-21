@@ -239,7 +239,7 @@ public partial class MainApiController
         => new()
         {
             IsSuccess = true,
-            Body = db.MDepartments
+            Body = scDb.MDepartments
                 .Where(d => d.IsEnable)
                 .OrderBy(d => d.DepCode)
                 .Select(d => new { d.DepCode, d.DepName })
