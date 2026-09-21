@@ -21,11 +21,10 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 public partial class OrderInfoVerifyApiController : BaseApiController
 {
     public OrderInfoVerifyApiController(
-        ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<OrderInfoVerifyApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<OrderInfoVerifyApiController> logger) : base(scDb, jwtHelper, logger)
     {
         _paths = paths;
     }
@@ -97,7 +96,7 @@ public partial class OrderInfoVerifyApiController : BaseApiController
         var ca = new CustomApiViewModel { IsSuccess = false };
 
         ca.IsSuccess = true;
-        ca.Body = db.CopCheckRules.ToList();
+        ca.Body = scDb.CopCheckRules.ToList();
         return ca;
     }
 
@@ -119,7 +118,7 @@ public partial class OrderInfoVerifyApiController : BaseApiController
         executor = string.IsNullOrWhiteSpace(executor) ? GetAccountByToken() : executor;
 
         var result = new SqlParameter("@Results", SqlDbType.NVarChar, 255) { Direction = ParameterDirection.Output };
-        db.Database.ExecuteSqlInterpolated($"EXEC prc_COPOrderChk {copSource}, {poNo}, {custAmt}, {paidCheck}, {executor}, {result} OUTPUT");
+        scDb.Database.ExecuteSqlInterpolated($"EXEC prc_COPOrderChk {copSource}, {poNo}, {custAmt}, {paidCheck}, {executor}, {result} OUTPUT");
 
         ca.Body = result.Value?.ToString();
         if (((string?)ca.Body ?? "").Contains("SUCCESS"))
@@ -145,7 +144,7 @@ public partial class OrderInfoVerifyApiController : BaseApiController
         executor = string.IsNullOrWhiteSpace(executor) ? GetAccountByToken() : executor;
 
         var result = new SqlParameter("@Results", SqlDbType.NVarChar, 255) { Direction = ParameterDirection.Output };
-        db.Database.ExecuteSqlInterpolated($"EXEC prc_COPPassCheck {checkNo}, {passItem}, {passMemo}, {executor}, {result} OUTPUT");
+        scDb.Database.ExecuteSqlInterpolated($"EXEC prc_COPPassCheck {checkNo}, {passItem}, {passMemo}, {executor}, {result} OUTPUT");
 
         ca.Body = result.Value?.ToString();
         if (((string?)ca.Body ?? "").Contains("SUCCESS"))
@@ -174,7 +173,7 @@ public partial class OrderInfoVerifyApiController : BaseApiController
 
         var account = GetAccountByToken();
         ca.IsSuccess = true;
-        ca.Body = db.Set<CopGetCredit>()
+        ca.Body = scDb.Set<CopGetCredit>()
             .FromSqlInterpolated($"EXEC prc_COPGetCredit {customNo}, {account}")
             .ToList();
         return ca;
@@ -190,7 +189,7 @@ public partial class OrderInfoVerifyApiController : BaseApiController
 
         var account = GetAccountByToken();
         ca.IsSuccess = true;
-        ca.Body = db.Set<CopGetCreditCrm>()
+        ca.Body = scDb.Set<CopGetCreditCrm>()
             .FromSqlInterpolated($"EXEC prc_COPGetCredit_CRM {customNo}, {account}")
             .ToList();
         return ca;
@@ -206,7 +205,7 @@ public partial class OrderInfoVerifyApiController : BaseApiController
         string? copSource, string? orderType, string? orderNo, string? customerNo,
         string? startDate, string? endDate)
     {
-        var vpoQuery = db.VPoLists.AsNoTracking().AsQueryable();
+        var vpoQuery = scDb.VPoLists.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(copSource))
         {
@@ -247,25 +246,31 @@ public partial class OrderInfoVerifyApiController : BaseApiController
     }
 
     /// <summary>
-    /// GetPOCheckView / ExportXls 共用的查詢核心，照抄 1.0 的多重 join。全部在記憶體
-    /// （LINQ to Objects）做，1.0 也是先 ToList() 幾張表再 join——這些 join 用了字串串接當
-    /// 複合鍵，SQL 端無法翻譯，本來就得先撈到記憶體。
+    /// GetPOCheckView / ExportXls 共用的查詢核心，照抄 1.0 的多重 join。最終 join 全部在
+    /// 記憶體（LINQ to Objects）做，1.0 也是先 ToList() 幾張表再 join——這些 join 用了字串
+    /// 串接當複合鍵，SQL 端無法翻譯，join 本身沒辦法省。
+    ///
+    /// **與 1.0 的差異（效能）**：1.0／這裡最早的版本是每張支援表整表 ToList() 下來，
+    /// 即使只查一張訂單也要下載全表，是這支 API 最主要的瓶頸。現在改成先用「本頁實際會用到
+    /// 的訂單」（<paramref name="pageSize"/> 分頁後的 <c>vpoList</c>）算出 CopSource／
+    /// PoNo（單別-單號）／部門代號 這幾組候選值，讓資料庫端先用 <c>IN</c> 過濾掉不相關的列，
+    /// 下面的 join 邏輯完全不變。這些過濾條件刻意只比對 <see cref="GetFilteredOrders"/> 篩出
+    /// 的訂單有哪些，是「安全的超集合」而不是精確比對（例如 CopPoDetailCheck 不比對 Sno、
+    /// VPoDetailList 只比對單號不比對單別）——多抓幾筆沒關係，最後的 join 才是決定實際結果的
+    /// 依據，這裡只是減少要下載到記憶體的資料量。
     ///
     /// <paramref name="preFilteredOrders"/> 有值就直接用（GetPOCheckView 已經先呼叫過
     /// <see cref="GetFilteredOrders"/>，不用再撈一次 <c>V_POList</c>）；ExportXls 沒有這份
     /// 資料，傳 null 讓這裡自己查。<paramref name="pageSize"/> &lt;= 0 代表不分頁
-    /// （ExportXls 用預設值，永遠拿全部）。
+    /// （ExportXls 用預設值，永遠拿全部——這種情況候選值集合會接近全表，跟優化前效能相近，
+    /// 是預期行為，匯出本來就要全部資料）。
     /// </summary>
     private List<VPoListDetailViewModel> GetOrderInfoList(
         string? copSource, string? orderType, string? orderNo, string? customerNo,
         string? startDate, string? endDate, string? confirmFlag,
         int pageIndex = 0, int pageSize = 0, List<VPoList>? preFilteredOrders = null)
     {
-        var checkRules = db.CopCheckRules.ToList();
-        var copPoCheckList = db.CopPoChecks.AsNoTracking().ToList()
-            .Select(c => new CopPoCheckExRule(c, checkRules)).ToList();
-        var copPoDetailCheckList = db.CopPoDetailChecks.AsNoTracking().ToList()
-            .Select(c => new CopPoDetailCheckExRule(c, checkRules)).ToList();
+        var checkRules = scDb.CopCheckRules.ToList();
 
         var vpoList = preFilteredOrders ?? GetFilteredOrders(copSource, orderType, orderNo, customerNo, startDate, endDate);
 
@@ -282,11 +287,56 @@ public partial class OrderInfoVerifyApiController : BaseApiController
             vpoList = vpoList.Skip(Math.Max(pageIndex, 0) * pageSize).Take(pageSize).ToList();
         }
 
-        var vpoDetailList = db.VPoDetailLists.AsNoTracking().ToList();
-        var productEnglishAlls = db.VProductEnglishAlls.AsNoTracking().ToList();
-        var depData = db.CopDepData.AsNoTracking().ToList();
-        var upFileData = db.VUpFileData.AsNoTracking().ToList();
-        var passChecks = db.CopPassChecks.AsNoTracking().ToList();
+        if (vpoList.Count == 0)
+        {
+            return [];
+        }
+
+        var copSources = vpoList.Select(v => v.CopSource).Distinct().ToList();
+        var poNoKeys = vpoList.Select(v => $"{v.單別.Trim()}-{v.單號.Trim()}").Distinct().ToList();
+        var orderNos = vpoList.Select(v => v.單號.Trim()).Distinct().ToList();
+        var depNos = vpoList.Select(v => v.部門代號).Distinct().ToList();
+
+        var copPoCheckList = scDb.CopPoChecks.AsNoTracking()
+            .Where(c => c.CopSource != null && copSources.Contains(c.CopSource)
+                && c.PoNo != null && poNoKeys.Contains(c.PoNo.Trim()))
+            .ToList()
+            .Select(c => new CopPoCheckExRule(c, checkRules)).ToList();
+
+        var copPoDetailCheckRaw = scDb.CopPoDetailChecks.AsNoTracking()
+            .Where(c => c.CopSource != null && copSources.Contains(c.CopSource)
+                && c.PoNo != null && poNoKeys.Contains(c.PoNo.Trim()))
+            .ToList();
+        var copPoDetailCheckList = copPoDetailCheckRaw
+            .Select(c => new CopPoDetailCheckExRule(c, checkRules)).ToList();
+
+        var vpoDetailList = scDb.VPoDetailLists.AsNoTracking()
+            .Where(d => copSources.Contains(d.CopSource) && orderNos.Contains(d.單號.Trim()))
+            .ToList();
+
+        var productNos = vpoDetailList.Select(d => d.品號).Where(p => p != null).Distinct().ToList();
+        var productEnglishAlls = productNos.Count == 0
+            ? new List<Proril.SalesIssue.Api.Data.VProductEnglishAll>()
+            : scDb.VProductEnglishAlls.AsNoTracking()
+                .Where(p => p.ProductNo != null && productNos.Contains(p.ProductNo))
+                .ToList();
+
+        var depData = scDb.CopDepData.AsNoTracking()
+            .Where(d => d.DepNo != null && depNos.Contains(d.DepNo))
+            .ToList();
+
+        var upFileData = scDb.VUpFileData.AsNoTracking()
+            .Where(u => u.KeyValues != null && poNoKeys.Contains(u.KeyValues))
+            .ToList();
+
+        // 只用「本頁訂單檢核明細」牽到的 OrderChkNo 當候選值（超集合：不管 Sno，
+        // 比原始 join 的 LastOrDefault() 寬鬆一點沒關係，join 邏輯本身沒動）。
+        var orderChkNos = copPoDetailCheckRaw.Select(c => c.OrderChkNo).Where(o => o != null).Distinct().ToList();
+        var passChecks = orderChkNos.Count == 0
+            ? new List<Proril.SalesIssue.Api.Data.CopPassCheck>()
+            : scDb.CopPassChecks.AsNoTracking()
+                .Where(p => p.OrderChkNo != null && orderChkNos.Contains(p.OrderChkNo))
+                .ToList();
 
         var query = from tbl in vpoList
                     join poCheck in copPoCheckList
