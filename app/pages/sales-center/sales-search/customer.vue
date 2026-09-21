@@ -452,7 +452,7 @@ const onSave = async () => {
               ERP 資料參考（唯讀）
             </p>
             <p>{{ linkedErpCustomer.ma002 }} / {{ linkedErpCustomer.ma003 }}</p>
-            <p>聯絡人：{{ linkedErpCustomer.ma005 }}　電話：{{ linkedErpCustomer.ma006 }}</p>
+            <p>聯絡人：{{ linkedErpCustomer.ma005 }}&#x3000;電話：{{ linkedErpCustomer.ma006 }}</p>
             <p>地址：{{ linkedErpCustomer.ma023 }} {{ linkedErpCustomer.ma024 }}</p>
           </div>
 
