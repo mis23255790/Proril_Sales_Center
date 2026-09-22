@@ -41,8 +41,8 @@ services:
     env_file:
       - api/docker.env
     volumes:
-      - D:\proril-sales-center.proril\proril-sales-center-prod.proril\ProrilWebFiles:/app/ProrilWebFiles
-      - D:\proril-sales-center.proril\proril-sales-center-prod.proril\Logs:/app/Logs
+      - D:/proril-sales-center.proril/proril-sales-center-prod.proril/ProrilWebFiles:/app/ProrilWebFiles
+      - D:/proril-sales-center.proril/proril-sales-center-prod.proril/Logs:/app/Logs
     restart: unless-stopped
     networks:
       - dev-mssql-2022-network
