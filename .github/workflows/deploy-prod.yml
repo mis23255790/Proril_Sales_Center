@@ -13,12 +13,14 @@ jobs:
         with:
           ref: main
 
-      - name: Inject env files
-        run: |
-          cp /secrets/proril-sales-center.env.production docker.env
-          cp /secrets/proril-sales-center.env.production api/docker.env
-
       - name: Deploy
         run: |
           export APP_PORT=51061
-          docker compose -f docker-compose.prod.yml up -d --build
+          docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+
+      - name: Show recent logs
+        if: always()
+        run: docker compose -f docker-compose.prod.yml logs --tail=50
+
+      - name: Clean up old images
+        run: docker image prune -f

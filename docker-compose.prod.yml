@@ -7,9 +7,18 @@
 # 同一台主機上還有 docker-compose.dev.yml（dev 環境），name 故意跟這份不同，
 # 兩者才能在同一台主機上同時起，不會互相蓋掉。
 #
-# api/docker.env、docker.env 要先準備好——尤其 ConnectionStrings__ProrilWeb /
-# ConnectionStrings__SalesCenter，這台主機在 dev-mssql-2022-network 上，SQL Server
-# 可能要改用該 network 上的容器名稱連，不一定是本機測試用的 LAN IP。
+# env_file 直接指到 runner 容器裡的 /secrets/proril-sales-center.env.production
+# （runner 自己的 compose 掛進去的，見 D:\github-runners\proril-sales-center.yml），
+# 不用另外複製一份到 checkout 目錄——docker compose 是在 runner 容器裡執行的，
+# 讀 env_file 就是讀它自己容器內的檔案系統。
+#
+# ProrilWebFiles 要跟 1.0 共用同一個 host 目錄，不能用 Docker 自己管的匿名 volume；
+# 又因為 docker compose 是在 Linux 的 runner 容器裡執行、Windows 路徑字串在這裡解析
+# 不出來（絕對路徑判斷是照 Linux 規則），所以改成引用一個「已經綁定到指定 host 路徑」的
+# named volume（external: true，要先在 142 上用原生 Windows CLI 建好）：
+#   docker volume create --driver local --opt type=none --opt o=bind \
+#     --opt device="D:\proril-sales-center.proril\proril-sales-center-prod.proril\ProrilWebFiles" \
+#     proril-sales-center-prod-prorilwebfiles
 name: proril_sales_center_prod
 services:
   app:
@@ -22,7 +31,7 @@ services:
     environment:
       PORT: "3000"
     env_file:
-      - docker.env
+      - /secrets/proril-sales-center.env.production
     depends_on:
       - api
     restart: unless-stopped
@@ -39,10 +48,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
     env_file:
-      - api/docker.env
+      - /secrets/proril-sales-center.env.production
     volumes:
-      - D:/proril-sales-center.proril/proril-sales-center-prod.proril/ProrilWebFiles:/app/ProrilWebFiles
-      - D:/proril-sales-center.proril/proril-sales-center-prod.proril/Logs:/app/Logs
+      - proril-sales-center-prod-prorilwebfiles:/app/ProrilWebFiles
+      - proril-sales-center-prod-logs:/app/Logs
     restart: unless-stopped
     networks:
       - dev-mssql-2022-network
@@ -53,3 +62,9 @@ networks:
     external: true
   nginx-proxy:
     external: true
+
+volumes:
+  proril-sales-center-prod-prorilwebfiles:
+    external: true
+  proril-sales-center-prod-logs:
+    name: proril-sales-center-prod-logs
