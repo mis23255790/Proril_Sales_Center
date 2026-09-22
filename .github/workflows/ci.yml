@@ -49,22 +49,3 @@ jobs:
 
       - name: Build
         run: dotnet build api/Proril.SalesIssue.Api.csproj -c Release --no-restore
-
-  deploy-dev:
-    needs: [frontend, api]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: [self-hosted, dev]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Inject env files
-        shell: pwsh
-        run: |
-          Copy-Item "C:\actions-runner\secrets\docker.env" "docker.env" -Force
-          Copy-Item "C:\actions-runner\secrets\api.docker.env" "api\docker.env" -Force
-
-      - name: Deploy
-        shell: pwsh
-        run: docker compose up -d --build

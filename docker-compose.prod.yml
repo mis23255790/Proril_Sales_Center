@@ -1,25 +1,48 @@
-# 內部測試站部署：image 已經 build/push 到 registry，這裡只負責跑起來，不 build。
+# 142（dev-mssql-2022-network 主機）的 prod 環境部署，由 self-hosted runner 執行：
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
 # 起之前確認 dev-mssql-2022-network、nginx-proxy 這兩個 external network 已經存在於這台主機
 # （docker network ls 查得到），這兩個是別的 compose/手動建的，這份不負責建立它們。
 #
-# api/docker.env 要先準備好（見 api/docker.env.example）——尤其
-# ConnectionStrings__ProrilWeb / ConnectionStrings__SalesCenter，這台主機在
-# dev-mssql-2022-network 上，SQL Server 可能要改用該 network 上的容器名稱連，
-# 不一定是本機測試用的 LAN IP。
+# 同一台主機上還有 docker-compose.dev.yml（dev 環境），name 故意跟這份不同，
+# 兩者才能在同一台主機上同時起，不會互相蓋掉。
+#
+# api/docker.env、docker.env 要先準備好——尤其 ConnectionStrings__ProrilWeb /
+# ConnectionStrings__SalesCenter，這台主機在 dev-mssql-2022-network 上，SQL Server
+# 可能要改用該 network 上的容器名稱連，不一定是本機測試用的 LAN IP。
+name: proril_sales_center_prod
 services:
-  web-server:
-    image: intranet-sales-center-dev.proril
-    container_name: proril_intranet_sales_center
-    user: "root"
+  app:
+    image: proril-sales-center-app-prod.proril
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "8088:8080"
+      - "${APP_PORT:-51061}:3000"
+    environment:
+      PORT: "3000"
+    env_file:
+      - docker.env
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - dev-mssql-2022-network
+      - nginx-proxy
+
+  api:
+    image: proril-sales-center-api-prod.proril
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    user: "root"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
     env_file:
       - api/docker.env
     volumes:
-      - D:\intranet-sales-center-dev.proril\ProrilWebFiles:/app/ProrilWebFiles
-      - D:\intranet-sales-center-dev.proril\Logs:/app/Logs
+      - D:\proril-sales-center.proril\proril-sales-center-prod.proril\ProrilWebFiles:/app/ProrilWebFiles
+      - D:\proril-sales-center.proril\proril-sales-center-prod.proril\Logs:/app/Logs
     restart: unless-stopped
     networks:
       - dev-mssql-2022-network
