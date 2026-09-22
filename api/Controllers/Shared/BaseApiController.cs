@@ -27,8 +27,8 @@ public abstract class BaseApiController : ControllerBase
     private readonly ILogger _logger;
 
     protected BaseApiController(
-        // ProrilWebDbContext db, SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
-        SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
+        ProrilWebDbContext db, SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
+        // SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
     {
         // this.db = db;
         this.scDb = scDb;

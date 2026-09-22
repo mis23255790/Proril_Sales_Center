@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Controllers.Shared;
+using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
@@ -24,10 +25,11 @@ public partial class WorkProcessApiController : BaseApiController
     private readonly StoragePaths _paths;
 
     public WorkProcessApiController(
+        ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<WorkProcessApiController> logger) : base(scDb, jwtHelper, logger)
+        ILogger<WorkProcessApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
         _paths = paths;
     }

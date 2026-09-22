@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Data.SalesCenter;
+using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
 
@@ -20,9 +21,10 @@ public partial class CustomQueryApiController : BaseApiController
 {
     public CustomQueryApiController(
         // Proril.SalesIssue.Api.Data.ProrilWebDbContext db,
+        ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
-        ILogger<CustomQueryApiController> logger) : base(scDb, jwtHelper, logger)
+        ILogger<CustomQueryApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
     }
 

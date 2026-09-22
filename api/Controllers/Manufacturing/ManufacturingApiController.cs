@@ -31,10 +31,11 @@ public class ManufacturingApiController : BaseApiController
     private readonly ManufacturingSerialNoLookupService _serialNoLookup;
 
     public ManufacturingApiController(
+        ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         ManufacturingSerialNoLookupService serialNoLookup,
-        ILogger<ManufacturingApiController> logger) : base(scDb, jwtHelper, logger)
+        ILogger<ManufacturingApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
         _serialNoLookup = serialNoLookup;
     }

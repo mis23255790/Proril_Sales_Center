@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Data.SalesCenter;
+using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
 
@@ -22,10 +23,11 @@ public class UploadApiController : BaseApiController
     private readonly StoragePaths _paths;
 
     public UploadApiController(
+        ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<UploadApiController> logger) : base(scDb, jwtHelper, logger)
+        ILogger<UploadApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
         _paths = paths;
     }

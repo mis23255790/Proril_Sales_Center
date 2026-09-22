@@ -27,7 +27,7 @@ public class CustomerApiController : BaseApiController
         ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
-        ILogger<CustomerApiController> logger) : base(scDb, jwtHelper, logger)
+        ILogger<CustomerApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
         this.db = db;
     }

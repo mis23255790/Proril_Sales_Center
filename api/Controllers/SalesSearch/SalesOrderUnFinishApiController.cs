@@ -29,12 +29,12 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 public partial class SalesOrderUnFinishApiController : BaseApiController
 {
     public SalesOrderUnFinishApiController(
-        // ProrilWebDbContext db,
+        ProrilWebDbContext db,
         Data.SalesCenter.SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
         ManufacturingSerialNoLookupService serialNoLookup,
-        ILogger<SalesOrderUnFinishApiController> logger) : base(scDb, jwtHelper, logger)
+        ILogger<SalesOrderUnFinishApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
         _paths = paths;
         _serialNoLookup = serialNoLookup;

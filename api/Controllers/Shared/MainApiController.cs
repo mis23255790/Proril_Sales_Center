@@ -28,7 +28,7 @@ public partial class MainApiController : BaseApiController
         JwtHelper jwtHelper,
         AesHelper aes,
         IConfiguration configuration,
-        ILogger<MainApiController> logger) : base(scDb, jwtHelper, logger)
+        ILogger<MainApiController> logger) : base(db, scDb, jwtHelper, logger)
     {
         this.db = db;
         _aes = aes;
