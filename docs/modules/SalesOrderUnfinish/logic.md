@@ -125,17 +125,18 @@ if (!string.IsNullOrWhiteSpace(orderType))
 
 # 金額欄位權限
 
-`FunctionId.QueryUnFinish(420)` 底下 `LinkType=100` 控制金額欄位（原幣單價/金額、
+字串權限 `salesSearch.queryUnFinish.viewAmount` 控制金額欄位（原幣單價/金額、
 幣別、匯率、台幣金額、付款條件、課稅別）。跟銷貨檢索共用同一個 `usePermission()`
-composable，只是 functionNo 換成 420：
+composable，只是 key 不同：
 
 ```
-usePermission().checkLinkTypePermission(420, 100)
+usePermission().checkPermission(PERMISSION_KEYS.salesSearch.queryUnFinishViewAmount)
 ```
 
-`LinkType=100` 這個數字跟銷貨檢索相同，但 `M_Permission` 是
-`(帳號, FunctionNo, LinkType)` 組合鍵，兩個功能各自獨立判斷，互不影響
-（比對某帳號在銷貨檢索有沒有權限，不代表在未完成訂單也有）。
+兩個功能的金額權限是不同的 key，各自獨立判斷，互不影響
+（某帳號在銷貨檢索有沒有權限，不代表在未完成訂單也有）。
+舊模型對應 `FunctionNo=0320102（舊 420）, LinkType=100`，見
+`docs/modules/SystemSetting/logic.md`「字串權限」。
 
 # 查詢條件：哪些真的送到後端
 

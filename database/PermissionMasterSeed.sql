@@ -127,6 +127,8 @@ GO
     舊 420 -> 0320102  未完成訂單    -> sales-search/unfinished-orders
     舊 425 -> 0320201  訂單資料檢核  -> sales-search/order-info-verify
     舊 440 -> 0320103  客戶檢索      -> sales-search/customer
+
+  2.0 才有、PRORIL_WEB 沒有的功能不在這張對照表，見下面「2.0 專屬功能」。
 */
 DECLARE @FunctionNos TABLE (OldNo INT PRIMARY KEY, NewNo VARCHAR(8) NOT NULL);
 INSERT INTO @FunctionNos (OldNo, NewNo) VALUES
@@ -173,6 +175,16 @@ JOIN @FunctionNos n ON n.OldNo = f.FunctionNo;
 
 SET IDENTITY_INSERT dbo.M_Function OFF;
 
+-- 2.0 專屬功能 ------------------------------------------------------
+-- PRORIL_WEB 沒有這些功能，上面的 @FunctionNos 帶不出來，直接寫值。
+-- 系統別／群組跟同群組的權限管理（0000101）一致，從剛複製進來的那列抄，不另外寫死。
+--   0000103  群組權限  -> system/group-permission（群組預設功能從權限管理獨立出來）
+-- 加一個 2.0 專屬功能時，最下面「中文欄位比對」的 NOT IN 也要一起加。
+INSERT INTO dbo.M_Function (FunctionNo, FunctionName, SystemNo, GroupNo, GroupName, ImagrePath, Href, aStatus, RedirectHref)
+SELECT '0000103', N'群組權限', f.SystemNo, f.GroupNo, f.GroupName, f.ImagrePath, N'', 'Y', NULL
+FROM dbo.M_Function f
+WHERE f.FunctionNo = '0000101';
+
 COMMIT TRANSACTION;
 GO
 
@@ -192,10 +204,12 @@ PRINT '--- 中文欄位比對（應該沒有任何列） ---';
 SELECT t.FunctionNo, t.FunctionName AS Target, s.FunctionName AS Source
 FROM dbo.M_Function t
 JOIN [PRORIL_WEB].[dbo].[M_Function] s ON s.ID = t.ID  -- FunctionNo 兩邊已不同，只能靠 ID 對
-WHERE CAST(t.FunctionName AS NVARCHAR(20))
-      <> CAST(s.FunctionName COLLATE Chinese_Taiwan_Stroke_BIN AS NVARCHAR(20))
-   OR CAST(ISNULL(t.GroupName, N'') AS NVARCHAR(20))
-      <> CAST(ISNULL(s.GroupName, '') COLLATE Chinese_Taiwan_Stroke_BIN AS NVARCHAR(20));
+-- 2.0 專屬功能的 ID 是新庫自己編的，跟 PRORIL_WEB 同號只是巧合，不比
+WHERE t.FunctionNo NOT IN ('0000103')
+  AND (CAST(t.FunctionName AS NVARCHAR(20))
+         <> CAST(s.FunctionName COLLATE Chinese_Taiwan_Stroke_BIN AS NVARCHAR(20))
+       OR CAST(ISNULL(t.GroupName, N'') AS NVARCHAR(20))
+         <> CAST(ISNULL(s.GroupName, '') COLLATE Chinese_Taiwan_Stroke_BIN AS NVARCHAR(20)));
 
 SELECT t.SystemNo, t.SystemName AS Target, s.SystemName AS Source
 FROM dbo.M_System t

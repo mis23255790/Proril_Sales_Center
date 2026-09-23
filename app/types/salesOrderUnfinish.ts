@@ -8,17 +8,6 @@
  * 刻意不共用型別或常數，避免兩個模組互相牽動。
  */
 
-/** FunctionId.QueryUnFinish，權限檢查用。1.0 enum 註解是「尚未出貨訂單」，畫面標題是「未完成訂單檢索」。 */
-export const UNFINISH_FUNCTION_NO = '0320102'
-
-/**
- * M_PermissionLinkType.LinkType，未完成訂單金額欄位的權限碼。
- *
- * 數字跟銷貨檢索的 100 相同，但兩個功能各自獨立判斷（M_Permission 是
- * FunctionNo+LinkType 組合鍵），互不影響。
- */
-export const UNFINISH_AMOUNT_LINK_TYPE = 100
-
 /** getProductType()：都不勾 = A（含 9 開頭），都勾 = a，5 = 成品，x = 零件。跟銷貨檢索共通的畫面慣例。 */
 export const UNFINISH_PRODUCT_TYPE = {
   ALL_UNCHECKED: 'A',

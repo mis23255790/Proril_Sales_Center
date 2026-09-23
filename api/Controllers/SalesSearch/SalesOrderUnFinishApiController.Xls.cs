@@ -19,10 +19,6 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
  */
 public partial class SalesOrderUnFinishApiController
 {
-    /// <summary>M_Permission.LinkType，未完成訂單金額欄位的權限碼（跟銷貨檢索的 100 相同，
-    /// 但 FunctionNo 不同，兩個功能各自獨立判斷）。</summary>
-    private const int AmountLinkType = 100;
-
     private const string QtyFormat = @"_-* #,##0_-;\-* #,##0_-;_-* ""-""_-;_-@_-";
     private const string MoneyFormat = @"_-""$""* #,##0_-;\-""$""* #,##0_-;_-""$""* ""-""_-;_-@_-";
 
@@ -77,7 +73,7 @@ public partial class SalesOrderUnFinishApiController
         }
 
         var account = GetAccountByToken();
-        var showAmount = HasAmountPermission(account);
+        var showAmount = HasPermission(account, PermissionKeys.SalesSearch.QueryUnFinishViewAmount);
 
         using var workbook = new XLWorkbook();
         // 細項頁取「非 Y」（N + S + T），統計頁取「非 N」（S + Y + T），與畫面上的頁籤一致。
@@ -98,14 +94,6 @@ public partial class SalesOrderUnFinishApiController
         ca.IsSuccess = true;
         ca.Body = $"Temp/{account}/Export/{fileName}";
         return ca;
-    }
-
-    /// <summary>金額欄位權限：admin 直接放行，否則看 M_Permission 有沒有 (0320102, 100) 這一筆。</summary>
-    private bool HasAmountPermission(string account)
-    {
-        if (scDb.MUsers.Any(u => u.Account == account && u.IsAdmin)) return true;
-        return scDb.MPermissions.Any(p =>
-            p.LinkNumber == account && p.FunctionNo == FunctionIds.QueryUnFinish && p.LinkType == AmountLinkType);
     }
 
     private static string GroupKeyByProduct(UnfinOrder r) => r.Td004 ?? "";

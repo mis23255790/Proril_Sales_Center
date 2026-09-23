@@ -60,6 +60,14 @@
 > 常數在 `api/Models/Enums.cs` 的 `FunctionIds` 與 `useAppNavigation.ts` 的 `NAV_MODULES`，
 > 新增功能時**兩邊都要加**，再改 `PermissionMasterSeed.sql` 的對照表。
 > 完整對照與腳本見 `database/FunctionNoFormatMigration.sql`。
+>
+> **權限判斷一律用字串權限 `module.function.action`**（2026-09-23 起，例如
+> `salesSearch.mixSalesShipping.viewAmount`），不要再用 `FunctionNo + LinkType` 數字判斷。
+> 主檔 `M_PermissionDef`（`database/PermissionDefObjectsMigration.sql`），
+> 常數在後端 `api/Models/Enums.cs` 的 `PermissionKeys` 與前端 `app/utils/permissionKeys.ts`；
+> 後端檢查用 `BaseApiController.HasPermission(key)`，前端用 `usePermission().checkPermission(key)`。
+> 新增功能時**這三處也要加**（至少一個 `.view`），完整步驟見
+> `docs/modules/SystemSetting/logic.md`「新增一個功能要改哪裡」。
 
 > **2.0 的登入只走 SSO**，`Proril_Sales_Center.M_User.Password` 已全部清成 `NULL`
 > （2026-09-14，備份在 `M_User_bak_Password`）。`LoginSso` 不看密碼，

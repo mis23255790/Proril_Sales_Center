@@ -175,20 +175,18 @@ public partial class MainApiController : BaseApiController
     }
 
     /// <summary>
-    /// 欄位級權限檢查（M_Permission），金額欄位這類需要逐帳號授權的畫面元素在用。
+    /// 字串權限檢查（<see cref="PermissionKeys"/>），金額欄位這類需要逐帳號授權的畫面元素在用。
     ///
     /// 回傳裸 <c>bool</c>，不是 <see cref="CustomApiViewModel"/> 信封——這支是刻意跟其他
     /// API 不同形狀，前端 usePermission.ts 也是照這個預期寫的。
-    /// 1.0 用 <c>.First()</c> 找帳號，帳號不存在會直接丟例外；這裡改 <c>.Any()</c>，
-    /// 查不到就當非 admin 處理，不用把「帳號不存在」也當成例外。
+    ///
+    /// 取代 1.0 的 <c>CheckUserPermissionLinkType(functionNo, linkType)</c>（已移除）。
+    /// 跟舊端點的差異：舊的只看本人的列，這支同 <see cref="BaseApiController.HasPermission(string)"/>
+    /// 也認 000000（全體使用者）。
     /// </summary>
     [HttpGet]
-    public bool CheckUserPermissionLinkType(string functionNo, int linkType)
-    {
-        var account = GetAccountByToken();
-        if (scDb.MUsers.Any(u => u.Account == account && u.IsAdmin)) return true;
-        return scDb.MPermissions.Any(p => p.LinkNumber == account && p.FunctionNo == functionNo && p.LinkType == linkType);
-    }
+    public bool CheckPermission(string permissionKey)
+        => !string.IsNullOrWhiteSpace(permissionKey) && HasPermission(permissionKey.Trim());
 
     /// <summary>
     /// 系統別資料（含 topbar 用來顯示正式區/測試區環境圖示的 ImagePath）。

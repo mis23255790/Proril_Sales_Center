@@ -5,12 +5,6 @@
  * 屬性名，跟後端 VPoList/VPoDetailList 的形狀一致），刻意不共用型別或常數。
  */
 
-/** FunctionId.OrderInfoVerify，權限檢查用。1.0 enum 註解「訂單資料查核」，畫面顯示「訂單資料檢核」。 */
-export const ORDER_INFO_VERIFY_FUNCTION_NO = '0320201'
-
-/** M_PermissionLinkType.LinkType，金額欄位的權限碼。 */
-export const ORDER_INFO_VERIFY_AMOUNT_LINK_TYPE = 100
-
 /** 檢核結果值域：Y=通過、N=不通過、P=特規Pass。 */
 export const CHK = { OK: 'Y', NG: 'N', PASS: 'P' } as const
 export type ChkValue = typeof CHK[keyof typeof CHK] | null | undefined

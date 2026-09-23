@@ -82,6 +82,8 @@ public partial class SalesCenterDbContext : DbContext
 
     public virtual DbSet<MPermissionLinkType> MPermissionLinkTypes { get; set; }
 
+    public virtual DbSet<MPermissionDef> MPermissionDefs { get; set; }
+
     public virtual DbSet<MSystem> MSystems { get; set; }
 
     public virtual DbSet<MUser> MUsers { get; set; }
@@ -1035,6 +1037,9 @@ public partial class SalesCenterDbContext : DbContext
                 .HasMaxLength(40)
                 .IsUnicode(false);
             entity.Property(e => e.PermissionLinkTypeId).HasColumnName("PermissionLinkTypeID");
+            entity.Property(e => e.PermissionKey)
+                .HasMaxLength(100)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<MPermissionBakFunctionNo>(entity =>
@@ -1085,6 +1090,9 @@ public partial class SalesCenterDbContext : DbContext
                 .HasMaxLength(10)
                 .IsUnicode(false);
             entity.Property(e => e.TypeDesc).HasMaxLength(50);
+            entity.Property(e => e.PermissionKey)
+                .HasMaxLength(100)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<MPermissionGroupBakFunctionNo>(entity =>
@@ -1137,6 +1145,41 @@ public partial class SalesCenterDbContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.ModifyTime).HasColumnType("datetime");
             entity.Property(e => e.ParentLinkTypeId).HasColumnName("ParentLinkTypeID");
+        });
+
+        modelBuilder.Entity<MPermissionDef>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_M_PermissionDef");
+
+            entity.ToTable("M_PermissionDef");
+
+            entity.HasIndex(e => e.PermissionKey, "UQ_M_PermissionDef_PermissionKey").IsUnique();
+            entity.HasIndex(e => new { e.FunctionNo, e.LinkType }, "UQ_M_PermissionDef_FunctionNo_LinkType").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.PermissionKey)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.FunctionNo)
+                .HasMaxLength(8)
+                .IsUnicode(false);
+            entity.Property(e => e.PermissionLinkTypeId).HasColumnName("PermissionLinkTypeID");
+            entity.Property(e => e.ParentPermissionKey)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.ActionName).HasMaxLength(50);
+            entity.Property(e => e.AStatus)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasColumnName("aStatus");
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.Creator)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.ModiTime).HasColumnType("datetime");
+            entity.Property(e => e.Modifier)
+                .HasMaxLength(10)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<MSystem>(entity =>

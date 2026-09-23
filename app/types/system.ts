@@ -28,13 +28,18 @@ export interface MFunction {
   redirectHref?: string | null
 }
 
-/** M_PermissionLinkType：功能底下的細項權限，權限樹第三層以後。 */
-export interface MPermissionLinkType {
+/**
+ * M_PermissionDef：字串權限主檔（`module.function.action`，見 app/utils/permissionKeys.ts）。
+ * linkType = 1 是功能本身（`.view`），> 1 是功能底下的細項，權限樹第三層以後。
+ */
+export interface MPermissionDef {
   id: number
+  permissionKey: string
   functionNo: string
   linkType: number
-  linkTypeName: string
-  parentLinkTypeId?: number | null
+  parentPermissionKey?: string | null
+  actionName: string
+  sort: number
 }
 
 /** M_Permission：某帳號已有的權限列。 */
@@ -44,6 +49,8 @@ export interface MPermission {
   functionNo: string
   linkType: number
   permissionLinkTypeId?: number | null
+  /** migration 回填不到的舊列會是 null，樹上不會打勾，存檔時會被刪掉。 */
+  permissionKey?: string | null
 }
 
 /** 人員管理畫面的帳號設定。 */
@@ -78,6 +85,7 @@ export interface DepFunction {
   groupNo?: string | null
   functionNo?: string | null
   linkType?: number | null
+  permissionKey?: string | null
   functionName: string
   linkTypeName: string
 }
@@ -96,22 +104,21 @@ export interface UserFunction {
 }
 
 /**
- * 權限樹存檔時送給後端的細項。
- * 欄位名（含 PermissionLinkTypeID 的大寫 ID）沿用 1.0 的 Ret_LinkType，後端照這個名字解。
+ * 權限樹節點。上面兩層（系統類別／系統）是純分類，checkable = false、沒有 permissionKey；
+ * 功能節點的 permissionKey 是該功能的 `.view`，細項節點是細項自己的 key。
  */
-export interface RetLinkType {
-  FunctionNo: string
-  LinkType: string
-  PermissionLinkTypeID: number
-}
-
-/** 權限樹節點。上面兩層（系統類別／系統）是純分類，checkable = false。 */
 export interface PermissionTreeNode {
   key: string
   label: string
   checkable: boolean
   functionNo?: string
-  linkType?: number
-  permissionLinkTypeId?: number
+  permissionKey?: string
   children: PermissionTreeNode[]
+}
+
+/** 群組套用差異清單的一列。 */
+export interface PermissionDiffItem {
+  permissionKey: string
+  /** 「業務檢索 / 銷貨檢索 / 顯示金額欄位」這種路徑，給人看的。 */
+  path: string
 }

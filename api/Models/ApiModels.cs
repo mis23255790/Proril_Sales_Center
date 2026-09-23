@@ -288,19 +288,6 @@ public sealed record CustomerCreditCrmRow(
 
 // ---------------------------------------------------------------- 權限控管
 
-/// <summary>
-/// 權限樹存檔時，前端回傳的「功能底下的細項權限」。
-/// 欄位名（含 <c>PermissionLinkTypeID</c> 的大寫 ID）沿用 1.0 的 <c>Ret_LinkType</c>，
-/// 因為前端送的是同一包 JSON 字串，改名就對不上。
-/// <c>LinkType</c> 是字串也是 1.0 的原樣——前端從 DOM 取值時沒轉型，後端再 TryParse。
-/// </summary>
-public class RetLinkType
-{
-    public string FunctionNo { get; set; } = string.Empty;
-    public string? LinkType { get; set; }
-    public int PermissionLinkTypeID { get; set; }
-}
-
 /// <summary>人員管理畫面用的帳號設定。1.0 的 GetUserInfo 直接回整個 M_User（含密碼），這裡只回畫面要的欄位。</summary>
 public class UserSettingViewModel
 {
@@ -320,6 +307,7 @@ public class PermissionGroupViewModel
     public string? GroupNo { get; set; }
     public string? FunctionNo { get; set; }
     public byte? LinkType { get; set; }
+    public string? PermissionKey { get; set; }
     public string FunctionName { get; set; } = string.Empty;
     public string LinkTypeName { get; set; } = string.Empty;
 }

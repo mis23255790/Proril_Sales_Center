@@ -170,8 +170,15 @@ const NAV_MODULES: AppNavModule[] = [
             label: '權限管理',
             path: 'system/permission-manager',
             icon: 'i-lucide-shield-check',
-            description: '逐人設定可用功能與細項權限，可套用或維護群組預設功能',
+            description: '逐人設定可用功能與細項權限，可套用群組預設功能並檢視差異',
             functionNo: '0000101'
+          },
+          {
+            label: '群組權限',
+            path: 'system/group-permission',
+            icon: 'i-lucide-users',
+            description: '維護各群組（部門）的預設功能範本，供權限管理套用',
+            functionNo: '0000103'
           }
         ]
       }
@@ -191,13 +198,32 @@ export const appPath = (relative = '') =>
  */
 const useUserFunctionState = () => useState<UserFunction[] | null>('app-user-functions', () => null)
 
+/**
+ * 可用功能清單的載入狀態。`userFunctions === null` 同時代表「還沒載完」與「載入失敗」，
+ * 兩者側欄的處理相反（前者先不顯示、後者顯示全部），所以要另外記。
+ */
+type UserFunctionStatus = 'idle' | 'loading' | 'loaded' | 'failed'
+const useUserFunctionStatus = () => useState<UserFunctionStatus>('app-user-functions-status', () => 'idle')
+
+/**
+ * 進行中的請求。側欄（default.vue）與功能頁（例如 permission-manager.vue）會在
+ * 同一輪 onMounted 各自呼叫 loadUserFunctions()，共用同一個請求避免重打。
+ * 只在 client 端呼叫（onMounted），不會有 SSR 跨請求共用的問題。
+ */
+let pendingLoad: Promise<UserFunction[] | null> | null = null
+
 export const useAppNavigation = () => {
   const userFunctions = useUserFunctionState()
+  const userFunctionStatus = useUserFunctionStatus()
 
   /**
-   * 載入可用功能。沒載到（API 掛了、token 過期）就保持 null，
-   * 側欄退回顯示全部項目——寧可多顯示，也不要讓人一進站看到空選單以為系統壞了。
-   * 真正的把關在後端，每支 API 自己會擋。
+   * 載入可用功能。
+   *
+   * - **載入中**：側欄不顯示任何功能（見 modules），避免先列出全部、
+   *   API 回來後沒權限的項目又消失的閃動。
+   * - **沒載到**（API 掛了、token 過期）：userFunctions 保持 null，
+   *   側欄退回顯示全部項目——寧可多顯示，也不要讓人一進站看到空選單以為系統壞了。
+   *   真正的把關在後端，每支 API 自己會擋。
    *
    * **「成功但回空陣列」不走這條 fallback**：那是「這個人一個功能權限都沒有」，
    * 語意上跟「拿不到清單」不同，所以照樣過濾成空。但空選單一定要有畫面說明
@@ -206,17 +232,36 @@ export const useAppNavigation = () => {
    * 實際踩過：新庫的 M_User/M_Permission 沒灌資料，連 admin 都被當成沒權限。
    */
   const loadUserFunctions = async (force = false) => {
-    if (userFunctions.value !== null && !force) return userFunctions.value
-    try {
-      const { getUserFunctions } = useSystemSettingApi()
-      const res = await getUserFunctions()
-      userFunctions.value = res?.isSuccess ? (res.body ?? []) : null
-    } catch (err) {
-      console.log('load user functions failed -->', err)
-      userFunctions.value = null
-    }
-    return userFunctions.value
+    if (userFunctionStatus.value === 'loaded' && !force) return userFunctions.value
+    if (pendingLoad && !force) return pendingLoad
+
+    userFunctionStatus.value = 'loading'
+    pendingLoad = (async () => {
+      try {
+        const { getUserFunctions } = useSystemSettingApi()
+        const res = await getUserFunctions()
+        if (res?.isSuccess) {
+          userFunctions.value = res.body ?? []
+          userFunctionStatus.value = 'loaded'
+        } else {
+          userFunctions.value = null
+          userFunctionStatus.value = 'failed'
+        }
+      } catch (err) {
+        console.log('load user functions failed -->', err)
+        userFunctions.value = null
+        userFunctionStatus.value = 'failed'
+      } finally {
+        pendingLoad = null
+      }
+      return userFunctions.value
+    })()
+    return pendingLoad
   }
+
+  /** 還沒拿到結果（成功或失敗都算拿到）。側欄用來顯示載入中的佔位。 */
+  const isLoadingUserFunctions = computed(() =>
+    userFunctionStatus.value === 'idle' || userFunctionStatus.value === 'loading')
 
   /** functionNo → DB 的功能名稱。 */
   const functionNameByNo = computed(() => {
@@ -236,8 +281,12 @@ export const useAppNavigation = () => {
   /** 未過濾的完整功能表。麵包屑／路徑反查用，不受權限影響。 */
   const allModules = NAV_MODULES.filter(mod => mod.enabled)
 
-  /** 側欄與首頁卡片用：只留有權限的功能，名稱以 DB 為準。 */
+  /**
+   * 側欄與首頁卡片用：只留有權限的功能，名稱以 DB 為準。
+   * 載入中回空陣列（不閃出沒權限的項目）；載入失敗才不過濾。
+   */
   const modules = computed<AppNavModule[]>(() => {
+    if (isLoadingUserFunctions.value) return []
     const allowed = allowedFunctionNos.value
     const names = functionNameByNo.value
 
@@ -328,6 +377,7 @@ export const useAppNavigation = () => {
     modules,
     allModules,
     loadUserFunctions,
+    isLoadingUserFunctions,
     hasNoAccessibleModule,
     canAccess,
     modulePath,

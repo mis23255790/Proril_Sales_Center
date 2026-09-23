@@ -28,4 +28,6 @@ public partial class MPermissionGroup
     public string? Modifier { get; set; }
 
     public DateTime? ModiTime { get; set; }
+
+    public string? PermissionKey { get; set; }
 }

@@ -3,7 +3,7 @@ import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
 const { public: { appVersion } } = useRuntimeConfig()
-const { modules, modulePath, itemPath, appBaseLabel, loadUserFunctions, hasNoAccessibleModule } = useAppNavigation()
+const { modules, modulePath, itemPath, appBaseLabel, loadUserFunctions, isLoadingUserFunctions, hasNoAccessibleModule } = useAppNavigation()
 const { account } = useAuthAccount()
 const { getCurrentUser } = useCurrentUser()
 const { getSystemByNo } = useSystemInfo()
@@ -107,6 +107,11 @@ const items = computed<NavigationMenuItem[][]>(() => [
           class="-mx-1"
           :ui="{ link: 'cursor-pointer', childLink: 'cursor-pointer' }"
         />
+
+        <!-- 權限清單回來之前先放佔位，不先列出全部功能（否則沒權限的項目會閃一下再消失） -->
+        <div v-if="isLoadingUserFunctions" class="space-y-2 px-1">
+          <USkeleton v-for="n in 3" :key="n" class="h-8 w-full" />
+        </div>
 
         <!--
           一個功能都沒有時要講話，不能只是空白一片：

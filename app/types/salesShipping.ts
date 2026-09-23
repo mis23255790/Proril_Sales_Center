@@ -5,17 +5,6 @@
  * camelCase 化），不做語意改名 —— 對照舊碼／SQL 時不需要再翻譯一層。
  */
 
-/** FunctionId.MixSalesShipping，權限檢查用。 */
-export const SALES_SHIPPING_FUNCTION_NO = '0320101'
-
-/**
- * M_PermissionLinkType.LinkType，銷貨檢索金額欄位的權限碼。
- *
- * 這個值只在 FunctionId=410 底下有意義 —— 系統沒有跨功能通用的 LinkType 常數表，
- * 每個功能的 LinkType 各自定義，不能拿去給其他頁面用。
- */
-export const SALES_SHIPPING_AMOUNT_LINK_TYPE = 100
-
 /** getProductType()：都不勾 = A（含 9 開頭），都勾 = a，5 = 成品，x = 零件。 */
 export const PRODUCT_TYPE = {
   ALL_UNCHECKED: 'A',

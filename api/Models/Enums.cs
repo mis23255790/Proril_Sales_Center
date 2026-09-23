@@ -60,6 +60,45 @@ public static class FunctionIds
     /// 2.0 沿用畫面上實際看到的字樣。
     /// </summary>
     public const string OrderInfoVerify = "0320201";
+
+    /// <summary>群組權限（2.0 新增，群組預設功能從權限管理獨立出來，PRORIL_WEB 沒有這個功能）。</summary>
+    public const string GroupPermission = "0000103";
+}
+
+/// <summary>
+/// 字串權限 `module.function.action`（M_PermissionDef.PermissionKey），
+/// 取代「FunctionNo + LinkType 數字」的判斷。`.view` = 進得去這個功能，其餘是細項。
+/// 前端對照在 app/utils/permissionKeys.ts，資料在 database/PermissionDefObjectsMigration.sql，
+/// **三邊要一起改**。
+/// </summary>
+public static class PermissionKeys
+{
+    // 不叫 System，免得在這個類別裡蓋掉 System 命名空間
+    public static class SystemSetting
+    {
+        public const string PermissionManagerView = "system.permissionManager.view";
+        public const string UserManagerView = "system.userManager.view";
+        public const string GroupPermissionView = "system.groupPermission.view";
+    }
+
+    public static class SalesIssue
+    {
+        public const string KindMaintainView = "salesIssue.kindMaintain.view";
+        public const string ProcessMaintainView = "salesIssue.processMaintain.view";
+        public const string ProcessMaintainCreateSop = "salesIssue.processMaintain.createSop";
+        public const string ProcessMaintainPublishSop = "salesIssue.processMaintain.publishSop";
+    }
+
+    public static class SalesSearch
+    {
+        public const string MixSalesShippingView = "salesSearch.mixSalesShipping.view";
+        public const string MixSalesShippingViewAmount = "salesSearch.mixSalesShipping.viewAmount";
+        public const string QueryUnFinishView = "salesSearch.queryUnFinish.view";
+        public const string QueryUnFinishViewAmount = "salesSearch.queryUnFinish.viewAmount";
+        public const string CustomQueryView = "salesSearch.customQuery.view";
+        public const string OrderInfoVerifyView = "salesSearch.orderInfoVerify.view";
+        public const string OrderInfoVerifyViewAmount = "salesSearch.orderInfoVerify.viewAmount";
+    }
 }
 
 /// <summary>M_PermissionGroup.GroupType。</summary>
@@ -67,13 +106,6 @@ public static class PermissionGroupType
 {
     /// <summary>部門預設功能。1.0 MainApiController._default_group_type = 10。</summary>
     public const int Department = 10;
-}
-
-/// <summary>訂單資料檢核相關常數。</summary>
-public static class OrderInfoVerifyConst
-{
-    /// <summary>M_Permission.LinkType，金額欄位權限碼。</summary>
-    public const int AmountLinkType = 100;
 }
 
 public static class PermissionConst

@@ -1,4 +1,50 @@
 <details>
+  <summary>版號2026.09.23.1112</summary>
+
+##### feat!: 權限改成字串權限 module.function.action，群組預設功能獨立成「群組權限」
+      權限判斷從「FunctionNo + 各功能自訂的 LinkType 數字（100 = 顯示金額）」改成
+      Google IAM 式三段字串，例如 salesSearch.mixSalesShipping.viewAmount。
+      Action 只收目前真的有在檢查的：每個功能一個 .view，加上既有細項
+      （createSop / publishSop / viewAmount），不捏造 CRUD 全套。
+
+      database/PermissionDefObjectsMigration.sql（新，**測試區已執行**）
+        建 M_PermissionDef（14 列），M_Permission / M_PermissionGroup 加
+        PermissionKey 欄位與索引，以 (FunctionNo, LinkType) 回填，最後驗證回填不到的列。
+        補上 salesSearch.orderInfoVerify.viewAmount——1.0 起就有檢查卻勾不到的缺口。
+        表名原本叫 M_PermissionAction，上線前改成 M_PermissionDef（端點 GetMPermissionDef），
+        舊名的庫腳本會自動 sp_rename。
+      database/PermissionMasterSeed.sql
+        加「2.0 專屬功能」段，寫入 0000103 群組權限（PRORIL_WEB 沒有這個功能）。
+
+      後端
+        BaseApiController：HasFunctionPermission -> HasPermission(key)。
+        三支 .Xls.cs 的 HasAmountPermission 與 AmountLinkType = 100 常數刪掉，改共用
+        HasPermission(account, key)。**行為差異**：舊版只認本人的列，
+        現在跟其他權限檢查一樣也認 000000（全體使用者）。
+        MainApi：新增 GetMPermissionDef / SetPermissionKeys / SaveDepPermissionKeys /
+        CheckPermission；移除 SetPermissionTree / SaveDepFunction /
+        CheckUserPermissionLinkType（不會寫 PermissionKey，留著會存出認不得的列）。
+        存檔時由後端 ResolvePermissionKeys 驗證 key 並補隱含的 .view，不再只靠前端。
+        SaveDepPermissionKeys 權限改要 system.groupPermission.view，不再跟權限管理綁一起。
+        RetLinkType / OrderInfoVerifyConst 已無人使用，刪除。
+        存檔只動有 PermissionKey 的列：FunctionNo 改格式時刻意保留的 1.0 功能列
+        （舊數字，測試區 501 + 29 列）原封不動。1.0 版 SetPermissionTree 會把它們刪掉，順便修正。
+
+      前端
+        新頁 system/group-permission.vue（0000103），內容是原本權限管理的
+        「群組預設功能編輯」彈窗搬出來；NAV_MODULES 加一項。
+        permission-manager.vue 拿掉編輯按鈕與彈窗，套用彈窗下方新增「套用後差異」清單
+        （將新增／已有／本人原有、群組沒有），跟著微調即時重算。
+        permissionTree.ts 改用 PermissionKey 認節點，新增 diffSelection。
+        usePermission：checkLinkTypePermission -> checkPermission(key)，
+        三個 sales-search 頁面與各自的 *_FUNCTION_NO / *_AMOUNT_LINK_TYPE 常數一起改掉。
+        新增 app/utils/permissionKeys.ts（跟後端 PermissionKeys 對齊）。
+
+      上線順序：先跑 PermissionDefObjectsMigration.sql、再重跑 PermissionMasterSeed.sql，
+      最後才部署 api/ 與前端。反過來的話非 admin 帳號會變成什麼權限都沒有。
+</details>
+
+<details>
   <summary>版號2026.09.16.0938</summary>
 
 ##### refactor: 群組預設功能套用改用跟編輯一致的樹狀元件

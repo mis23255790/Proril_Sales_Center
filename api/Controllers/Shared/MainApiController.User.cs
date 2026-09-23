@@ -14,7 +14,7 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 /// 1. 回傳型別從裸 <c>bool</c> 改成 <see cref="CustomApiViewModel"/>。1.0 失敗時只回 false，
 ///    畫面永遠只能說「帳號新增失敗」；改成信封才有訊息可顯示，也才吃得到全域的
 ///    <c>ApiExceptionFilter</c>（它靠 reflection 塞 Message，塞不進 bool）。
-/// 2. 後端加上功能權限檢查（<see cref="FunctionIds.UserManager"/>）。1.0 只靠前端擋。
+/// 2. 後端加上功能權限檢查（<see cref="PermissionKeys.SystemSetting.UserManagerView"/>）。1.0 只靠前端擋。
 /// 3. 多一支 <see cref="UnlockUser"/>。1.0 的 IsLocked 只有登入失敗時會被設成 true，
 ///    畫面上沒有任何地方解得開，只能進 DB 改；2.0 接手帳號管理後不該還要人去動 DB。
 ///
@@ -27,7 +27,7 @@ public partial class MainApiController
     private string InitialPassword(string account) => _aes.Encrypt(account);
 
     private CustomApiViewModel? DenyIfNoUserManagerPermission()
-        => HasFunctionPermission(FunctionIds.UserManager)
+        => HasPermission(PermissionKeys.SystemSetting.UserManagerView)
             ? null
             : new CustomApiViewModel { IsSuccess = false, Message = "沒有人員管理權限" };
 

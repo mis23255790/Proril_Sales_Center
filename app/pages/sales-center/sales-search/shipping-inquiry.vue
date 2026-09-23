@@ -4,14 +4,14 @@ import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableColumn } from '@nuxt/ui'
 import type { SalesOrderQuery } from '~/composables/useSalesShippingApi'
 import type { CopSalesOrder, CopSalesOrderRow, SalesShippingCustomer } from '~/types/salesShipping'
-import { isDetailRow, SALES_SHIPPING_AMOUNT_LINK_TYPE, SALES_SHIPPING_FUNCTION_NO } from '~/types/salesShipping'
+import { isDetailRow } from '~/types/salesShipping'
 
 definePageMeta({ title: '銷貨檢索' })
 
 useSeoMeta({ title: '銷貨檢索 · PRORIL 業務中心' })
 
 const api = useSalesShippingApi()
-const { checkLinkTypePermission } = usePermission()
+const { checkPermission } = usePermission()
 const toast = useToast()
 const { breadcrumbFor, appPath } = useAppNavigation()
 const { pagination } = useTablePagination(20)
@@ -84,7 +84,7 @@ const loadCustomers = async () => {
 
 const loadPermission = async () => {
   try {
-    showAmount.value = await checkLinkTypePermission(SALES_SHIPPING_FUNCTION_NO, SALES_SHIPPING_AMOUNT_LINK_TYPE)
+    showAmount.value = await checkPermission(PERMISSION_KEYS.salesSearch.mixSalesShippingViewAmount)
   } catch (err) {
     console.log('shipping-inquiry loadPermission failed -->', err)
     showAmount.value = false

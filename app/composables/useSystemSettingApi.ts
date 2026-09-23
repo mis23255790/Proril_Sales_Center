@@ -4,20 +4,19 @@ import type {
   DepartmentListItem,
   MFunction,
   MPermission,
-  MPermissionLinkType,
+  MPermissionDef,
   MSystem,
-  RetLinkType,
   UserFunction,
   UserListItem,
   UserSetting
 } from '~/types/system'
 
 /**
- * 系統管理（人員管理 / 權限管理）的 API。
+ * 系統管理（人員管理 / 權限管理 / 群組權限）的 API。
  *
- * 端點名稱與參數沿用 1.0（MainApi/* 與 CommonApi/GetDepFunction），
- * 兩個「存檔」端點的參數是 **JSON 字串**不是陣列，這是 1.0 的形狀，不要改成物件送，
- * 後端是用 JsonConvert.DeserializeObject 解的。
+ * 讀取端點沿用 1.0（MainApi/* 與 CommonApi/GetDepFunction）；兩個「存檔」端點是 2.0 改成
+ * 字串權限後新開的（SetPermissionKeys / SaveDepPermissionKeys），但參數照 1.0 的習慣送
+ * **JSON 字串**不是陣列，後端是用 JsonConvert.DeserializeObject 解的。
  *
  * 回傳型別與 1.0 的差異：人員管理那幾支 1.0 回裸 bool，2.0 改回 ApiResponse 信封，
  * 失敗時才有訊息可顯示（見 api/Controllers/Shared/MainApiController.User.cs 的註解）。
@@ -58,20 +57,18 @@ export const useSystemSettingApi = () => {
 
   const getFunctions = () => apiFetch<ApiResponse<MFunction[]>>('/MainApi/GetMFunction')
 
-  const getLinkTypes = () =>
-    apiFetch<ApiResponse<MPermissionLinkType[]>>('/MainApi/GetMPermissionLinkType')
+  /** 字串權限主檔（M_PermissionDef），樹的功能節點與細項節點都從這裡長。 */
+  const getPermissionDefs = () =>
+    apiFetch<ApiResponse<MPermissionDef[]>>('/MainApi/GetMPermissionDef')
 
   /** 某帳號目前已有的權限列（含全體帳號 000000 的）。 */
   const getUserPermissions = (account: string) =>
     apiFetch<ApiResponse<MPermission[]>>('/MainApi/GetPermissionLinkType', { params: { account } })
 
-  const savePermissionTree = (account: string, functionNos: string[], linkTypes: RetLinkType[]) =>
-    apiFetch<ApiResponse>('/MainApi/SetPermissionTree', {
-      params: {
-        account,
-        str_permission_functionNos: JSON.stringify(functionNos),
-        str_permission_linkTypes: JSON.stringify(linkTypes)
-      }
+  /** 個人權限存檔，送勾到的 PermissionKey 陣列（後端會自己補隱含的 `.view`）。 */
+  const savePermissionKeys = (account: string, permissionKeys: string[]) =>
+    apiFetch<ApiResponse>('/MainApi/SetPermissionKeys', {
+      params: { account, str_permission_keys: JSON.stringify(permissionKeys) }
     })
 
   // ---------------------------------------------------------------- 群組預設功能
@@ -82,13 +79,10 @@ export const useSystemSettingApi = () => {
   const getDepFunctions = (depCode: string) =>
     apiFetch<ApiResponse<DepFunction[]>>('/CommonApi/GetDepFunction', { params: { depCode } })
 
-  const saveDepFunctions = (depCode: string, functionNos: string[], linkTypes: RetLinkType[]) =>
-    apiFetch<ApiResponse>('/MainApi/SaveDepFunction', {
-      params: {
-        depCode,
-        str_permission_functionNos: JSON.stringify(functionNos),
-        str_permission_linkTypes: JSON.stringify(linkTypes)
-      }
+  /** 群組範本存檔（群組權限頁），要 system.groupPermission.view 權限。 */
+  const saveDepPermissionKeys = (depCode: string, permissionKeys: string[]) =>
+    apiFetch<ApiResponse>('/MainApi/SaveDepPermissionKeys', {
+      params: { depCode, str_permission_keys: JSON.stringify(permissionKeys) }
     })
 
   // ---------------------------------------------------------------- 側欄
@@ -107,12 +101,12 @@ export const useSystemSettingApi = () => {
     getAllUserList,
     getSystems,
     getFunctions,
-    getLinkTypes,
+    getPermissionDefs,
     getUserPermissions,
-    savePermissionTree,
+    savePermissionKeys,
     getDepartments,
     getDepFunctions,
-    saveDepFunctions,
+    saveDepPermissionKeys,
     getUserFunctions
   }
 }

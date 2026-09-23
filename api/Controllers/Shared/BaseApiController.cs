@@ -82,20 +82,29 @@ public abstract class BaseApiController : ControllerBase
     }
 
     /// <summary>
-    /// 目前登入者有沒有某個功能的權限（M_Permission，admin 直接放行）。
+    /// 目前登入者有沒有某個字串權限（<see cref="PermissionKeys"/>，例如
+    /// <c>salesSearch.mixSalesShipping.viewAmount</c>）。admin 直接放行；
+    /// 其他人看 M_Permission 裡 LinkNumber = 自己 或 000000（全體）的列。
     ///
     /// **與 1.0 的差異**：1.0 的 MainApi/System 這些管理端點只掛 [Authorize]，
     /// 是否能進畫面完全靠前端 checkPermission() 擋——等於任何登入者直接打 API
     /// 就能建管理員帳號或改別人的權限。2.0 在後端也擋一次。
     /// </summary>
-    protected bool HasFunctionPermission(string functionNo)
+    protected bool HasPermission(string permissionKey)
     {
         var account = GetAccountByToken();
         if (string.IsNullOrWhiteSpace(account)) return false;
-        if (IsAdmin(account)) return true;
+        return HasPermission(account, permissionKey);
+    }
+
+    /// <summary>同上，帳號由呼叫端給（匯出 Excel 那幾支是自己解 token 拿帳號）。</summary>
+    protected bool HasPermission(string account, string permissionKey)
+    {
+        var trimmed = account.Trim();
+        if (IsAdmin(trimmed)) return true;
         return scDb.MPermissions.Any(p =>
-            (p.LinkNumber == account || p.LinkNumber == PermissionConst.AccountForAll)
-            && p.FunctionNo == functionNo);
+            (p.LinkNumber == trimmed || p.LinkNumber == PermissionConst.AccountForAll)
+            && p.PermissionKey == permissionKey);
     }
 
     protected void WriteStepLog(string? methodName, string message)

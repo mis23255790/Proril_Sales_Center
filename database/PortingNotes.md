@@ -643,3 +643,31 @@ migration 會先把 4 張表複製成 `*_bak_FunctionNo`。腳本**不可重入*
 `OrgApiController` 是不是仍是唯一寫入者，照 `M_User`/`M_Permission` 那次的完整流程走
 （Controller 邏輯搬過來、`api/` 改注入 `SalesCenterDbContext`），不能只看這次的表快照
 就當作已經遷移完成。
+
+## 字串權限 M_PermissionDef + 群組權限 0000103（2026-09-23，**測試區已執行**，正式區還沒建庫）
+
+權限判斷改成 Google IAM 式的 `module.function.action` 字串（`PermissionKey`），
+理由與對照表見 `docs/modules/SystemSetting/logic.md`「字串權限」。資料庫端兩支腳本：
+
+1. `database/PermissionDefObjectsMigration.sql`（新）
+   - 建 `M_PermissionDef`（14 列，MERGE 可重跑）。
+   - `M_Permission` / `M_PermissionGroup` 加 `PermissionKey varchar(100) NULL` 與索引，
+     以 `(FunctionNo, LinkType)` 回填。回填不到的是 FunctionNo 改格式時刻意保留的 1.0 功能
+     （舊數字 FunctionNo，測試區 `M_Permission` 501 列、`M_PermissionGroup` 29 列），
+     存檔不會動到它們；驗證查詢只把「7 碼 AAABBCC 卻回填不到」當問題，**那個應為 0 筆**（測試區是 0）。
+2. `database/PermissionMasterSeed.sql` 重跑一次，會多寫一列 `0000103 群組權限`
+   （PRORIL_WEB 沒有這個功能，腳本裡另開「2.0 專屬功能」段直接寫值）。
+
+> 這張表原本叫 `M_PermissionAction`，同日改名為 `M_PermissionDef`（存的是「有哪些權限可授權」的定義，
+> 跟 `M_Permission`「誰有哪個權限」區分）。測試區是先用舊名建的，腳本開頭會偵測舊名並 `sp_rename`
+> （表與 5 個 constraint），資料不動；正式區直接用新名建。
+
+**`M_PermissionDef` 是 2.0 新表，PRORIL_WEB 沒有**，所以：
+- 不加進 `TABLES.txt` / `Tables/*.sql`——`copy-snapshot-data.ps1` 是從 PRORIL_WEB 複製，這張表不歸它管。
+- `M_Permission` / `M_PermissionGroup` 在新庫又多了一個跟 PRORIL_WEB 分岔的欄位
+  （`PermissionKey`），`publish.ps1` / `drift.ps1` 會報，**不要套用**。
+- 之後若用 `copy-snapshot-data.ps1` 重灌 `M_Permission` / `M_PermissionGroup`，
+  來源沒有 `PermissionKey`，**重灌完一定要再跑一次 `PermissionDefObjectsMigration.sql` 回填**，
+  否則非 admin 帳號會變成什麼權限都沒有。
+
+執行順序：先跑這兩支腳本，再部署 `api/` 與前端——新版 `api/` 的權限檢查全部讀 `PermissionKey`。

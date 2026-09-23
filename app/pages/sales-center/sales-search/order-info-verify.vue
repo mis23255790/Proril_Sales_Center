@@ -2,7 +2,6 @@
 import { h, resolveComponent } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import type { CopCheckRule, OrderInfoVerifyGroup, OrderInfoVerifySummary } from '~/types/orderInfoVerify'
-import { ORDER_INFO_VERIFY_AMOUNT_LINK_TYPE, ORDER_INFO_VERIFY_FUNCTION_NO } from '~/types/orderInfoVerify'
 import type { SalesShippingCustomer } from '~/types/salesShipping'
 import { chkBadgeColor, chkBadgeLabel, feFinChk, groupOrderInfoVerifyRows } from '~/utils/orderInfoVerify'
 
@@ -11,7 +10,7 @@ definePageMeta({ title: '訂單資料檢核' })
 useSeoMeta({ title: '訂單資料檢核 · PRORIL 業務中心' })
 
 const api = useOrderInfoVerifyApi()
-const { checkLinkTypePermission } = usePermission()
+const { checkPermission } = usePermission()
 const toast = useToast()
 const { breadcrumbFor, appPath } = useAppNavigation()
 const { pagination } = useTablePagination(20)
@@ -61,7 +60,7 @@ const loadCustomers = async () => {
 
 const loadPermission = async () => {
   try {
-    showAmount.value = await checkLinkTypePermission(ORDER_INFO_VERIFY_FUNCTION_NO, ORDER_INFO_VERIFY_AMOUNT_LINK_TYPE)
+    showAmount.value = await checkPermission(PERMISSION_KEYS.salesSearch.orderInfoVerifyViewAmount)
   } catch (err) {
     console.log('order-info-verify loadPermission failed -->', err)
     showAmount.value = false

@@ -43,9 +43,9 @@ dotnet run
 | `UploadApi` | SaveByFileName |
 | `CustomQueryApi` | GetCustom / GetERPCustom / SaveCustom / GetCustomMemo / SetCustomMemo / DeleteCustomMemo |
 | `OrderInfoVerifyApi` | GetPOCheckView / GetConditionList / CheckCOPOrderInfo / COPOrderInfoPassCheck / SP_GetCredit / SP_GetCreditCRM / ExportXls |
-| `MainApi`（權限） | CheckUserPermissionLinkType |
+| `MainApi`（權限） | CheckPermission（2.0 新增，取代 1.0 的 CheckUserPermissionLinkType） |
 | `MainApi`（人員管理） | GetUserSetting / AddUser / UpdateUser / DeleteUser / ResetPassword / UnlockUser / GetAllUserList |
-| `MainApi`（權限管理） | GetMSystem / GetMFunction / GetMPermissionLinkType / GetPermissionLinkType / SetPermissionTree / SaveDepFunction / GetDepartmentList / GetUserFunctions |
+| `MainApi`（權限管理） | GetMSystem / GetMFunction / GetMPermissionLinkType / GetPermissionLinkType / GetDepartmentList / GetUserFunctions；2.0 新增 GetMPermissionDef / SetPermissionKeys / SaveDepPermissionKeys（取代 1.0 的 SetPermissionTree / SaveDepFunction） |
 | `MixSalesShipApi` | GetSalesOrder / GetSalesOrder_1 / ExportXls / GetCustomerCredit / GetCustomerCreditCRM / GetSalesTotal / GetCustomerUnfinOrder |
 | `SalesOrderUnFinishApi` | GetUnfinOrder / QueryUnfinOrder_1 / ExportXls |
 | `CommonApi` | GetDepFunction |
@@ -115,6 +115,15 @@ dotnet run
 
 8. **登入不再區分「帳號不存在」與「密碼錯誤」**，避免被用來列舉帳號。
 
+9. **權限改成字串權限 `module.function.action`**（2026-09-23）
+   `M_PermissionDef` 主檔 + `M_Permission`/`M_PermissionGroup.PermissionKey`，
+   後端統一走 `BaseApiController.HasPermission(key)`，常數在 `Models/Enums.cs` 的 `PermissionKeys`。
+   1.0 的 `CheckUserPermissionLinkType` / `SetPermissionTree` / `SaveDepFunction` **已移除**
+   （它們不會寫 `PermissionKey`，留著會存出權限檢查認不得的列），
+   改用 `CheckPermission` / `SetPermissionKeys` / `SaveDepPermissionKeys`。
+   群組範本存檔改要 `system.groupPermission.view`（群組權限，功能 `0000103`），不再跟權限管理綁在一起。
+   細節見 `../docs/modules/SystemSetting/logic.md`。
+
 ## 訂單資料檢核（`OrderInfoVerifyApi`）
 
 跟業務議題不同，這個模組的資料表不在 `database/` 的 DACPAC 版控範圍內（那批表本來就是
@@ -130,8 +139,10 @@ dotnet run
 2. **`SP_GetCredit` / `SP_GetCreditCRM` 改參數化 SQL**
    1.0 直接把 `customNo` 字串插值進 SQL 字串執行，有 SQL injection 風險；這裡改用
    `FromSqlInterpolated`，讓 EF Core 自己把值轉成參數。
-3. **`CheckUserPermissionLinkType` 用 `.Any()` 不用 `.First()`**
-   1.0 對不存在的帳號會直接丟例外，這裡改成查不到就當非 admin 處理。
+3. **金額欄位權限檢查不會因帳號不存在而丟例外**
+   1.0 的 `CheckUserPermissionLinkType` 用 `.First()` 找帳號，對不存在的帳號會直接丟例外；
+   2.0 先改成 `.Any()`，之後整支換成 `CheckPermission(salesSearch.orderInfoVerify.viewAmount)`，
+   查不到就當非 admin 處理。
 4. **`prc_COPGetCredit`/`prc_COPGetCredit_CRM` 的回傳欄位型別改宣告 `decimal`**
    1.0 的 model 這裡宣告 `float`，但 SP 實際回傳的欄位是 SQL `decimal`/`numeric`，
    EF Core 8 對不上型別會直接丟 `InvalidCastException`（本機實測打

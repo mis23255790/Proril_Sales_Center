@@ -23,10 +23,11 @@ public class CommonApiController : BaseApiController
     }
 
     /// <summary>
-    /// 某群組（部門）的預設功能清單，權限管理畫面的「群組預設功能編輯／套用」在用。
+    /// 某群組（部門）的預設功能清單。群組權限頁（編輯）與權限管理頁（套用）在用，
+    /// 所以這支刻意不擋功能權限，只要登入。
     ///
-    /// M_PermissionGroup / M_Function / M_PermissionLinkType 都在 scDb。
-    /// LinkType = 1 代表「這是功能本身」，沒有細項名稱可對照。
+    /// M_PermissionGroup / M_Function / M_PermissionDef 都在 scDb。
+    /// 前端用 PermissionKey 對樹；LinkType = 1 代表「這是功能本身」，細項名稱留空。
     /// </summary>
     [HttpGet]
     public CustomApiViewModel GetDepFunction(string depCode)
@@ -41,7 +42,7 @@ public class CommonApiController : BaseApiController
             .ToList();
 
         var functions = scDb.MFunctions.Where(f => f.AStatus != ActiveStatus.Inactive).ToList();
-        var linkTypes = scDb.MPermissionLinkTypes.ToList();
+        var actions = scDb.MPermissionDefs.ToList();
 
         var body = groups.Select(g => new PermissionGroupViewModel
         {
@@ -49,9 +50,11 @@ public class CommonApiController : BaseApiController
             GroupNo = g.GroupNo,
             FunctionNo = g.FunctionNo,
             LinkType = g.LinkType,
+            PermissionKey = g.PermissionKey,
             FunctionName = functions.FirstOrDefault(f => f.FunctionNo == g.FunctionNo)?.FunctionName ?? "",
-            LinkTypeName = linkTypes.FirstOrDefault(
-                t => t.FunctionNo == (g.FunctionNo ?? "") && t.LinkType == (g.LinkType ?? 0))?.LinkTypeName ?? ""
+            LinkTypeName = (g.LinkType ?? 1) > 1
+                ? actions.FirstOrDefault(a => a.PermissionKey == g.PermissionKey)?.ActionName ?? ""
+                : ""
         }).ToList();
 
         return new CustomApiViewModel { IsSuccess = true, Body = body };

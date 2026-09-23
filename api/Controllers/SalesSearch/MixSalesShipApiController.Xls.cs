@@ -20,9 +20,6 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
  */
 public partial class MixSalesShipApiController
 {
-    /// <summary>M_Permission.LinkType，銷貨檢索的「金額欄位」權限碼。</summary>
-    private const int AmountLinkType = 100;
-
     private const string QtyFormat = @"_-* #,##0_-;\-* #,##0_-;_-* ""-""_-;_-@_-";
     private const string MoneyFormat = @"_-""$""* #,##0_-;\-""$""* #,##0_-;_-""$""* ""-""_-;_-@_-";
 
@@ -68,7 +65,7 @@ public partial class MixSalesShipApiController
         }
 
         var account = GetAccountByToken();
-        var showAmount = HasAmountPermission(account);
+        var showAmount = HasPermission(account, PermissionKeys.SalesSearch.MixSalesShippingViewAmount);
 
         using var workbook = new XLWorkbook();
         // 細項頁取「非 Y」（N + S + T），統計頁取「非 N」（S + Y + T），與畫面上的頁籤一致。
@@ -89,14 +86,6 @@ public partial class MixSalesShipApiController
         ca.IsSuccess = true;
         ca.Body = $"Temp/{account}/Export/{fileName}";
         return ca;
-    }
-
-    /// <summary>金額欄位權限：admin 直接放行，否則看 M_Permission 有沒有 (410, 100) 這一筆。</summary>
-    private bool HasAmountPermission(string account)
-    {
-        if (scDb.MUsers.Any(u => u.Account == account && u.IsAdmin)) return true;
-        return scDb.MPermissions.Any(p =>
-            p.LinkNumber == account && p.FunctionNo == FunctionIds.MixSalesShipping && p.LinkType == AmountLinkType);
     }
 
     private static string GroupKeyByProduct(CopSalesOrder r) => r.Th004 ?? "";

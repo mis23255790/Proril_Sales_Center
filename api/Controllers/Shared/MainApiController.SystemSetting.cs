@@ -10,9 +10,11 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 ///
 /// 權限樹是三層：
 ///   M_System（系統別，再依 SystemType 分「行政／現場／…」一層）
-///     → M_Function（功能）
-///       → M_PermissionLinkType（功能底下的細項，例如「顯示金額欄位」）
-/// 勾選結果寫進 M_Permission（個人）或 M_PermissionGroup（群組預設功能）。
+///     → M_Function（功能，對應 M_PermissionDef 裡 LinkType = 1 的 <c>.view</c>）
+///       → M_PermissionDef 的細項（LinkType > 1，例如 <c>.viewAmount</c> 顯示金額欄位）
+/// 勾選結果以 PermissionKey 寫進 M_Permission（個人，權限管理）或
+/// M_PermissionGroup（群組預設功能，群組權限）。FunctionNo / LinkType 過渡期照樣一併寫，
+/// 側欄（<see cref="GetUserFunctions"/>）還靠 FunctionNo。
 ///
 /// 讀寫分兩邊，**不要弄混**：
 ///   - M_Permission / M_PermissionGroup / M_User / M_System / M_Function /
@@ -31,9 +33,59 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 public partial class MainApiController
 {
     private CustomApiViewModel? DenyIfNoPermissionManagerPermission()
-        => HasFunctionPermission(FunctionIds.PermissionManager)
+        => HasPermission(PermissionKeys.SystemSetting.PermissionManagerView)
             ? null
             : new CustomApiViewModel { IsSuccess = false, Message = "沒有權限管理權限" };
+
+    private CustomApiViewModel? DenyIfNoGroupPermissionPermission()
+        => HasPermission(PermissionKeys.SystemSetting.GroupPermissionView)
+            ? null
+            : new CustomApiViewModel { IsSuccess = false, Message = "沒有群組權限權限" };
+
+    /// <summary>
+    /// 把前端勾到的 PermissionKey 換成主檔列，並補上隱含的權限：
+    /// 細項一定連帶它的上層細項（ParentPermissionKey）與同功能的 <c>.view</c>——
+    /// 有細項卻沒有 view 等於進不去那個畫面（1.0 processNode 的用意，原本只在前端補）。
+    ///
+    /// 主檔裡找不到的 key 一律擋下來回錯，不默默略過，避免前後端 key 對不上時存了一半。
+    /// </summary>
+    private (List<MPermissionDef> Wanted, string? Error) ResolvePermissionKeys(string? json)
+    {
+        var keys = JsonConvert.DeserializeObject<List<string>>(json ?? "");
+        if (keys is null) return ([], "permission_keys is null!");
+
+        var actions = scDb.MPermissionDefs
+            .Where(a => a.AStatus == ActiveStatus.Active)
+            .ToList();
+        var byKey = actions.ToDictionary(a => a.PermissionKey);
+        var viewByFunction = actions
+            .Where(a => a.LinkType == 1)
+            .ToDictionary(a => a.FunctionNo);
+
+        var unknown = keys.Select(k => k.Trim()).Where(k => !byKey.ContainsKey(k)).ToList();
+        if (unknown.Count > 0)
+            return ([], $"未定義的權限：{string.Join(", ", unknown)}");
+
+        var wanted = new Dictionary<string, MPermissionDef>();
+        foreach (var key in keys.Select(k => k.Trim()))
+        {
+            var cursor = byKey[key];
+            while (true)
+            {
+                wanted.TryAdd(cursor.PermissionKey, cursor);
+                if (cursor.ParentPermissionKey is { } parent && byKey.TryGetValue(parent, out var next))
+                {
+                    cursor = next;
+                    continue;
+                }
+                break;
+            }
+            if (viewByFunction.TryGetValue(byKey[key].FunctionNo, out var view))
+                wanted.TryAdd(view.PermissionKey, view);
+        }
+
+        return ([.. wanted.Values], null);
+    }
 
     // ------------------------------------------------------------------ 權限樹的三層主檔
 
@@ -63,6 +115,21 @@ public partial class MainApiController
         => new() { IsSuccess = true, Body = scDb.MPermissionLinkTypes.OrderBy(o => o.FunctionNo).ToList() };
 
     /// <summary>
+    /// 字串權限主檔（M_PermissionDef），2.0 權限樹的功能節點與細項節點都從這裡長。
+    /// LinkType = 1 是功能本身（<c>.view</c>），其餘是細項。
+    /// </summary>
+    [HttpGet]
+    public CustomApiViewModel GetMPermissionDef()
+        => new()
+        {
+            IsSuccess = true,
+            Body = scDb.MPermissionDefs
+                .Where(a => a.AStatus == ActiveStatus.Active)
+                .OrderBy(a => a.FunctionNo).ThenBy(a => a.Sort).ThenBy(a => a.LinkType)
+                .ToList()
+        };
+
+    /// <summary>
     /// 某帳號目前已有的權限列（M_Permission）。前端拿它去把樹上的 checkbox 打勾。
     /// 一併帶入保留帳號 000000（全體使用者）的列，所以「全體都有的功能」也會是勾起來的。
     /// </summary>
@@ -83,19 +150,19 @@ public partial class MainApiController
     // ------------------------------------------------------------------ 個人權限存檔
 
     /// <summary>
-    /// 權限樹存檔。參數形狀沿用 1.0：兩個 JSON 字串，一個是勾到的 FunctionNo 陣列，
-    /// 一個是勾到的細項（<see cref="RetLinkType"/>）陣列。
+    /// 權限樹存檔（權限管理）。<paramref name="str_permission_keys"/> 是勾到的 PermissionKey
+    /// 陣列的 JSON 字串（例如 <c>["salesSearch.mixSalesShipping.view", "salesSearch.mixSalesShipping.viewAmount"]</c>），
+    /// 後端會自己補隱含的 <c>.view</c>，見 <see cref="ResolvePermissionKeys"/>。
     ///
-    /// 前端存檔前會把每個勾到的節點往上找 parent 一併加進 FunctionNo 陣列
-    /// （細項有權限、功能本身卻沒開，等於進不去那個畫面）。
-    ///
-    /// **與 1.0 的差異**：1.0 是「先刪不在清單裡的、再補沒有的」，分四段條件寫，
-    /// 條件有重疊也有漏（同一批 remove 被跑了兩次）。這裡改成算出目標集合後做差集，
-    /// 最終狀態一樣，既有列的 Creator / CreateTime 同樣保留不動。
+    /// 取代 1.0 的 <c>SetPermissionTree(account, functionNos, linkTypes)</c>（已移除——
+    /// 它不會寫 PermissionKey，留著會存出權限檢查認不得的列）。
+    /// 做法同舊版：算出目標集合後做差集，既有列的 Creator / CreateTime 保留不動。
+    /// PermissionKey 是 NULL 的列（2.0 沒有頁面的 1.0 功能，FunctionNo 還是舊數字）
+    /// 不在權限樹上，存檔**不會動到它們**——FunctionNo 改格式時就是刻意保留的。
+    /// （1.0 版的 SetPermissionTree 會把它們一起刪掉，這裡順便修正。）
     /// </summary>
     [HttpGet]
-    public CustomApiViewModel SetPermissionTree(
-        string account, string str_permission_functionNos, string str_permission_linkTypes)
+    public CustomApiViewModel SetPermissionKeys(string account, string str_permission_keys)
     {
         var ca = DenyIfNoPermissionManagerPermission();
         if (ca is not null) return ca;
@@ -103,125 +170,84 @@ public partial class MainApiController
         if (string.IsNullOrWhiteSpace(account))
             return new CustomApiViewModel { IsSuccess = false, Message = "未輸入帳號!" };
 
-        var functionNos = JsonConvert.DeserializeObject<List<string>>(str_permission_functionNos ?? "");
-        if (functionNos is null)
-            return new CustomApiViewModel { IsSuccess = false, Message = "permission_functionNos is null!" };
-
-        var linkTypes = JsonConvert.DeserializeObject<List<RetLinkType>>(str_permission_linkTypes ?? "");
-        if (linkTypes is null)
-            return new CustomApiViewModel { IsSuccess = false, Message = "permission_linkTypes is null!" };
+        var (wanted, error) = ResolvePermissionKeys(str_permission_keys);
+        if (error is not null) return new CustomApiViewModel { IsSuccess = false, Message = error };
 
         var linkNumber = account.Trim();
+        var wantedKeys = wanted.Select(a => a.PermissionKey).ToHashSet();
         var existing = scDb.MPermissions.Where(p => p.LinkNumber == linkNumber).ToList();
 
-        // 全部取消勾選 = 這個帳號一個權限都沒有
-        if (functionNos.Count == 0)
-        {
-            scDb.MPermissions.RemoveRange(existing);
-            scDb.SaveChanges();
-            return new CustomApiViewModel { IsSuccess = true };
-        }
+        // PermissionKey 是 NULL 的是 2.0 沒有頁面的 1.0 功能（舊數字 FunctionNo），刻意保留，不碰
+        scDb.MPermissions.RemoveRange(
+            existing.Where(p => p.PermissionKey is not null && !wantedKeys.Contains(p.PermissionKey)));
 
-        // 目標集合：(FunctionNo, LinkType, PermissionLinkTypeId)
-        var wanted = new HashSet<(string FunctionNo, byte LinkType, int? LinkTypeId)>();
-        foreach (var functionNo in functionNos) wanted.Add((functionNo, (byte)1, null));
-        foreach (var linkType in linkTypes)
-        {
-            byte.TryParse(linkType.LinkType, out var value);
-            wanted.Add((linkType.FunctionNo, value, linkType.PermissionLinkTypeID));
-        }
-
-        var removed = existing
-            .Where(p => !wanted.Contains((p.FunctionNo, p.LinkType, p.PermissionLinkTypeId)))
-            .ToList();
-        scDb.MPermissions.RemoveRange(removed);
-
-        var kept = existing
-            .Select(p => (p.FunctionNo, p.LinkType, p.PermissionLinkTypeId))
-            .ToHashSet();
+        var kept = existing.Where(p => p.PermissionKey is not null).Select(p => p.PermissionKey!).ToHashSet();
         var creator = GetAccountByToken();
-        foreach (var item in wanted.Where(w => !kept.Contains(w)))
+        foreach (var action in wanted.Where(a => !kept.Contains(a.PermissionKey)))
         {
             scDb.MPermissions.Add(new MPermission
             {
                 LinkNumber = linkNumber,
-                FunctionNo = item.FunctionNo,
-                LinkType = item.LinkType,
-                PermissionLinkTypeId = item.LinkTypeId,
+                PermissionKey = action.PermissionKey,
+                FunctionNo = action.FunctionNo,
+                LinkType = action.LinkType,
+                PermissionLinkTypeId = action.PermissionLinkTypeId,
                 Creator = creator,
                 CreateTime = DateTime.Now
             });
         }
 
         scDb.SaveChanges();
-        WriteStepLog(nameof(SetPermissionTree),
-            $"account:{linkNumber}, functions:{functionNos.Count}, linkTypes:{linkTypes.Count}");
+        WriteStepLog(nameof(SetPermissionKeys), $"account:{linkNumber}, keys:{wanted.Count}");
         return new CustomApiViewModel { IsSuccess = true };
     }
 
     // ------------------------------------------------------------------ 群組預設功能
 
     /// <summary>
-    /// 群組（部門）預設功能存檔，寫 M_PermissionGroup。
+    /// 群組（部門）預設功能存檔（群組權限頁），寫 M_PermissionGroup。參數形狀同
+    /// <see cref="SetPermissionKeys"/>。
+    ///
     /// 這只是一份「套用範本」，存了不會改到任何人的實際權限 —— 要等有人在權限管理畫面
     /// 按「群組預設功能套用」把它套進樹裡、再按儲存，才會寫進 M_Permission。
     ///
-    /// M_PermissionGroup 沒有 PermissionLinkTypeID 欄位，細項只靠 (FunctionNo, LinkType)
-    /// 認人，跟 M_Permission 不同。
+    /// 權限要的是 <see cref="PermissionKeys.SystemSetting.GroupPermissionView"/>，
+    /// 不是權限管理——群組範本從權限管理獨立出來就是為了能分開授權。
+    /// 取代 1.0 的 <c>SaveDepFunction</c>（已移除，理由同 <see cref="SetPermissionKeys"/>）。
     /// </summary>
     [HttpGet]
-    public CustomApiViewModel SaveDepFunction(
-        string depCode, string str_permission_functionNos, string str_permission_linkTypes)
+    public CustomApiViewModel SaveDepPermissionKeys(string depCode, string str_permission_keys)
     {
-        var ca = DenyIfNoPermissionManagerPermission();
+        var ca = DenyIfNoGroupPermissionPermission();
         if (ca is not null) return ca;
 
         if (string.IsNullOrWhiteSpace(depCode))
             return new CustomApiViewModel { IsSuccess = false, Message = "未輸入部門!" };
 
-        var functionNos = JsonConvert.DeserializeObject<List<string>>(str_permission_functionNos ?? "");
-        if (functionNos is null)
-            return new CustomApiViewModel { IsSuccess = false, Message = "permission_functionNos is null!" };
-
-        var linkTypes = JsonConvert.DeserializeObject<List<RetLinkType>>(str_permission_linkTypes ?? "");
-        if (linkTypes is null)
-            return new CustomApiViewModel { IsSuccess = false, Message = "permission_linkTypes is null!" };
+        var (wanted, error) = ResolvePermissionKeys(str_permission_keys);
+        if (error is not null) return new CustomApiViewModel { IsSuccess = false, Message = error };
 
         var groupNo = depCode.Trim();
+        var wantedKeys = wanted.Select(a => a.PermissionKey).ToHashSet();
         var existing = scDb.MPermissionGroups
             .Where(g => g.GroupType == PermissionGroupType.Department && g.GroupNo == groupNo)
             .ToList();
 
-        if (functionNos.Count == 0)
-        {
-            scDb.MPermissionGroups.RemoveRange(existing);
-            scDb.SaveChanges();
-            return new CustomApiViewModel { IsSuccess = true };
-        }
+        // 同 SetPermissionKeys：PermissionKey 是 NULL 的舊功能列保留不碰
+        scDb.MPermissionGroups.RemoveRange(
+            existing.Where(g => g.PermissionKey is not null && !wantedKeys.Contains(g.PermissionKey)));
 
-        var wanted = new HashSet<(string FunctionNo, byte LinkType)>();
-        foreach (var functionNo in functionNos) wanted.Add((functionNo, (byte)1));
-        foreach (var linkType in linkTypes)
-        {
-            byte.TryParse(linkType.LinkType, out var value);
-            wanted.Add((linkType.FunctionNo, value));
-        }
-
-        var removed = existing
-            .Where(g => !wanted.Contains((g.FunctionNo ?? "", g.LinkType ?? 0)))
-            .ToList();
-        scDb.MPermissionGroups.RemoveRange(removed);
-
-        var kept = existing.Select(g => (g.FunctionNo ?? "", g.LinkType ?? 0)).ToHashSet();
+        var kept = existing.Where(g => g.PermissionKey is not null).Select(g => g.PermissionKey!).ToHashSet();
         var creator = GetAccountByToken();
-        foreach (var item in wanted.Where(w => !kept.Contains(w)))
+        foreach (var action in wanted.Where(a => !kept.Contains(a.PermissionKey)))
         {
             scDb.MPermissionGroups.Add(new MPermissionGroup
             {
                 GroupType = PermissionGroupType.Department,
                 GroupNo = groupNo,
-                FunctionNo = item.FunctionNo,
-                LinkType = item.LinkType,
+                PermissionKey = action.PermissionKey,
+                FunctionNo = action.FunctionNo,
+                LinkType = action.LinkType,
                 AStatus = ActiveStatus.Active,
                 Creator = creator,
                 CreateTime = DateTime.Now
@@ -229,7 +255,7 @@ public partial class MainApiController
         }
 
         scDb.SaveChanges();
-        WriteStepLog(nameof(SaveDepFunction), $"depCode:{groupNo}, functions:{functionNos.Count}");
+        WriteStepLog(nameof(SaveDepPermissionKeys), $"depCode:{groupNo}, keys:{wanted.Count}");
         return new CustomApiViewModel { IsSuccess = true };
     }
 

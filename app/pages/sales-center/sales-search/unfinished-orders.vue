@@ -6,8 +6,6 @@ import type { UnfinOrderQuery } from '~/composables/useSalesOrderUnfinishApi'
 import {
   type UnfinOrder,
   type UnfinOrderRow,
-  UNFINISH_AMOUNT_LINK_TYPE,
-  UNFINISH_FUNCTION_NO,
   isUnfinishDetailRow
 } from '~/types/salesOrderUnfinish'
 import type { SalesShippingCustomer } from '~/types/salesShipping'
@@ -17,7 +15,7 @@ definePageMeta({ title: '未完成訂單檢索' })
 useSeoMeta({ title: '未完成訂單檢索 · PRORIL 業務中心' })
 
 const api = useSalesOrderUnfinishApi()
-const { checkLinkTypePermission } = usePermission()
+const { checkPermission } = usePermission()
 const toast = useToast()
 const { breadcrumbFor, appPath } = useAppNavigation()
 const { pagination } = useTablePagination(20)
@@ -92,7 +90,7 @@ const loadCustomers = async () => {
 
 const loadPermission = async () => {
   try {
-    showAmount.value = await checkLinkTypePermission(UNFINISH_FUNCTION_NO, UNFINISH_AMOUNT_LINK_TYPE)
+    showAmount.value = await checkPermission(PERMISSION_KEYS.salesSearch.queryUnFinishViewAmount)
   } catch (err) {
     console.log('unfinished-orders loadPermission failed -->', err)
     showAmount.value = false

@@ -108,21 +108,20 @@ Nuxt 頁面 ──▶ useSalesShippingApi() ──▶ /api/proxy/... ──▶ s
 
 # 金額欄位權限
 
-`FunctionId.MixSalesShipping(410)` 底下 `LinkType=100` 專門控制金額欄位
-（單價／小計／幣別／匯率／台幣未稅／稅額／總額）。
+字串權限 `salesSearch.mixSalesShipping.viewAmount` 專門控制金額欄位
+（單價／小計／幣別／匯率／台幣未稅／稅額／總額）。對應舊模型的
+`FunctionNo=0320101（舊 410）, LinkType=100`，2026-09-23 改成字串權限，
+見 `docs/modules/SystemSetting/logic.md`「字串權限」。
 
 ```
-usePermission().checkLinkTypePermission(410, 100)
-  ──▶ GET /MainApi/CheckUserPermissionLinkType?functionNo=410&linkType=100
+usePermission().checkPermission(PERMISSION_KEYS.salesSearch.mixSalesShippingViewAmount)
+  ──▶ GET /MainApi/CheckPermission?permissionKey=salesSearch.mixSalesShipping.viewAmount
   ──▶ 回裸 bool（這支 API 例外，不是 ApiResponse 信封）
 ```
 
-每次進頁面即時查一次，**不快取進 token**（舊系統也是這樣，見
-`MainApiController_SystemSetting.CheckUserPermissionLinkType`：`IsAdmin` 帳號直接
-放行，否則查 `M_Permission` 有沒有 `(帳號, FunctionNo=410, LinkType=100)` 這一列）。
-
-`LinkType` 沒有跨功能通用的常數表 —— 100 只在 FunctionId=410 底下有這個意思，
-其他功能的 LinkType 各自定義，不要拿去共用。
+每次進頁面即時查一次，**不快取進 token**（舊系統也是這樣）：`IsAdmin` 帳號直接放行，
+否則查 `M_Permission` 有沒有 `(帳號 或 000000, PermissionKey)` 這一列。
+Excel 匯出（`MixSalesShipApiController.Xls.cs`）用同一個 key 在後端判斷。
 
 沒有權限時，四個頁籤與兩個明細 modal 的金額欄位**整欄不渲染**（不是模糊或唯讀），
 對照舊版 `bootstrapTableHideColumn(..., 'per-amount')`。

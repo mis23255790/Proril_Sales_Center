@@ -3,11 +3,11 @@
  * 權限樹（1.0 用 fancytree，2.0 自己刻）。
  *
  * 層級：系統類別（M_System.TypeName）→ 系統（M_System）→ 功能（M_Function）
- *       → 細項（M_PermissionLinkType，可再往下巢狀）
+ *       → 細項（M_PermissionDef 裡 linkType > 1 的列，可再往下巢狀）
  *
  * 只有功能與細項有 checkbox，上面兩層純粹是分類（1.0 也是 `checkbox: false`）。
  * 勾選互相獨立、**不做父子連動**（對應 fancytree 的 `selectMode: 2`）——
- * 「勾了細項就自動開啟所屬功能」是存檔時才補的，見 permission-manager.vue 的
+ * 「勾了細項就自動開啟所屬功能」是存檔時才補的，見 app/utils/permissionTree.ts 的
  * collectSelection()。這裡若做連動，反而會在載入既有權限時把沒授權的功能也點亮。
  *
  * 元件自己遞迴呼叫自己（Nuxt 的 components 自動匯入支援自我參照）。

@@ -36,7 +36,7 @@ public partial class OrderInfoVerifyApiController
         }
 
         var account = GetAccountByToken();
-        var showAmount = HasAmountPermission(account, FunctionIds.OrderInfoVerify, OrderInfoVerifyConst.AmountLinkType);
+        var showAmount = HasPermission(account, PermissionKeys.SalesSearch.OrderInfoVerifyViewAmount);
 
         using var workbook = new XLWorkbook();
         WriteOrderSummarySheet(workbook, orderInfo, showAmount);
@@ -50,12 +50,6 @@ public partial class OrderInfoVerifyApiController
         ca.IsSuccess = true;
         ca.Body = $"Temp/{account}/Export/{fileName}";
         return ca;
-    }
-
-    private bool HasAmountPermission(string account, string functionNo, int linkType)
-    {
-        if (scDb.MUsers.Any(u => u.Account == account && u.IsAdmin)) return true;
-        return scDb.MPermissions.Any(p => p.LinkNumber == account && p.FunctionNo == functionNo && p.LinkType == linkType);
     }
 
     /// <summary>檢核結果上色：Y=淡綠／P=淡黃／N=淡紅／其他(未檢核)=灰，照抄 1.0 色碼。</summary>

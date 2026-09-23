@@ -2,34 +2,35 @@ import type {
   DepFunction,
   MFunction,
   MPermission,
-  MPermissionLinkType,
+  MPermissionDef,
   MSystem,
-  PermissionTreeNode,
-  RetLinkType
+  PermissionDiffItem,
+  PermissionTreeNode
 } from '~/types/system'
 
 /**
- * 權限樹的組樹／取值邏輯，個人權限與群組預設功能兩棵樹共用。
+ * 權限樹的組樹／取值邏輯，權限管理（個人）與群組權限（群組範本）共用。
  *
- * 對應 1.0 的 wwwroot/js/system/permission-manager-treeV2.js。
+ * 對應 1.0 的 wwwroot/js/system/permission-manager-treeV2.js，但節點改用
+ * PermissionKey（`module.function.action`，見 app/utils/permissionKeys.ts）認，
+ * 不再用 (FunctionNo, LinkType) 猜。
  */
 
 const typeKey = (systemType: number) => `t-${systemType}`
 const systemKey = (systemNo: number) => `s-${systemNo}`
-const functionKey = (functionNo: string) => `f-${functionNo}`
-const linkTypeKey = (id: number) => `l-${id}`
+const permissionNodeKey = (permissionKey: string) => `p-${permissionKey}`
 
 /**
  * 組出三層權限樹。
  *
- * **與 1.0 的差異**：1.0 的 v2AddFunctionEx 把所有 M_PermissionLinkType 一律掛在功能底下，
- * 完全沒有用 ParentLinkTypeID，巢狀的細項會被攤平成兄弟節點。這裡照 ParentLinkTypeID 掛，
- * 樹形才跟資料一致（1.0 另一支 GetPermissionTree API 本來也是這樣設計的）。
+ * 功能節點（M_Function）的勾選代表它的 `.view`（M_PermissionDef 裡 linkType = 1 那列）；
+ * 主檔裡沒有 `.view` 的功能照樣長出來但不能勾，免得存出後端認不得的 key。
+ * 細項（linkType > 1）依 parentPermissionKey 掛，沒有就掛在同 functionNo 的功能底下。
  */
 export const buildPermissionTree = (
   systems: MSystem[],
   functions: MFunction[],
-  linkTypes: MPermissionLinkType[]
+  actions: MPermissionDef[]
 ): PermissionTreeNode[] => {
   const roots: PermissionTreeNode[] = []
   const systemNodes = new Map<number, PermissionTreeNode>()
@@ -58,40 +59,44 @@ export const buildPermissionTree = (
     systemNodes.set(system.systemNo, systemNode)
   }
 
+  const viewByFunction = new Map(actions.filter(a => a.linkType === 1).map(a => [a.functionNo, a]))
+
   const functionNodes = new Map<string, PermissionTreeNode>()
   for (const fn of functions) {
     const parent = systemNodes.get(fn.systemNo)
     // M_Function 可能指到已經不存在／沒列在 M_System 的系統別，掛不上就跳過
     if (!parent) continue
 
+    const view = viewByFunction.get(fn.functionNo)
     const node: PermissionTreeNode = {
-      key: functionKey(fn.functionNo),
+      key: view ? permissionNodeKey(view.permissionKey) : `f-${fn.functionNo}`,
       label: fn.functionName || `功能 ${fn.functionNo}`,
-      checkable: true,
+      checkable: !!view,
       functionNo: fn.functionNo,
+      permissionKey: view?.permissionKey,
       children: []
     }
     parent.children.push(node)
     functionNodes.set(fn.functionNo, node)
   }
 
-  const linkTypeNodes = new Map<number, PermissionTreeNode>()
-  // 先全部建好節點再掛父子，才不用管 M_PermissionLinkType 的排序
-  for (const lt of linkTypes) {
-    linkTypeNodes.set(lt.id, {
-      key: linkTypeKey(lt.id),
-      label: lt.linkTypeName,
+  const details = actions.filter(a => a.linkType > 1)
+  const detailNodes = new Map<string, PermissionTreeNode>()
+  // 先全部建好節點再掛父子，才不用管主檔的排序
+  for (const action of details) {
+    detailNodes.set(action.permissionKey, {
+      key: permissionNodeKey(action.permissionKey),
+      label: action.actionName,
       checkable: true,
-      functionNo: lt.functionNo,
-      linkType: lt.linkType,
-      permissionLinkTypeId: lt.id,
+      functionNo: action.functionNo,
+      permissionKey: action.permissionKey,
       children: []
     })
   }
-  for (const lt of linkTypes) {
-    const node = linkTypeNodes.get(lt.id)!
-    const parent = (lt.parentLinkTypeId ? linkTypeNodes.get(lt.parentLinkTypeId) : null)
-      ?? functionNodes.get(lt.functionNo)
+  for (const action of details) {
+    const node = detailNodes.get(action.permissionKey)!
+    const parent = (action.parentPermissionKey ? detailNodes.get(action.parentPermissionKey) : null)
+      ?? functionNodes.get(action.functionNo)
     if (!parent) continue
     parent.children.push(node)
   }
@@ -125,78 +130,54 @@ export const buildParentMap = (nodes: PermissionTreeNode[]) => {
   return parents
 }
 
-/**
- * 把既有權限（M_Permission）對映成樹上的勾選。
- *
- * LinkType <= 1 的列代表「功能本身」；> 1 的是細項，用 (FunctionNo, LinkType) 找節點
- * ——跟 1.0 v2GetFunctionLinkTypeNode 同一個判斷，不是用 PermissionLinkTypeID 找，
- * 因為舊資料有 PermissionLinkTypeID 是 null 的列。
- */
-export const selectedKeysFromPermissions = (
+/** 把一串 PermissionKey 對映成樹上的勾選；樹上沒有的 key（停用的、回填不到的）直接略過。 */
+const selectedKeysFromPermissionKeys = (
   nodes: PermissionTreeNode[],
-  permissions: MPermission[]
+  permissionKeys: (string | null | undefined)[]
 ) => {
-  const all = [...flattenTree(nodes).values()]
+  const byKey = flattenTree(nodes)
   const keys = new Set<string>()
-
-  for (const p of permissions) {
-    if (p.linkType > 1) {
-      const node = all.find(n => n.functionNo === p.functionNo && n.linkType === p.linkType)
-      if (node) keys.add(node.key)
-      continue
-    }
-    if (all.some(n => n.key === functionKey(p.functionNo))) keys.add(functionKey(p.functionNo))
+  for (const permissionKey of permissionKeys) {
+    if (!permissionKey) continue
+    const key = permissionNodeKey(permissionKey.trim())
+    if (byKey.get(key)?.checkable) keys.add(key)
   }
-
   return keys
 }
 
-/** 群組預設功能（M_PermissionGroup）對映成樹上的勾選，判斷方式同上。 */
-export const selectedKeysFromDepFunctions = (
-  nodes: PermissionTreeNode[],
-  depFunctions: DepFunction[]
-) => selectedKeysFromPermissions(
-  nodes,
-  depFunctions.map(d => ({
-    id: d.id,
-    functionNo: d.functionNo ?? '',
-    linkType: d.linkType ?? 1,
-    permissionLinkTypeId: null
-  }))
-)
+/** 既有權限（M_Permission）對映成樹上的勾選。 */
+export const selectedKeysFromPermissions = (nodes: PermissionTreeNode[], permissions: MPermission[]) =>
+  selectedKeysFromPermissionKeys(nodes, permissions.map(p => p.permissionKey))
+
+/** 群組預設功能（M_PermissionGroup）對映成樹上的勾選。 */
+export const selectedKeysFromDepFunctions = (nodes: PermissionTreeNode[], depFunctions: DepFunction[]) =>
+  selectedKeysFromPermissionKeys(nodes, depFunctions.map(d => d.permissionKey))
 
 /**
- * 把勾選轉成要送給後端的兩包資料。
+ * 勾到的節點 + 沿路祖先的節點 key。
  *
- * 每個勾到的節點都往上找 parent，把沿路的 functionNo 一併開啟——
- * 細項有權限但功能本身沒開，等於進不去那個畫面（1.0 processNode 的用意）。
+ * 細項有權限但功能本身沒開，等於進不去那個畫面（1.0 processNode 的用意），
+ * 所以每個勾到的節點都往上把功能一起算進來。後端存檔時也會再補一次。
  */
-export const collectSelection = (nodes: PermissionTreeNode[], selected: Set<string>) => {
+const withAncestors = (nodes: PermissionTreeNode[], selected: Set<string>) => {
   const byKey = flattenTree(nodes)
   const parents = buildParentMap(nodes)
-
-  const functionNos = new Set<string>()
-  const linkTypeMap = new Map<string, RetLinkType>()
+  const result = new Set<string>()
 
   for (const key of selected) {
     let cursor: string | undefined = key
     while (cursor) {
-      const node: PermissionTreeNode | undefined = byKey.get(cursor)
-      if (node) {
-        if (node.functionNo) functionNos.add(node.functionNo)
-        if (node.linkType && node.linkType > 1 && node.permissionLinkTypeId) {
-          linkTypeMap.set(node.key, {
-            FunctionNo: node.functionNo!,
-            LinkType: String(node.linkType),
-            PermissionLinkTypeID: node.permissionLinkTypeId
-          })
-        }
-      }
+      if (byKey.get(cursor)?.permissionKey) result.add(cursor)
       cursor = parents.get(cursor)
     }
   }
+  return result
+}
 
-  return { functionNos: [...functionNos], linkTypes: [...linkTypeMap.values()] }
+/** 把勾選轉成要送給後端的 PermissionKey 陣列。 */
+export const collectSelection = (nodes: PermissionTreeNode[], selected: Set<string>) => {
+  const byKey = flattenTree(nodes)
+  return [...withAncestors(nodes, selected)].map(key => byKey.get(key)!.permissionKey!)
 }
 
 /** 勾到的節點的所有祖先，載入後自動展開用。 */
@@ -211,4 +192,46 @@ export const expandedKeysFor = (nodes: PermissionTreeNode[], selected: Set<strin
     }
   }
   return keys
+}
+
+/**
+ * 群組套用前的差異清單：把 incoming（群組範本，可能已微調）套進 current（這個人目前的勾選）
+ * 會發生什麼事。套用是聯集，所以 keptOnly 只是「保留不動」，不會被取消。
+ *
+ * 兩邊都先補上祖先再比，跟實際存檔的結果一致（勾細項會連帶開功能）。
+ * 路徑略過最上層的系統類別，只列「系統 / 功能 / 細項」。
+ */
+export const diffSelection = (
+  nodes: PermissionTreeNode[],
+  current: Set<string>,
+  incoming: Set<string>
+) => {
+  const byKey = flattenTree(nodes)
+  const parents = buildParentMap(nodes)
+
+  const pathOf = (key: string) => {
+    const labels: string[] = []
+    let cursor: string | undefined = key
+    while (cursor) {
+      const node = byKey.get(cursor)
+      // 沒有父節點的就是最上層系統類別，不列
+      if (node && parents.has(cursor)) labels.unshift(node.label)
+      cursor = parents.get(cursor)
+    }
+    return labels.join(' / ')
+  }
+  const toItem = (key: string): PermissionDiffItem => ({
+    permissionKey: byKey.get(key)!.permissionKey!,
+    path: pathOf(key)
+  })
+  const byPath = (a: PermissionDiffItem, b: PermissionDiffItem) => a.path.localeCompare(b.path, 'zh-Hant')
+
+  const currentAll = withAncestors(nodes, current)
+  const incomingAll = withAncestors(nodes, incoming)
+
+  return {
+    added: [...incomingAll].filter(k => !currentAll.has(k)).map(toItem).sort(byPath),
+    existing: [...incomingAll].filter(k => currentAll.has(k)).map(toItem).sort(byPath),
+    keptOnly: [...currentAll].filter(k => !incomingAll.has(k)).map(toItem).sort(byPath)
+  }
 }
