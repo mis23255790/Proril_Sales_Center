@@ -6,7 +6,14 @@ node_modules
 .data
 dist
 .git
+.git-rewrite
 .vs
+.vscode
+.claude
+
+# docker save 匯出的 image tar（數百 MB），進 build context 會拖慢每次 build
+docker-images
+*.tar
 .idea
 .fleet
 

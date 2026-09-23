@@ -20,6 +20,13 @@ export default defineNuxtConfig({
     enabled: true
   },
 
+  // 分頁圖示用 LOGO 的橘色斜紋（public/favicon.svg），取代 Nuxt 預設的 favicon.ico
+  app: {
+    head: {
+      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]
+    }
+  },
+
   css: ['~/assets/css/main.css'],
 
   runtimeConfig: {
