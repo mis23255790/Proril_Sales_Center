@@ -39,6 +39,9 @@ services:
       - "${APP_PORT:-50061}:3000"
     environment:
       PORT: "3000"
+      # server/api/proxy 轉發的後端。沒設的話 nuxt.config.ts 會退回 https://intranet-dev.proril.com（1.0），
+      # 新端點全部 404。用容器名稱不用服務名 api：nginx-proxy 是多個專案共用的網路，api 可能撞名。
+      NUXT_PUBLIC_API_BASE: http://proril_sales_center_dev_api:8080
     env_file:
       - /secrets/proril-sales-center.env.dev
     depends_on:
