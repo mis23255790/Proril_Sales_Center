@@ -7,10 +7,13 @@
 # 同一台主機上還有 docker-compose.dev.yml（dev 環境），name 故意跟這份不同，
 # 兩者才能在同一台主機上同時起，不會互相蓋掉。
 #
-# env_file 直接指到 runner 容器裡的 /secrets/proril-sales-center.env.production
-# （runner 自己的 compose 掛進去的，見 D:\github-runners\proril-sales-center.yml），
+# env_file 指到 runner 容器裡的 /secrets/prod/（api 讀 web-server.env、app 讀 docker.env，
+# 前端容器拿不到資料庫密碼）。/secrets/prod 是 runner 自己的 compose
+# （D:\github-runners\proril-sales-center.yml）把 142 的
+# D:\proril-sales-center.proril\proril-sales-center-prod.proril 整個資料夾唯讀掛進去的。
 # 不用另外複製一份到 checkout 目錄——docker compose 是在 runner 容器裡執行的，
 # 讀 env_file 就是讀它自己容器內的檔案系統。
+# 改了 env 檔之後要重跑 deploy-prod 讓容器重建，env_file 只在建立容器時讀一次。
 #
 # ProrilWebFiles 要跟 1.0 共用同一個 host 目錄，不能用 Docker 自己管的匿名 volume；
 # 又因為 docker compose 是在 Linux 的 runner 容器裡執行、Windows 路徑字串在這裡解析
@@ -41,7 +44,7 @@ services:
       # 新端點全部 404。用容器名稱不用服務名 api：nginx-proxy 是多個專案共用的網路，api 可能撞名。
       NUXT_PUBLIC_API_BASE: http://proril_sales_center_prod_api:8080
     env_file:
-      - /secrets/proril-sales-center.env.production
+      - /secrets/prod/docker.env
     depends_on:
       - api
     restart: unless-stopped
@@ -59,7 +62,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
     env_file:
-      - /secrets/proril-sales-center.env.production
+      - /secrets/prod/web-server.env
     volumes:
       - proril-sales-center-prod-prorilwebfiles:/app/ProrilWebFiles
       - proril-sales-center-prod-logs:/app/Logs
