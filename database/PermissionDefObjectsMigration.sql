@@ -28,6 +28,10 @@
  執行方式：
    sqlcmd -S <host>,<port> -d Proril_Sales_Center -U <user> -P <pw> -C -i PermissionDefObjectsMigration.sql
  之後請再跑一次 PermissionMasterSeed.sql，才會有 0000103 群組權限這個功能。
+
+ **已被取代**：2026-09-23 改成角色制之後，RbacObjectsMigration.sql 會把 M_PermissionDef
+ 改名成 RBAC_Permission（並拿掉 PermissionLinkTypeID）。新環境仍是先跑這支、再跑那支；
+ 已經改名過的庫再跑這支會自動略過。
 ================================================================================
 */
 
@@ -38,6 +42,15 @@ GO
 IF DB_NAME() <> 'Proril_Sales_Center'
 BEGIN
     RAISERROR('這支腳本要在 Proril_Sales_Center 上執行，目前連到的是別的資料庫。', 16, 1);
+    SET NOEXEC ON;
+END
+GO
+
+-- 2026-09-23 起 M_PermissionDef 已由 RbacObjectsMigration.sql 改名成 RBAC_Permission。
+-- 改名之後再跑這支會重建一張空的 M_PermissionDef、回填也會失準，直接跳過。
+IF OBJECT_ID('dbo.RBAC_Permission', 'U') IS NOT NULL
+BEGIN
+    PRINT 'RBAC_Permission 已存在（M_PermissionDef 已改名），這支不需要再跑，略過。';
     SET NOEXEC ON;
 END
 GO
@@ -192,4 +205,7 @@ FROM dbo.M_Permission WHERE PermissionKey IS NULL AND LEN(FunctionNo) = 7
 UNION ALL
 SELECT 'M_PermissionGroup', ID, GroupNo, FunctionNo, LinkType
 FROM dbo.M_PermissionGroup WHERE PermissionKey IS NULL AND LEN(FunctionNo) = 7;
+GO
+
+SET NOEXEC OFF;
 GO

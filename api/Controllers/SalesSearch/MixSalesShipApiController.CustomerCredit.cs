@@ -1,5 +1,6 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Models;
 
@@ -26,6 +27,8 @@ public partial class MixSalesShipApiController
     /// </summary>
     /// <param name="customerNo">1.0 簽章裡有這個參數，但函式本體從沒用到，維持原樣不用它。</param>
     [HttpGet]
+    // 客戶相關資訊（客戶檢索底下的頁面）在用，不是只有銷貨檢索
+    [RequirePermission(PermissionKeys.SalesSearch.MixSalesShipping, PermissionKeys.SalesSearch.CustomQuery)]
     public CustomApiViewModel GetCustomerCredit(string? customerNo, string? erpCustomerNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
@@ -46,6 +49,8 @@ public partial class MixSalesShipApiController
     /// <summary>客戶信用額度（幣別分開版本，<c>prc_COPGetCredit_CRM</c>）+ 母公司簡稱/全名。</summary>
     /// <param name="customerNo">同 <see cref="GetCustomerCredit"/>，1.0 簽章有但沒用到。</param>
     [HttpGet]
+    // 客戶相關資訊（客戶檢索底下的頁面）在用，不是只有銷貨檢索
+    [RequirePermission(PermissionKeys.SalesSearch.MixSalesShipping, PermissionKeys.SalesSearch.CustomQuery)]
     public CustomApiViewModel GetCustomerCreditCRM(string? customerNo, string? erpCustomerNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };

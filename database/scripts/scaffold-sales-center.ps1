@@ -77,6 +77,12 @@ try {
     $allTables = Get-AllTableNames -ConnectionString $cs
     if ($allTables.Count -eq 0) { throw "$Environment 環境查不到任何表，連線字串可能不對。" }
 
+    # 刻意不對映的表：2.0 已不讀，對映留著只會讓人以為還要維護它。
+    # M_Function 在 2026-09-24 權限樹改由 RBAC_Permission 驅動後就沒有人讀，連同它的備份表一起排除。
+    $retiredTables = @('M_Function', 'M_Function_bak_FunctionNo')
+    $allTables = $allTables | Where-Object { $retiredTables -notcontains $_ }
+    Write-Host "不對映（已廢棄）: $($retiredTables -join ', ')" -ForegroundColor DarkGray
+
     $authTables = @('M_User', 'M_Permission', 'M_PermissionGroup')
     $targetTables = if ($ExcludeAuthTables) {
         $allTables | Where-Object { $authTables -notcontains $_ }

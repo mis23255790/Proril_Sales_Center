@@ -68,10 +68,6 @@ public partial class SalesCenterDbContext : DbContext
 
     public virtual DbSet<MDepartment> MDepartments { get; set; }
 
-    public virtual DbSet<MFunction> MFunctions { get; set; }
-
-    public virtual DbSet<MFunctionBakFunctionNo> MFunctionBakFunctionNos { get; set; }
-
     public virtual DbSet<MPermission> MPermissions { get; set; }
 
     public virtual DbSet<MPermissionBakFunctionNo> MPermissionBakFunctionNos { get; set; }
@@ -82,7 +78,13 @@ public partial class SalesCenterDbContext : DbContext
 
     public virtual DbSet<MPermissionLinkType> MPermissionLinkTypes { get; set; }
 
-    public virtual DbSet<MPermissionDef> MPermissionDefs { get; set; }
+    public virtual DbSet<RBACPermission> RBACPermissions { get; set; }
+
+    public virtual DbSet<RBACRole> RBACRoles { get; set; }
+
+    public virtual DbSet<RBACRolePermission> RBACRolePermissions { get; set; }
+
+    public virtual DbSet<RBACRoleUser> RBACRoleUsers { get; set; }
 
     public virtual DbSet<MSystem> MSystems { get; set; }
 
@@ -961,60 +963,6 @@ public partial class SalesCenterDbContext : DbContext
                 .IsUnicode(false);
         });
 
-        modelBuilder.Entity<MFunction>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__M_Functi__3214EC2746E5CF47");
-
-            entity.ToTable("M_Function");
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.AStatus)
-                .HasMaxLength(1)
-                .IsUnicode(false)
-                .HasDefaultValue("Y")
-                .HasColumnName("aStatus");
-            entity.Property(e => e.FunctionName)
-                .HasMaxLength(20)
-                .IsUnicode(false);
-            entity.Property(e => e.FunctionNo)
-                .HasMaxLength(8)
-                .IsUnicode(false);
-            entity.Property(e => e.GroupName)
-                .HasMaxLength(20)
-                .IsUnicode(false);
-            entity.Property(e => e.Href).HasMaxLength(50);
-            entity.Property(e => e.ImagrePath)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.RedirectHref).HasMaxLength(50);
-        });
-
-        modelBuilder.Entity<MFunctionBakFunctionNo>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToTable("M_Function_bak_FunctionNo");
-
-            entity.Property(e => e.AStatus)
-                .HasMaxLength(1)
-                .IsUnicode(false)
-                .HasColumnName("aStatus");
-            entity.Property(e => e.FunctionName)
-                .HasMaxLength(20)
-                .IsUnicode(false);
-            entity.Property(e => e.GroupName)
-                .HasMaxLength(20)
-                .IsUnicode(false);
-            entity.Property(e => e.Href).HasMaxLength(50);
-            entity.Property(e => e.Id)
-                .ValueGeneratedOnAdd()
-                .HasColumnName("ID");
-            entity.Property(e => e.ImagrePath)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.RedirectHref).HasMaxLength(50);
-        });
-
         modelBuilder.Entity<MPermission>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__M_Permis__3214EC274A3FED69");
@@ -1147,27 +1095,119 @@ public partial class SalesCenterDbContext : DbContext
             entity.Property(e => e.ParentLinkTypeId).HasColumnName("ParentLinkTypeID");
         });
 
-        modelBuilder.Entity<MPermissionDef>(entity =>
+        modelBuilder.Entity<RBACRole>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK_M_PermissionDef");
+            entity.HasKey(e => e.Id).HasName("PK_RBAC_Role");
 
-            entity.ToTable("M_PermissionDef");
+            entity.ToTable("RBAC_Role");
 
-            entity.HasIndex(e => e.PermissionKey, "UQ_M_PermissionDef_PermissionKey").IsUnique();
-            entity.HasIndex(e => new { e.FunctionNo, e.LinkType }, "UQ_M_PermissionDef_FunctionNo_LinkType").IsUnique();
+            entity.HasIndex(e => e.RoleCode, "UQ_RBAC_Role_RoleCode").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.RoleCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.RoleName).HasMaxLength(50);
+            entity.Property(e => e.Description).HasMaxLength(200);
+            entity.Property(e => e.AStatus)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasColumnName("aStatus");
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.Creator)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.ModiTime).HasColumnType("datetime");
+            entity.Property(e => e.Modifier)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+        });
+
+        modelBuilder.Entity<RBACRolePermission>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_RBAC_RolePermission");
+
+            entity.ToTable("RBAC_RolePermission");
+
+            entity.HasIndex(e => new { e.RoleId, e.PermissionKey }, "UQ_RBAC_RolePermission_Role_Key").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.RoleId).HasColumnName("RoleID");
+            entity.Property(e => e.PermissionKey)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.AStatus)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasDefaultValue("Y")
+                .HasColumnName("aStatus");
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.Creator)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.ModiTime).HasColumnType("datetime");
+            entity.Property(e => e.Modifier)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+        });
+
+        modelBuilder.Entity<RBACRoleUser>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_RBAC_RoleUser");
+
+            entity.ToTable("RBAC_RoleUser");
+
+            entity.HasIndex(e => new { e.Account, e.RoleId }, "UQ_RBAC_RoleUser_Account_Role").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.Account)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.RoleId).HasColumnName("RoleID");
+            entity.Property(e => e.AStatus)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasDefaultValue("Y")
+                .HasColumnName("aStatus");
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.Creator)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.ModiTime).HasColumnType("datetime");
+            entity.Property(e => e.Modifier)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+        });
+
+        modelBuilder.Entity<RBACPermission>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_RBAC_Permission");
+
+            entity.ToTable("RBAC_Permission");
+
+            entity.HasIndex(e => e.PermissionKey, "UQ_RBAC_Permission_PermissionKey").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("ID");
             entity.Property(e => e.PermissionKey)
                 .HasMaxLength(100)
                 .IsUnicode(false);
-            entity.Property(e => e.FunctionNo)
-                .HasMaxLength(8)
+            entity.Property(e => e.NodeType)
+                .HasMaxLength(10)
                 .IsUnicode(false);
-            entity.Property(e => e.PermissionLinkTypeId).HasColumnName("PermissionLinkTypeID");
-            entity.Property(e => e.ParentPermissionKey)
+            entity.Property(e => e.ParentKey)
                 .HasMaxLength(100)
                 .IsUnicode(false);
-            entity.Property(e => e.ActionName).HasMaxLength(50);
+            entity.Property(e => e.Label).HasMaxLength(50);
+            entity.Property(e => e.LabelEn)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.Path)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+            entity.Property(e => e.Icon)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.Description).HasMaxLength(200);
             entity.Property(e => e.AStatus)
                 .HasMaxLength(1)
                 .IsUnicode(false)

@@ -1,6 +1,7 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Data.SalesCenter;
+using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
@@ -17,6 +18,8 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 /// 客戶「情報」（CRM_CustomerMemo）的兩支端點在 CustomQueryApiController.Memo.cs。
 /// </summary>
 [Authorize]
+// 客戶檢索本身，加上議題維護的客戶欄位也會查客戶（GetCustom / GetERPCustom）
+[RequirePermission(PermissionKeys.SalesSearch.CustomQuery, PermissionKeys.SalesIssue.ProcessMaintain)]
 public partial class CustomQueryApiController : BaseApiController
 {
     public CustomQueryApiController(
@@ -143,6 +146,7 @@ public partial class CustomQueryApiController : BaseApiController
     /// 自動產生（對齊 1.0：同年度、流水號 &lt;= 100 的既有客戶取最大號再 +1）；否則更新既有客戶。
     /// </summary>
     [HttpGet]
+    [RequirePermission(PermissionKeys.SalesSearch.CustomQuery)]
     public CustomApiViewModel SaveCustom([FromQuery] CrmCustomer crmCustom)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };

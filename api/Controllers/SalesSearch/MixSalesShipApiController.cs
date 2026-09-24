@@ -1,7 +1,8 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Proril.SalesIssue.Api.Controllers.Shared;
+using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
@@ -25,6 +26,7 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 /// 那些屬於別的模組，2.0 前端目前也沒有呼叫，不在這次搬移範圍。
 /// </summary>
 [Authorize]
+[RequirePermission(PermissionKeys.SalesSearch.MixSalesShipping)]
 public partial class MixSalesShipApiController : BaseApiController
 {
     public MixSalesShipApiController(
@@ -56,9 +58,11 @@ public partial class MixSalesShipApiController : BaseApiController
 
         WriteStepLog(nameof(GetSalesOrder), $"customerNo:{customerNo}, productType:{productType}, groupName:{groupName}");
 
+        var showAmount = HasPermission(PermissionKeys.SalesSearch.MixSalesShippingViewAmount);
+
         ca.IsSuccess = true;
-        ca.Body = QueryByProduct(customerNo, productType, productNo, productName, productSpec,
-            startDate, endDate, serialNo, poNo, inPlanNumber, groupName, groupDesc);
+        ca.Body = MaskAmounts(QueryByProduct(customerNo, productType, productNo, productName, productSpec,
+            startDate, endDate, serialNo, poNo, inPlanNumber, groupName, groupDesc), showAmount);
         return ca;
     }
 
@@ -81,10 +85,35 @@ public partial class MixSalesShipApiController : BaseApiController
 
         WriteStepLog(nameof(GetSalesOrder_1), $"customerNo:{customerNo}, orderType:{OrderType}, orderNo:{OrderNo}, groupName:{groupName}");
 
+        var showAmount = HasPermission(PermissionKeys.SalesSearch.MixSalesShippingViewAmount);
+
         ca.IsSuccess = true;
-        ca.Body = QueryBySalesOrder(customerNo, productType, productNo, productName, productSpec,
-            startDate, endDate, serialNo, poNo, OrderType, OrderNo, inPlanNumber, groupName, groupDesc);
+        ca.Body = MaskAmounts(QueryBySalesOrder(customerNo, productType, productNo, productName, productSpec,
+            startDate, endDate, serialNo, poNo, OrderType, OrderNo, inPlanNumber, groupName, groupDesc), showAmount);
         return ca;
+    }
+
+    /// <summary>
+    /// 沒有 viewAmount 權限時把金額相關欄位清成 null。權限不足時後端也清掉金額，不只靠前端隱藏欄位
+    /// （直接打 API 一樣看不到）。清的欄位與 <see cref="SalesOrderDetailCols"/> 在 showAmount=false
+    /// 時拿掉的那組一致：單價、數量*單價、幣別、匯率、台幣未稅、台幣稅額、台幣總額。
+    /// </summary>
+    private static List<CopSalesOrder> MaskAmounts(List<CopSalesOrder> rows, bool showAmount)
+    {
+        if (showAmount) return rows;
+
+        foreach (var row in rows)
+        {
+            row.Th012 = null;
+            row.Th013 = null;
+            row.Tg011 = null;
+            row.Tg012 = null;
+            row.Th037 = null;
+            row.Th038 = null;
+            row.SumAmt = null;
+        }
+
+        return rows;
     }
 
     /// <summary>

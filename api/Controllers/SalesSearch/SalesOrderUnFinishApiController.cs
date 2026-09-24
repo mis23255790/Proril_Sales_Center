@@ -1,7 +1,8 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Proril.SalesIssue.Api.Controllers.Shared;
+using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
@@ -26,6 +27,7 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 /// 在應用層 left join 回去（見 <see cref="ApplySerialNos"/>）。
 /// </summary>
 [Authorize]
+[RequirePermission(PermissionKeys.SalesSearch.QueryUnFinish)]
 public partial class SalesOrderUnFinishApiController : BaseApiController
 {
     public SalesOrderUnFinishApiController(
@@ -55,11 +57,13 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
 
         WriteStepLog(nameof(GetUnfinOrder), $"productNo:{productNo}, productName:{productName}, groupName:{groupName}");
 
+        var showAmount = HasPermission(PermissionKeys.SalesSearch.QueryUnFinishViewAmount);
+
         ca.IsSuccess = true;
-        ca.Body = ApplySerialNos(FilterByOrderType(
+        ca.Body = MaskAmounts(ApplySerialNos(FilterByOrderType(
             CallQueryUnfinOrder(inCopSource, inCustomerNo, productType, productNo, productName, productSpec,
                 startDate, endDate, deliveryStartDate, deliveryEndDate, serialNo, poNo, inPlanNumber, groupName, groupDesc),
-            orderType));
+            orderType)), showAmount);
         return ca;
     }
 
@@ -80,11 +84,13 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
 
         WriteStepLog(nameof(QueryUnfinOrder_1), $"productNo:{productNo}, poNo:{poNo}, groupName:{groupName}");
 
+        var showAmount = HasPermission(PermissionKeys.SalesSearch.QueryUnFinishViewAmount);
+
         ca.IsSuccess = true;
-        ca.Body = ApplySerialNos(FilterByOrderType(
+        ca.Body = MaskAmounts(ApplySerialNos(FilterByOrderType(
             CallQueryUnfinOrder1(inCopSource, inCustomerNo, productType, productNo, productName, productSpec,
                 startDate, endDate, deliveryStartDate, deliveryEndDate, serialNo, poNo, inPlanNumber, groupName, groupDesc),
-            orderType));
+            orderType)), showAmount);
         return ca;
     }
 
@@ -172,6 +178,29 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
             {
                 row.SerialNosJson = json;
             }
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// 沒有 viewAmount 權限時把金額相關欄位清成 null。權限不足時後端也清掉金額，不只靠前端隱藏欄位
+    /// （直接打 API 一樣看不到）。清的欄位與 <see cref="DetailCols"/> 在 showAmount=false 時拿掉的
+    /// 那組一致：原幣單價、原幣金額、幣別、匯率、台幣金額、付款條件、課稅別。
+    /// </summary>
+    private static List<UnfinOrder> MaskAmounts(List<UnfinOrder> rows, bool showAmount)
+    {
+        if (showAmount) return rows;
+
+        foreach (var row in rows)
+        {
+            row.Td011 = null;
+            row.Td012 = null;
+            row.Tc008 = null;
+            row.Tc009 = null;
+            row.Ntd = null;
+            row.Tc014 = null;
+            row.Tc016 = null;
         }
 
         return rows;

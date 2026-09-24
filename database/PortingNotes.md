@@ -492,6 +492,10 @@ CLAUDE.md 講得很白：這兩張表**要嘛連同 1.0 對應的兩支 Controll
 **加一列之前先確認 `app/composables/useAppNavigation.ts` 的 `NAV_MODULES` 有對應路由**，
 否則側欄不會顯示它（側欄只列有對照路由的功能），權限樹卻勾得到，容易誤會。
 
+> **2026-09-24 起這段只剩歷史背景**：權限樹與側欄改由 `RBAC_Permission` 單一表驅動，
+> `NAV_MODULES` 已刪除，`M_Function` 不再被讀。加新功能是加 `RBAC_Permission` 節點，
+> 不用再改 `@FunctionNos`，見本檔「角色制 RBAC」底下的「權限樹改成單一表自我參照」。
+
 ### 這件事踩到的兩個工具陷阱
 
 1. **`copy-snapshot-data.ps1` 會整批覆蓋**，跑下去就把上面這件事推翻了。
@@ -646,6 +650,10 @@ migration 會先把 4 張表複製成 `*_bak_FunctionNo`。腳本**不可重入*
 
 ## 字串權限 M_PermissionDef + 群組權限 0000103（2026-09-23，**測試區已執行**，正式區還沒建庫）
 
+> **同日下午已被角色制取代**：`M_PermissionDef` 改名成 `RBAC_Permission`、
+> `M_Permission` / `M_PermissionGroup` 變成備份表、群組權限 `0000103` 停用。
+> 這一節描述的是中間態，現況以下面「角色制 RBAC」那節為準。
+
 權限判斷改成 Google IAM 式的 `module.function.action` 字串（`PermissionKey`），
 理由與對照表見 `docs/modules/SystemSetting/logic.md`「字串權限」。資料庫端兩支腳本：
 
@@ -671,3 +679,145 @@ migration 會先把 4 張表複製成 `*_bak_FunctionNo`。腳本**不可重入*
   否則非 admin 帳號會變成什麼權限都沒有。
 
 執行順序：先跑這兩支腳本，再部署 `api/` 與前端——新版 `api/` 的權限檢查全部讀 `PermissionKey`。
+## 角色制 RBAC（2026-09-23，**測試區已執行**，正式區還沒建庫）
+
+權限模型從「逐人勾權限（`M_Permission`）+ 部門範本（`M_PermissionGroup`）」改成角色制：
+角色綁一組 PermissionKey、帳號掛多個角色，有效權限 = 所屬角色 ∪ `everyone`，
+`superAdmin` 全放行。邏輯、畫面與端點見 `docs/modules/SystemSetting/logic.md`。
+腳本是 **`database/RbacObjectsMigration.sql`**，在 `Proril_Sales_Center` 上執行。
+
+### 表
+
+| 表 | 內容 |
+|---|---|
+| `RBAC_Permission` | 權限主檔，**原 `M_PermissionDef` 原地改名**，資料不動；拿掉過渡期的 `PermissionLinkTypeID`（角色制之後沒有地方讀） |
+| `RBAC_Role` | 角色。`RoleCode` 唯一；`IsSystem`（不可刪、不可改代碼）/ `IsSuperAdmin`（全放行）/ `IsDefault`（所有帳號自動擁有）/ `Sort` |
+| `RBAC_RolePermission` | 角色 × PermissionKey，唯一鍵 `(RoleID, PermissionKey)`，FK 到 `RBAC_Role` 與 `RBAC_Permission` |
+| `RBAC_RoleUser` | 帳號 × 角色，唯一鍵 `(Account, RoleID)`，FK 到 `RBAC_Role`，`RoleID` 有索引 |
+
+三張角色表都有 `aStatus`（預設 `'Y'`）與 `Creator`/`CreateTime`/`Modifier`/`ModiTime`。
+**`aStatus` 手動改 `'N'` = 該列失效**，`api/` 只認 `'Y'`；畫面上的取消勾選是直接刪列，
+勾回 `'N'` 的列則改回 `'Y'`（有唯一鍵，不能另開一列）。
+
+四張都是 2.0 新表，`PRORIL_WEB` 沒有，**不加進 `TABLES.txt` / `Tables/*.sql`**，
+`copy-snapshot-data.ps1` 不歸它管；也**不要**用 `publish.ps1` 建（理由同「客戶相關資訊」那節）。
+
+腳本另外做的事：
+
+- 停用群組權限：`M_Function` `0000103` 與 `RBAC_Permission` 的 `system.groupPermission.view`
+  設 `aStatus = 'N'`。key 不刪，照「key 一旦寫進資料就不改名」的規則保留。
+- 建系統角色 `superAdmin`（系統管理員，`IsSuperAdmin = 1`）與 `everyone`（全體使用者，`IsDefault = 1`）。
+  MERGE 可重跑，重跑不動 `aStatus`（手動改成 `'N'` 的維持失效）。
+
+### 轉換規則
+
+只在 `RBAC_RoleUser` 還是空的時候做（有資料就略過，避免重跑重複建角色），整段包在一個交易裡：
+
+1. `everyone` 的權限 = `M_Permission` 裡 `LinkNumber = '000000'` 的 key（只收仍啟用的 key）。
+2. `M_User.IsAdmin = 1` → 指派 `superAdmin`，個人 key 不另外轉。
+3. 其餘帳號：個人 key 扣掉 `everyone` 已有的（有效權限是聯集，扣掉不失真），
+   排序後的 key 串當簽章，**簽章相同的人歸成一個角色**「移轉角色-NN」（`RoleCode` = `migratedNN`，
+   `Sort` = 100 + NN）。編號依該簽章字典序最小的成員帳號排，重跑結果穩定。扣完是空集合的不建角色。
+4. 不轉：`PermissionKey IS NULL` 的 1.0 遺留列（FunctionNo 改格式時刻意保留的舊功能）、
+   `M_PermissionGroup` 的部門範本、`M_User` 已不存在的帳號的孤兒權限列。
+
+驗證（腳本最後自己跑）：每個非管理員帳號轉換前（本人 ∪ `000000`）與轉換後（所屬角色 ∪ `IsDefault` 角色）
+有效權限的對稱差、`IsAdmin` 與 `superAdmin` 成員的對稱差，**都應為 0 筆**。
+**測試區結果：兩組都是 0 筆**，建出 12 個角色 / 36 筆角色權限 / 25 筆角色成員。
+
+### 備份
+
+`M_Permission` / `M_PermissionGroup` **不刪、不改**，就是備份；`api/` 之後不再讀寫它們。
+`M_User.IsAdmin` 欄位也還在，但不再被讀（`AddUser` 一律寫 `false`）。
+之後用 `copy-snapshot-data.ps1` 重灌 `M_Permission` / `M_PermissionGroup` **已經不影響權限**；
+要從它們重新轉換，得先清空三張角色表再重跑腳本。
+
+### 表名的改名歷程
+
+同一天在測試區換過好幾次名字，每一版都真的建過：
+
+```
+M_UserRole → M_Role / M_RolePermission / M_RoleUser
+           → M_RbacRole / M_RbacRolePermission / M_RbacRoleUser
+           → RbacRole / RbacRolePermission / RbacRoleUser
+           → RBACRole / RBACRolePermission / RBACRoleUser
+           → RBAC_Role / RBAC_RolePermission / RBAC_RoleUser（定案）
+M_PermissionDef → RBAC_Permission
+```
+
+定案成 `RBAC_` 開頭（全大寫、底線、不加 `M_`），四張權限表在 SSMS 會排在一起。
+**腳本會偵測上面任何一個舊名，原地 `sp_rename` 成現在的名字**（表、PK/UQ/FK/DF constraint、索引一併改，
+跟 `SalesCenterDbContext` 的對映一致），資料不動；正式區直接用新名建。
+資料庫定序是 `_BIN`，**物件名稱區分大小寫**——`RbacRole` 與 `RBAC_Role` 是不同名字，
+手寫查詢要打 `RBAC_Role`，打成 `rbac_role` 會是「無效的物件名稱」。
+
+### 執行
+
+前置：`PermissionMasterSeed.sql`、`PermissionDefObjectsMigration.sql` 已跑過。
+
+```powershell
+.\scripts\run-objects-migration.ps1 -Script RbacObjectsMigration.sql -Environment snapshot
+.\scripts\run-objects-migration.ps1 -Script RbacObjectsMigration.sql -Environment snapshot -Execute
+```
+
+檔案是 UTF-8 無 BOM，中文角色名稱要靠 `-f 65001`（`run-objects-migration.ps1` 已處理）。
+
+**`PermissionDefObjectsMigration.sql` 現在會自己略過**：`RBAC_Permission` 已存在就整支 `SET NOEXEC ON`
+——改名之後再跑它會重建一張空的 `M_PermissionDef`、回填也會失準。新環境仍是先跑那支、再跑這支。
+
+執行順序：三支腳本跑完，**再部署 `api/` 與前端**。新版 `api/` 讀的是 `RBAC_*`，
+表不存在的話所有人都沒有權限，連 `superAdmin` 都不存在。
+
+### 權限樹改成單一表自我參照（2026-09-24，**測試區已執行**，正式區還沒建庫）
+
+同一支 `RbacObjectsMigration.sql` 的第 4b 段。權限樹與側欄原本由 `M_System` → `M_Function`
+（位置編在 `FunctionNo`）→ `RBAC_Permission`（細項）三張表拼起來，路由／icon 寫死在前端 `NAV_MODULES`；
+改成 **`RBAC_Permission` 一張表自我參照**，模組／分組／頁面／細項都是它的節點，側欄也由它驅動。
+邏輯見 `docs/modules/SystemSetting/logic.md`「權限樹的資料（`RBAC_Permission`）」。
+
+`RBAC_Permission` 的欄位變成：
+
+| 欄位 | 異動 |
+|---|---|
+| `NodeType` | 新增，`MODULE` / `GROUP` / `PAGE` / `ACTION`，`NOT NULL` + `CK_RBAC_Permission_NodeType` |
+| `ParentKey` | 原 `ParentPermissionKey` 改名；自我參照外鍵 `FK_RBAC_Permission_Parent`，`NULL` = 最上層 |
+| `Label` | 原 `ActionName` 改名 |
+| `LabelEn` / `Path` / `Icon` / `Description` | 新增。`Path` 是前端路由（不含 `/sales-center`），只有 MODULE / PAGE 有 |
+| `FunctionNo` / `LinkType` | **拿掉**，連同 `UQ_RBAC_Permission_FunctionNo_LinkType` |
+
+`ID` / `PermissionKey` / `Sort` / `aStatus` / 異動欄位不變。
+
+做的事（依段落）：
+
+1. **4b.1** 改名與加欄位。
+2. **4b.2** `FK_RBAC_RolePermission_RBAC_Permission` 改成 `ON UPDATE CASCADE`——下一步改 key 時
+   `RBAC_RolePermission` 跟著改，不用另外回填。
+3. **4b.3** 還有 `LinkType` 的庫：依 `LinkType` 標 `NodeType`（1 = PAGE，其餘 ACTION），
+   **頁面 key 拿掉 `.view`**（`salesSearch.mixSalesShipping.view` → `salesSearch.mixSalesShipping`，
+   細項 `…viewAmount` 不變），再拿掉 `FunctionNo` / `LinkType`。欄位拿掉之後這段整個略過。
+4. **4b.4** 灌節點：3 個模組（`salesIssue` / `salesSearch` / `system`）、6 個分組
+   （`salesIssue.grpIssue` / `.grpBasic`、`salesSearch.grpCustomer` / `.grpSales` / `.grpOrder`、`system.grpAccess`）、
+   8 個頁面、5 個細項，內容就是原本 `NAV_MODULES` 的路由／icon／說明／分組。
+   **只在還沒有任何 MODULE 節點時灌一次**，之後位置／名稱／icon 直接在 DB 改（改 `ParentKey` 搬位置、
+   改 `Sort` 換順序），重跑**不會**蓋回去。
+5. **4b.5** 約束：`NodeType` 改 `NOT NULL` + CHECK、`ParentKey` 自我參照外鍵。
+   停用的 `system.groupPermission`（`aStatus = 'N'`）接到 `system.grpAccess` 底下；
+   `ParentKey` 指向自己的節點清成 `NULL`。
+6. **4b.6** 角色補上祖先節點：勾頁面／細項就連帶擁有所屬分組與模組，側欄才長得出上層。
+   已手動設成 `'N'` 的列不動。
+
+**測試區結果**：`RBAC_RolePermission` 36 → 72 筆（多出來的是補上的 MODULE / GROUP）。
+轉換前後有效權限的驗證改成先把舊的 `xxx.view` 換算成新 key、只比 PAGE / ACTION 節點，**對稱差仍是 0 筆**。
+
+注意：
+
+- **頁面 key 改名是「key 一旦寫進資料就不改名」規則的唯一例外**：當時只有測試區有資料、
+  正式區還沒建庫，又有 `ON UPDATE CASCADE`，才一次做掉。之後不要再比照。
+- **`aStatus = 'N'` 會連同整棵子樹一起失效**（`api/Services/PermissionService.cs` 的 `ActiveNodes`），
+  `ParentKey` 斷掉或形成迴圈的節點也一律不算。
+- `M_System` / `M_Function` 不再組權限樹與側欄：`M_System` 只剩 topbar 環境圖示（`GetMSystemWNo`）在讀，
+  `M_Function` 應用層已不讀。`PermissionMasterSeed.sql` 照樣留著（新環境仍會跑），但**加新功能不用再改它**。
+- 新功能的節點在既有的庫要**直接 INSERT 或另寫 `*ObjectsMigration.sql`**（4b.4 不會再跑），
+  同時補進 4b.4 的清單讓全新環境建得出來。
+- **跑完第 4b 段，2026-09-23 版的 `api/` 與前端就不能用了**（讀 `LinkType`、檢查 `xxx.view`），
+  腳本跑完要緊接著部署新版。

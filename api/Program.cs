@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
@@ -53,6 +53,8 @@ builder.Services.AddSingleton<LogHelper>();
 // ——不然開發環境還沒設定這個服務，整個 api 會直接起不來。
 builder.Services.AddHttpClient("ManufacturingCenter");
 builder.Services.AddScoped<ManufacturingSerialNoLookupService>();
+// 角色制權限解析（BaseApiController.HasPermission / RequirePermissionAttribute 共用），request 內快取
+builder.Services.AddScoped<PermissionService>();
 builder.Services.AddHostedService<LogTimedHostedService>();
 builder.Services.AddHostedService<SerialNoSyncHostedService>();
 builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());

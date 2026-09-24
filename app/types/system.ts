@@ -13,47 +13,62 @@ export interface MSystem {
 
 // ---------------------------------------------------------------- 權限控管
 
-/** M_Function：功能主檔，權限樹第二層。 */
-export interface MFunction {
-  id: number
-  /** AAABBCC：SystemNo(3) + GroupNo(2) + 序號(2)，見 database/FunctionNoFormatMigration.sql。 */
-  functionNo: string
-  functionName?: string | null
-  systemNo: number
-  groupNo?: number | null
-  groupName?: string | null
-  imagrePath?: string | null
-  href?: string | null
-  aStatus?: string | null
-  redirectHref?: string | null
-}
+/** RBAC_Permission.NodeType：模組 → 分組 → 頁面 → 細項。 */
+export type PermissionNodeType = 'MODULE' | 'GROUP' | 'PAGE' | 'ACTION'
 
 /**
- * M_PermissionDef：字串權限主檔（`module.function.action`，見 app/utils/permissionKeys.ts）。
- * linkType = 1 是功能本身（`.view`），> 1 是功能底下的細項，權限樹第三層以後。
+ * RBAC_Permission：權限樹的一個節點（單一表自我參照，parentKey 指父節點）。
+ * 側欄、模組首頁、麵包屑與權限管理的樹都由它長出來（MainApi/GetRBACPermission，只回有效節點）。
+ * 頁面 key = `module.function`，細項 = `module.function.action`，見 app/utils/permissionKeys.ts。
  */
-export interface MPermissionDef {
-  id: number
+export interface RBACPermission {
   permissionKey: string
-  functionNo: string
-  linkType: number
-  parentPermissionKey?: string | null
-  actionName: string
+  nodeType: PermissionNodeType
+  parentKey?: string | null
+  label: string
+  labelEn?: string | null
+  /** 前端路由（不含 /sales-center），MODULE / PAGE 才有。 */
+  path?: string | null
+  icon?: string | null
+  description?: string | null
   sort: number
+  /**
+   * 自己與所有祖先都是 aStatus = 'Y'。預設的 GetRBACPermission 只回 true 的節點；
+   * 權限管理用 includeDisabled 才會拿到 false 的（顯示成 disabled）。
+   */
+  isActive: boolean
 }
 
-/** M_Permission：某帳號已有的權限列。 */
-export interface MPermission {
+/** RBAC_Role：角色清單的一列。 */
+export interface RoleListItem {
   id: number
-  linkNumber?: string | null
-  functionNo: string
-  linkType: number
-  permissionLinkTypeId?: number | null
-  /** migration 回填不到的舊列會是 null，樹上不會打勾，存檔時會被刪掉。 */
-  permissionKey?: string | null
+  roleCode: string
+  roleName: string
+  description?: string | null
+  /** 系統角色（superAdmin / everyone）：不可刪、不可改代碼。 */
+  isSystem: boolean
+  /** 全放行，不需要勾權限。 */
+  isSuperAdmin: boolean
+  /** 所有啟用帳號自動擁有，不需要設成員。 */
+  isDefault: boolean
+  sort: number
+  permissionCount: number
+  memberCount: number
 }
 
-/** 人員管理畫面的帳號設定。 */
+/** 單一角色：基本資料 + 權限 + 成員帳號。 */
+export interface RoleDetail extends RoleListItem {
+  permissionKeys: string[]
+  members: string[]
+}
+
+/** 目前登入者的有效權限（MainApi/GetMyPermissions）。 */
+export interface MyPermissions {
+  isSuperAdmin: boolean
+  keys: string[]
+}
+
+/** 人員管理畫面的帳號設定。isAdmin = 有沒有掛 superAdmin 角色。 */
 export interface UserSetting {
   account: string
   userName: string
@@ -62,6 +77,8 @@ export interface UserSetting {
   isLocked: boolean
   isFirstLogin: boolean
   lastChangePwd?: string | null
+  /** 所屬角色（RBAC_RoleUser），不含自動擁有的 everyone。 */
+  roleIds: number[]
 }
 
 /** 工號下拉用。 */
@@ -69,56 +86,22 @@ export interface UserListItem {
   account: string
   userName: string
   isEnable: boolean
+  /** 有沒有掛 superAdmin 角色。 */
   isAdmin: boolean
   isLocked: boolean
 }
 
-/** 群組（部門）下拉用。 */
-export interface DepartmentListItem {
-  depCode: string
-  depName: string
-}
-
-/** 群組預設功能（M_PermissionGroup）+ 對照出來的名稱。 */
-export interface DepFunction {
-  id: number
-  groupNo?: string | null
-  functionNo?: string | null
-  linkType?: number | null
-  permissionKey?: string | null
-  functionName: string
-  linkTypeName: string
-}
-
-/** 側欄用：目前登入者可以進入的功能。 */
-export interface UserFunction {
-  systemNo: number
-  systemName: string
-  systemType: number
-  typeName?: string | null
-  systemSort: number
-  functionNo: string
-  functionName: string
-  groupNo?: number | null
-  groupName?: string | null
-}
-
 /**
- * 權限樹節點。上面兩層（系統類別／系統）是純分類，checkable = false、沒有 permissionKey；
- * 功能節點的 permissionKey 是該功能的 `.view`，細項節點是細項自己的 key。
+ * 權限樹節點（權限管理的樹）。MODULE / GROUP 是純分類，checkable = false，
+ * 但照樣有 permissionKey——存檔時勾到的頁面／細項會沿路把它們一起帶上（側欄要靠它們長出上層）。
  */
 export interface PermissionTreeNode {
   key: string
   label: string
   checkable: boolean
-  functionNo?: string
-  permissionKey?: string
-  children: PermissionTreeNode[]
-}
-
-/** 群組套用差異清單的一列。 */
-export interface PermissionDiffItem {
+  /** 節點停用（自己或祖先 aStatus = 'N'）：照樣顯示、原本的勾選照樣顯示，但不能改，存檔也不送。 */
+  disabled: boolean
+  nodeType: PermissionNodeType
   permissionKey: string
-  /** 「業務檢索 / 銷貨檢索 / 顯示金額欄位」這種路徑，給人看的。 */
-  path: string
+  children: PermissionTreeNode[]
 }

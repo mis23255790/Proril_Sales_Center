@@ -1,4 +1,129 @@
 <details>
+  <summary>版號2026.09.24.1018</summary>
+
+##### feat!: 權限樹改成單一表自我參照，側欄改由 DB 驅動
+      權限樹與側欄原本由 M_System（系統）-> M_Function（功能，位置編在 FunctionNo）
+      -> RBAC_Permission（細項）三張表拼起來，路由／icon 還寫死在前端 NAV_MODULES，
+      功能要換位置就得改 FunctionNo。改成 RBAC_Permission 一張表自我參照，
+      模組／分組／頁面／細項都是它的節點，側欄也直接由它長出來。
+
+      database/RbacObjectsMigration.sql 第 4b 段（**測試區已執行**，正式區還沒建庫）
+        欄位：ActionName -> Label、ParentPermissionKey -> ParentKey；新增 NodeType
+        （MODULE / GROUP / PAGE / ACTION，NOT NULL + CHECK 約束）、LabelEn、Path（前端路由，
+        不含 /sales-center，MODULE / PAGE 才有）、Icon、Description。
+        拿掉 FunctionNo / LinkType 與 UQ_RBAC_Permission_FunctionNo_LinkType。
+        ParentKey 加自我參照外鍵 FK_RBAC_Permission_Parent（NULL = 最上層）。
+        頁面 key 拿掉 .view（salesSearch.mixSalesShipping.view -> salesSearch.mixSalesShipping），
+        細項不變；FK_RBAC_RolePermission_RBAC_Permission 改成 ON UPDATE CASCADE，
+        角色權限列靠它跟著改名。
+        灌入 3 模組（salesIssue / salesSearch / system）+ 6 分組（salesSearch.grpOrder 這類）
+        + 頁面 + 細項節點，**只在還沒有 MODULE 節點時灌一次**；之後位置／名稱／icon 直接在 DB 改
+        （改 ParentKey 搬位置、改 Sort 換順序），重跑不會蓋回去。
+        停用的 system.groupPermission 接回 system.grpAccess 底下。
+        角色補上祖先節點（模組、分組），測試區 RBAC_RolePermission 36 -> 72 筆；
+        轉換前後有效權限的驗證改成把舊 .view 換算成新 key，對稱差仍是 0 筆。
+
+      後端
+        aStatus = 'N' 的節點連同底下整棵子樹一起失效：PermissionService.ActiveNodes 只收
+        自己與所有祖先都是 'Y'、祖先鏈接得到最上層的節點（ParentKey 斷掉或形成迴圈的不算）。
+        SaveRole 的 ResolvePermissionKeys 沿 ParentKey 補上**所有祖先**（頁面、分組、模組）。
+        GetRBACPermission 改回全部有效節點（permissionKey / nodeType / parentKey / label /
+        labelEn / path / icon / description / sort），登入即可讀。
+        移除 GetMSystem / GetMFunction / GetUserFunctions 與 UserFunctionViewModel。
+        M_System 只剩 GetMSystemWNo（topbar 環境圖示）在讀，M_Function 不再被讀；
+        FunctionIds 只剩 H_FileLink 上傳紀錄對照用。
+        PermissionKeys 常數改名（XxxView -> Xxx，例如 PermissionKeys.SalesSearch.MixSalesShipping），
+        新增 PermissionNodeType（Module / Group / Page / Action）。
+        RequirePermission 全部改掛頁面 key。
+
+      前端
+        刪除 NAV_MODULES。useAppNavigation 依 GetRBACPermission 的節點排成
+        模組 -> 分組 -> 頁面（PAGE 可以直接掛在 MODULE 底下，放進沒有標題的分組；
+        ACTION 不進側欄），再用 usePermission().can(頁面 key) 過濾；canAccess 改收 PermissionKey。
+        loadUserFunctions 平行載入節點與自己的權限；權限沒載到時不過濾，節點沒載到時顯示空側欄提示。
+        [module]/index.vue 的 404 判斷改成等功能表載完才做（showError），
+        新增模組只要加 MODULE 節點。
+        permissionTree.ts 改成依 parentKey 組單一樹，MODULE / GROUP 不能勾，
+        collectSelection 存檔時補上所有祖先。
+        PERMISSION_KEYS 改名（system.permissionManager 等，頁面不帶 .view）。
+
+      新增功能的步驟變成：加頁面檔 -> RBAC_Permission 加 PAGE（與 ACTION）節點 ->
+      PermissionKeys / PERMISSION_KEYS 常數 -> Controller 掛 [RequirePermission(頁面 key)] ->
+      權限管理勾進角色。不用再改 NAV_MODULES / FunctionIds / PermissionMasterSeed.sql。
+      詳見 logic.md「新增一個功能要改哪裡」。
+
+      上線注意：第 4b 段跑完之後舊版 api/ 與前端就不能用了（讀 LinkType、檢查 xxx.view），
+      腳本跑完要緊接著部署新版。
+</details>
+
+<details>
+  <summary>版號2026.09.23.1500</summary>
+
+##### feat!: 權限改成角色制（RBAC）
+      不再逐人勾權限：角色綁一組 PermissionKey，帳號掛多個角色，
+      有效權限 = 所屬角色 ∪ everyone（IsDefault），superAdmin（IsSuperAdmin）全放行。
+      不做個人例外授權。帳號停用或鎖定一律沒有任何權限，即使 token 仍有效。
+
+      database/RbacObjectsMigration.sql（新，**測試區已執行**，正式區還沒建庫）
+        M_PermissionDef 原地改名成 RBAC_Permission，拿掉過渡期的 PermissionLinkTypeID。
+        建 RBAC_Role / RBAC_RolePermission / RBAC_RoleUser，三張都有 aStatus（預設 'Y'）
+        與 Creator/CreateTime/Modifier/ModiTime；aStatus 手動改 'N' = 該列失效，api/ 只認 'Y'。
+        表名改過幾輪（M_UserRole / M_Role* / M_Rbac* / Rbac* / RBAC*），腳本會把舊名原地改成 RBAC_*。
+        建系統角色 superAdmin / everyone；停用 M_Function 0000103 與 system.groupPermission.view。
+        既有個人權限轉換：IsAdmin -> superAdmin；000000 -> everyone 的權限；
+        其餘帳號扣掉 everyone 已有的 key 後依 key 組合分群成「移轉角色-NN」（migratedNN）。
+        PermissionKey IS NULL 的 1.0 遺留列、M_PermissionGroup 部門範本不轉。
+        驗證：轉換前後有效權限、IsAdmin vs superAdmin 成員兩組對稱差皆 0 筆
+        （測試區 12 個角色 / 36 筆角色權限 / 25 筆角色成員）。
+        M_Permission / M_PermissionGroup 不刪不改，留作備份，api/ 不再讀寫。
+      database/PermissionDefObjectsMigration.sql
+        RBAC_Permission 已存在就整支略過（改名後重跑會重建空表、回填失準）。
+
+      後端
+        新增 Services/PermissionService（Scoped，同 request 同帳號只查一次），
+        BaseApiController.HasPermission / IsAdmin 與 RequirePermissionAttribute 共用。
+        IsAdmin 改成「有沒有 superAdmin 角色」，M_User.IsAdmin 不再被讀。
+        新增 Filters/RequirePermissionAttribute：權限不足回 HTTP 403 + 信封。掛在
+        WorkProcessApi / CustomQueryApi / MixSalesShipApi / SalesOrderUnFinishApi /
+        OrderInfoVerifyApi（class 層級，跨功能共用的 Action 另列多個 .view）。
+        CustomerApi / UploadApi / ManufacturingApi 是共用的，不掛。
+        金額欄位後端遮蔽：MixSalesShip GetSalesOrder(_1)、SalesOrderUnFinish
+        GetUnfinOrder / QueryUnfinOrder_1、OrderInfoVerify GetPOCheckView 沒有 viewAmount
+        時把金額欄位清成 null，直接打 API 也看不到。
+        MainApi 新增 GetRoleList / GetRole / SaveRole / DeleteRole / SetRoleMembers /
+        SetUserRoles / GetMyPermissions；GetMPermissionDef 改名 GetRBACPermission；
+        GetUserFunctions 改由有效 .view 經 RBAC_Permission 對回 FunctionNo。
+        移除 SetPermissionKeys / SaveDepPermissionKeys / GetPermissionLinkType /
+        GetMPermissionLinkType / GetDepartmentList；CommonApiController 整支刪除
+        （GetDepFunction）。
+        AddUser / UpdateUser 不再收 isAdmin；DeleteUser 同一交易刪 RBAC_RoleUser，
+        非 superAdmin 不能刪 superAdmin 帳號。
+        實體改 RBACPermission / RBACRole / RBACRolePermission / RBACRoleUser，MPermissionDef 刪除。
+
+      前端
+        permission-manager.vue 改成角色管理：角色清單 + 編輯（代碼／名稱／說明、權限樹、成員）。
+        系統角色不能刪、代碼不能改；superAdmin 成員只有 superAdmin 能改，且不能移出自己；
+        everyone 不設成員。
+        user-manager.vue「管理人員」開關改成角色多選（不列 everyone，superAdmin 選項限 superAdmin）。
+        group-permission.vue 刪除，NAV_MODULES 拿掉該項。
+        usePermission 改成登入後打一次 GetMyPermissions 存 useState，提供
+        can / checkPermission / isSuperAdmin / loadPermissions(force)；存角色後重載。
+        useApi 攔 403 跳「沒有權限」toast，不當成連線錯誤。
+
+      行為差異
+        群組預設功能（部門範本、套用差異清單）整個拿掉，改用角色。
+        原本 1.0 任何能進人員管理的人都能把人設成管理員，現在只有 superAdmin 能指派 superAdmin。
+        原本只靠前端擋的畫面，現在後端 403。
+        訂單資料檢核的明細視窗也吃同一支 GetPOCheckView，沒有 viewAmount 的人在明細裡
+        也看不到訂單金額 / 交易條件（決定過的）。
+        畫面取消勾選／移除成員是直接刪列；勾回一個 'N' 的列會改回 'Y'（唯一鍵，不另開新列）。
+
+      上線順序：PermissionMasterSeed.sql -> PermissionDefObjectsMigration.sql ->
+      RbacObjectsMigration.sql（後兩支走 scripts/run-objects-migration.ps1），
+      最後才部署 api/ 與前端。
+</details>
+
+<details>
   <summary>版號2026.09.23.1112</summary>
 
 ##### feat!: 權限改成字串權限 module.function.action，群組預設功能獨立成「群組權限」

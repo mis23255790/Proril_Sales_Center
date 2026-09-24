@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Data.SalesCenter;
@@ -151,7 +151,7 @@ public partial class MainApiController : BaseApiController
         }
 
         ca.IsSuccess = true;
-        ca.Body = new { account = user.Account, username = user.UserName, isAdmin = user.IsAdmin };
+        ca.Body = new { account = user.Account, username = user.UserName, isAdmin = IsAdmin(account) };
         return ca;
     }
 
@@ -182,7 +182,7 @@ public partial class MainApiController : BaseApiController
     ///
     /// 取代 1.0 的 <c>CheckUserPermissionLinkType(functionNo, linkType)</c>（已移除）。
     /// 跟舊端點的差異：舊的只看本人的列，這支同 <see cref="BaseApiController.HasPermission(string)"/>
-    /// 也認 000000（全體使用者）。
+    /// 看所屬角色 ∪ everyone。前端一般改用 <c>GetMyPermissions</c> 一次載入，這支保留給單點查詢。
     /// </summary>
     [HttpGet]
     public bool CheckPermission(string permissionKey)

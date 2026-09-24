@@ -20,7 +20,7 @@ const userMenuItems = computed<DropdownMenuItem[][]>(() => [
 ])
 
 /**
- * 側欄要顯示哪些功能是 DB 說了算（M_Function ∩ M_Permission），
+ * 側欄整棵樹從 DB 來（RBAC_Permission），再依目前登入者的角色權限過濾，
  * 在這裡載一次，之後整個站共用（見 useAppNavigation.loadUserFunctions）。
  */
 onMounted(() => {

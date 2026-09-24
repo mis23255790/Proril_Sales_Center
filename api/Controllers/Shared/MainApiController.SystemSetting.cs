@@ -1,322 +1,491 @@
+﻿using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Models;
+using Proril.SalesIssue.Api.Services;
 
 namespace Proril.SalesIssue.Api.Controllers.Shared;
 
 /// <summary>
-/// 權限管理（1.0 系統設定 / 權限管理，Controllers/System/MainApiController_SystemSetting.cs）。
+/// 權限管理（角色制，RBAC）。
 ///
-/// 權限樹是三層：
-///   M_System（系統別，再依 SystemType 分「行政／現場／…」一層）
-///     → M_Function（功能，對應 M_PermissionDef 裡 LinkType = 1 的 <c>.view</c>）
-///       → M_PermissionDef 的細項（LinkType > 1，例如 <c>.viewAmount</c> 顯示金額欄位）
-/// 勾選結果以 PermissionKey 寫進 M_Permission（個人，權限管理）或
-/// M_PermissionGroup（群組預設功能，群組權限）。FunctionNo / LinkType 過渡期照樣一併寫，
-/// 側欄（<see cref="GetUserFunctions"/>）還靠 FunctionNo。
+/// 角色（RBAC_Role）綁一組 PermissionKey（RBAC_RolePermission），帳號掛多個角色（RBAC_RoleUser）。
+/// 有效權限 = 所屬角色 ∪ IsDefault 角色（everyone），IsSuperAdmin 角色（superAdmin）全放行，
+/// 解析集中在 <see cref="PermissionService"/>。不做個人例外授權。
 ///
-/// 讀寫分兩邊，**不要弄混**：
-///   - M_Permission / M_PermissionGroup / M_User / M_System / M_Function /
-///     M_PermissionLinkType → scDb（Proril_Sales_Center，已切連線）
-///   - M_Department → db（PRORIL_WEB，唯讀；1.0 的組織維護還在寫它）
+/// 權限樹是 RBAC_Permission 單一表自我參照（MODULE → GROUP → PAGE → ACTION，ParentKey 指父節點），
+/// 側欄與權限管理的樹都從它長；勾選結果寫進角色。M_System 不再用來組樹，M_Function 已不對映，
+/// M_Permission / M_PermissionGroup 是備份表，應用層不讀不寫，見 database/RbacObjectsMigration.sql。
+/// 節點停用（自己或祖先 aStatus = 'N'）：側欄與權限判斷當作失效；權限管理的樹照樣列出但 disabled，
+/// 角色原本勾的權限列保留（SaveRole 不會刪），節點重新啟用就恢復。
 ///
-/// M_System / M_Function 在新庫**只有 2.0 真的有頁面的那幾列**（3 個系統別 + 8 個功能），
-/// 不是整份複製 —— 權限樹因此只會長出 2.0 管得到的功能，勾不到 1.0 還沒搬的模組。
-/// 見 database/PortingNotes.md「功能主檔（M_System / M_Function）只搬 2.0 用得到的列」。
+/// 三張表都有 aStatus：手動改成 'N' 即視為失效，這裡的讀取一律只認 'Y'。
+/// 畫面上取消勾選／移除成員是直接刪列；已失效（'N'）的列在畫面上重新勾回來時改回 'Y'
+/// （有唯一鍵，不能另外新增一列）。
 ///
-/// 跨庫的併表都得先各自 ToList() 再用 LINQ to Objects 併，不能寫成單一 SQL。
-///
-/// 1.0 那幾支已經沒有畫面在呼叫的舊端點（SetPermission / SetPermissionLinkType /
-/// GetPermissionTree / GetFunctionPermissions…）沒有搬，畫面實際打的只有這裡這幾支。
+/// 全部在 scDb（Proril_Sales_Center）。
 /// </summary>
 public partial class MainApiController
 {
+    private static readonly Regex RoleCodePattern = new("^[A-Za-z][A-Za-z0-9_-]{0,49}$", RegexOptions.Compiled);
+
     private CustomApiViewModel? DenyIfNoPermissionManagerPermission()
-        => HasPermission(PermissionKeys.SystemSetting.PermissionManagerView)
+        => HasPermission(PermissionKeys.SystemSetting.PermissionManager)
             ? null
             : new CustomApiViewModel { IsSuccess = false, Message = "沒有權限管理權限" };
 
-    private CustomApiViewModel? DenyIfNoGroupPermissionPermission()
-        => HasPermission(PermissionKeys.SystemSetting.GroupPermissionView)
-            ? null
-            : new CustomApiViewModel { IsSuccess = false, Message = "沒有群組權限權限" };
+    private PermissionService Permissions => HttpContext.RequestServices.GetRequiredService<PermissionService>();
 
     /// <summary>
-    /// 把前端勾到的 PermissionKey 換成主檔列，並補上隱含的權限：
-    /// 細項一定連帶它的上層細項（ParentPermissionKey）與同功能的 <c>.view</c>——
-    /// 有細項卻沒有 view 等於進不去那個畫面（1.0 processNode 的用意，原本只在前端補）。
+    /// 把前端勾到的 PermissionKey 換成主檔列，並沿 ParentKey 補上**所有祖先**：
+    /// 勾細項 = 連帶擁有所屬頁面、分組、模組——細項有權限但頁面沒有等於進不去，
+    /// 側欄也要有模組／分組才長得出來。
     ///
-    /// 主檔裡找不到的 key 一律擋下來回錯，不默默略過，避免前後端 key 對不上時存了一半。
+    /// 主檔裡找不到（或已停用）的 key 一律擋下來回錯，不默默略過，避免前後端 key 對不上時存了一半。
     /// </summary>
-    private (List<MPermissionDef> Wanted, string? Error) ResolvePermissionKeys(string? json)
+    private (List<RBACPermission> Wanted, string? Error) ResolvePermissionKeys(string? json)
     {
         var keys = JsonConvert.DeserializeObject<List<string>>(json ?? "");
         if (keys is null) return ([], "permission_keys is null!");
 
-        var actions = scDb.MPermissionDefs
-            .Where(a => a.AStatus == ActiveStatus.Active)
-            .ToList();
-        var byKey = actions.ToDictionary(a => a.PermissionKey);
-        var viewByFunction = actions
-            .Where(a => a.LinkType == 1)
-            .ToDictionary(a => a.FunctionNo);
+        var byKey = Permissions.ActiveNodes().ToDictionary(n => n.PermissionKey);
 
         var unknown = keys.Select(k => k.Trim()).Where(k => !byKey.ContainsKey(k)).ToList();
         if (unknown.Count > 0)
             return ([], $"未定義的權限：{string.Join(", ", unknown)}");
 
-        var wanted = new Dictionary<string, MPermissionDef>();
+        var wanted = new Dictionary<string, RBACPermission>();
         foreach (var key in keys.Select(k => k.Trim()))
         {
-            var cursor = byKey[key];
-            while (true)
+            // ActiveNodes 保證祖先鏈接得到最上層、沒有迴圈
+            for (var cursor = byKey[key]; ; cursor = byKey[cursor.ParentKey])
             {
                 wanted.TryAdd(cursor.PermissionKey, cursor);
-                if (cursor.ParentPermissionKey is { } parent && byKey.TryGetValue(parent, out var next))
-                {
-                    cursor = next;
-                    continue;
-                }
-                break;
+                if (cursor.ParentKey is null) break;
             }
-            if (viewByFunction.TryGetValue(byKey[key].FunctionNo, out var view))
-                wanted.TryAdd(view.PermissionKey, view);
         }
 
         return ([.. wanted.Values], null);
     }
 
-    // ------------------------------------------------------------------ 權限樹的三層主檔
+    /// <summary>
+    /// 角色清單「權限」欄要算的 key：只算有效的 PAGE / ACTION（畫面上勾得到的那些）。
+    /// MODULE / GROUP 是存檔時 <see cref="ResolvePermissionKeys"/> 自動補的祖先，
+    /// 算進去的話勾 5 個會顯示成 11 個；已停用的節點也不算。
+    /// </summary>
+    private HashSet<string> CountablePermissionKeys()
+        => Permissions.ActiveNodes()
+            .Where(n => n.NodeType is PermissionNodeType.Page or PermissionNodeType.Action)
+            .Select(n => n.PermissionKey)
+            .ToHashSet();
 
-    /// <summary>系統別主檔，權限樹第一層。</summary>
-    [HttpGet]
-    public CustomApiViewModel GetMSystem()
-        => new() { IsSuccess = true, Body = scDb.MSystems.OrderBy(o => o.SystemType).ToList() };
+    // ------------------------------------------------------------------ 權限樹
 
-    /// <summary>功能主檔，權限樹第二層。</summary>
+    /// <summary>
+    /// 權限樹節點（RBAC_Permission），依 Sort 排序。
+    /// 預設只回有效節點（節點與祖先都是 'Y'）：側欄、模組首頁、麵包屑用，所以只要登入就能讀；
+    /// 「這個人看得到哪些」另外用 <see cref="GetMyPermissions"/> 過濾。
+    ///
+    /// <paramref name="includeDisabled"/> = true 時連停用節點一起回（<c>isActive = false</c>），
+    /// 給權限管理的樹顯示成 disabled——停用的功能照樣看得到、看得出哪些角色原本勾過，但不能勾。
+    /// </summary>
     [HttpGet]
-    public CustomApiViewModel GetMFunction()
+    public CustomApiViewModel GetRBACPermission(bool includeDisabled = false)
         => new()
         {
             IsSuccess = true,
-            Body = scDb.MFunctions
-                .OrderBy(o => o.SystemNo).ThenBy(o => o.GroupNo).ThenBy(o => o.FunctionNo)
-                .ToList()
+            Body = Permissions.TreeNodes()
+                .Where(t => includeDisabled || t.IsActive)
+                .Select(t => new
+                {
+                    t.Node.PermissionKey,
+                    t.Node.NodeType,
+                    t.Node.ParentKey,
+                    t.Node.Label,
+                    t.Node.LabelEn,
+                    t.Node.Path,
+                    t.Node.Icon,
+                    t.Node.Description,
+                    t.Node.Sort,
+                    t.IsActive
+                }).ToList()
         };
 
-    /// <summary>
-    /// 功能底下的細項權限，權限樹第三層以後。
-    /// FunctionNo 改成 AAABBCC 之後這張表也搬進 Proril_Sales_Center 了（舊庫還是 int，
-    /// 跨庫對不起來），只收 2.0 這 8 個功能的細項。
-    /// </summary>
-    [HttpGet]
-    public CustomApiViewModel GetMPermissionLinkType()
-        => new() { IsSuccess = true, Body = scDb.MPermissionLinkTypes.OrderBy(o => o.FunctionNo).ToList() };
+    // ------------------------------------------------------------------ 角色
 
     /// <summary>
-    /// 字串權限主檔（M_PermissionDef），2.0 權限樹的功能節點與細項節點都從這裡長。
-    /// LinkType = 1 是功能本身（<c>.view</c>），其餘是細項。
+    /// 角色清單。角色管理與人員管理（指派角色的下拉）都在用，兩個權限任一個就能讀。
     /// </summary>
     [HttpGet]
-    public CustomApiViewModel GetMPermissionDef()
-        => new()
-        {
-            IsSuccess = true,
-            Body = scDb.MPermissionDefs
-                .Where(a => a.AStatus == ActiveStatus.Active)
-                .OrderBy(a => a.FunctionNo).ThenBy(a => a.Sort).ThenBy(a => a.LinkType)
-                .ToList()
-        };
-
-    /// <summary>
-    /// 某帳號目前已有的權限列（M_Permission）。前端拿它去把樹上的 checkbox 打勾。
-    /// 一併帶入保留帳號 000000（全體使用者）的列，所以「全體都有的功能」也會是勾起來的。
-    /// </summary>
-    [HttpGet]
-    public CustomApiViewModel GetPermissionLinkType(string account)
+    public CustomApiViewModel GetRoleList()
     {
-        if (string.IsNullOrWhiteSpace(account))
-            return new CustomApiViewModel { IsSuccess = true, Body = new List<MPermission>() };
+        if (!HasPermission(PermissionKeys.SystemSetting.PermissionManager)
+            && !HasPermission(PermissionKeys.SystemSetting.UserManager))
+            return new CustomApiViewModel { IsSuccess = false, Message = "沒有權限管理權限" };
 
-        var trimmed = account.Trim();
-        var permissions = scDb.MPermissions
-            .Where(p => p.LinkNumber == trimmed || p.LinkNumber == PermissionConst.AccountForAll)
+        var countable = CountablePermissionKeys();
+        var permissionCounts = scDb.RBACRolePermissions
+            .Where(rp => rp.AStatus == ActiveStatus.Active)
+            .Select(rp => new { rp.RoleId, rp.PermissionKey })
+            .ToList()
+            .Where(rp => countable.Contains(rp.PermissionKey))
+            .GroupBy(rp => rp.RoleId)
+            .ToDictionary(g => g.Key, g => g.Count());
+        var memberCounts = scDb.RBACRoleUsers
+            .Where(ur => ur.AStatus == ActiveStatus.Active)
+            .GroupBy(ur => ur.RoleId)
+            .Select(g => new { RoleId = g.Key, Cnt = g.Count() })
+            .ToDictionary(x => x.RoleId, x => x.Cnt);
+
+        var body = scDb.RBACRoles
+            .Where(r => r.AStatus == ActiveStatus.Active)
+            .OrderBy(r => r.Sort).ThenBy(r => r.Id)
+            .ToList()
+            .Select(r => ToListItem(r, permissionCounts.GetValueOrDefault(r.Id), memberCounts.GetValueOrDefault(r.Id)))
             .ToList();
 
-        return new CustomApiViewModel { IsSuccess = true, Body = permissions };
+        return new CustomApiViewModel { IsSuccess = true, Body = body };
     }
 
-    // ------------------------------------------------------------------ 個人權限存檔
-
-    /// <summary>
-    /// 權限樹存檔（權限管理）。<paramref name="str_permission_keys"/> 是勾到的 PermissionKey
-    /// 陣列的 JSON 字串（例如 <c>["salesSearch.mixSalesShipping.view", "salesSearch.mixSalesShipping.viewAmount"]</c>），
-    /// 後端會自己補隱含的 <c>.view</c>，見 <see cref="ResolvePermissionKeys"/>。
-    ///
-    /// 取代 1.0 的 <c>SetPermissionTree(account, functionNos, linkTypes)</c>（已移除——
-    /// 它不會寫 PermissionKey，留著會存出權限檢查認不得的列）。
-    /// 做法同舊版：算出目標集合後做差集，既有列的 Creator / CreateTime 保留不動。
-    /// PermissionKey 是 NULL 的列（2.0 沒有頁面的 1.0 功能，FunctionNo 還是舊數字）
-    /// 不在權限樹上，存檔**不會動到它們**——FunctionNo 改格式時就是刻意保留的。
-    /// （1.0 版的 SetPermissionTree 會把它們一起刪掉，這裡順便修正。）
-    /// </summary>
+    /// <summary>單一角色：基本資料 + 權限 + 成員。</summary>
     [HttpGet]
-    public CustomApiViewModel SetPermissionKeys(string account, string str_permission_keys)
+    public CustomApiViewModel GetRole(int roleId)
     {
         var ca = DenyIfNoPermissionManagerPermission();
         if (ca is not null) return ca;
 
-        if (string.IsNullOrWhiteSpace(account))
-            return new CustomApiViewModel { IsSuccess = false, Message = "未輸入帳號!" };
+        var role = scDb.RBACRoles.FirstOrDefault(r => r.Id == roleId && r.AStatus == ActiveStatus.Active);
+        if (role is null) return new CustomApiViewModel { IsSuccess = false, Message = "查無角色" };
 
-        var (wanted, error) = ResolvePermissionKeys(str_permission_keys);
-        if (error is not null) return new CustomApiViewModel { IsSuccess = false, Message = error };
+        var keys = scDb.RBACRolePermissions.Where(rp => rp.RoleId == roleId && rp.AStatus == ActiveStatus.Active)
+            .Select(rp => rp.PermissionKey).OrderBy(k => k).ToList();
+        var members = scDb.RBACRoleUsers.Where(ur => ur.RoleId == roleId && ur.AStatus == ActiveStatus.Active)
+            .Select(ur => ur.Account).OrderBy(a => a).ToList();
 
-        var linkNumber = account.Trim();
-        var wantedKeys = wanted.Select(a => a.PermissionKey).ToHashSet();
-        var existing = scDb.MPermissions.Where(p => p.LinkNumber == linkNumber).ToList();
-
-        // PermissionKey 是 NULL 的是 2.0 沒有頁面的 1.0 功能（舊數字 FunctionNo），刻意保留，不碰
-        scDb.MPermissions.RemoveRange(
-            existing.Where(p => p.PermissionKey is not null && !wantedKeys.Contains(p.PermissionKey)));
-
-        var kept = existing.Where(p => p.PermissionKey is not null).Select(p => p.PermissionKey!).ToHashSet();
-        var creator = GetAccountByToken();
-        foreach (var action in wanted.Where(a => !kept.Contains(a.PermissionKey)))
+        var body = new RoleDetailViewModel
         {
-            scDb.MPermissions.Add(new MPermission
-            {
-                LinkNumber = linkNumber,
-                PermissionKey = action.PermissionKey,
-                FunctionNo = action.FunctionNo,
-                LinkType = action.LinkType,
-                PermissionLinkTypeId = action.PermissionLinkTypeId,
-                Creator = creator,
-                CreateTime = DateTime.Now
-            });
-        }
-
-        scDb.SaveChanges();
-        WriteStepLog(nameof(SetPermissionKeys), $"account:{linkNumber}, keys:{wanted.Count}");
-        return new CustomApiViewModel { IsSuccess = true };
+            Id = role.Id,
+            RoleCode = role.RoleCode,
+            RoleName = role.RoleName,
+            Description = role.Description,
+            IsSystem = role.IsSystem,
+            IsSuperAdmin = role.IsSuperAdmin,
+            IsDefault = role.IsDefault,
+            Sort = role.Sort,
+            PermissionCount = keys.Count(CountablePermissionKeys().Contains),
+            MemberCount = members.Count,
+            PermissionKeys = keys,
+            Members = members
+        };
+        return new CustomApiViewModel { IsSuccess = true, Body = body };
     }
 
-    // ------------------------------------------------------------------ 群組預設功能
-
     /// <summary>
-    /// 群組（部門）預設功能存檔（群組權限頁），寫 M_PermissionGroup。參數形狀同
-    /// <see cref="SetPermissionKeys"/>。
+    /// 新增（<paramref name="roleId"/> = 0）或修改角色。<paramref name="str_permission_keys"/> 是
+    /// PermissionKey 陣列的 JSON 字串，後端會自己補隱含的 <c>.view</c>（<see cref="ResolvePermissionKeys"/>）。
     ///
-    /// 這只是一份「套用範本」，存了不會改到任何人的實際權限 —— 要等有人在權限管理畫面
-    /// 按「群組預設功能套用」把它套進樹裡、再按儲存，才會寫進 M_Permission。
-    ///
-    /// 權限要的是 <see cref="PermissionKeys.SystemSetting.GroupPermissionView"/>，
-    /// 不是權限管理——群組範本從權限管理獨立出來就是為了能分開授權。
-    /// 取代 1.0 的 <c>SaveDepFunction</c>（已移除，理由同 <see cref="SetPermissionKeys"/>）。
+    /// 系統角色可以改名稱／說明，不能改代碼；superAdmin 全放行，權限清單忽略不存。
+    /// 回傳 Body = 角色 ID。
     /// </summary>
     [HttpGet]
-    public CustomApiViewModel SaveDepPermissionKeys(string depCode, string str_permission_keys)
+    public CustomApiViewModel SaveRole(int roleId, string roleCode, string roleName, string? description,
+        string str_permission_keys)
     {
-        var ca = DenyIfNoGroupPermissionPermission();
+        var ca = DenyIfNoPermissionManagerPermission();
         if (ca is not null) return ca;
 
-        if (string.IsNullOrWhiteSpace(depCode))
-            return new CustomApiViewModel { IsSuccess = false, Message = "未輸入部門!" };
+        var code = (roleCode ?? "").Trim();
+        var name = (roleName ?? "").Trim();
+        if (name.Length == 0) return new CustomApiViewModel { IsSuccess = false, Message = "請輸入角色名稱" };
+        if (name.Length > 50) return new CustomApiViewModel { IsSuccess = false, Message = "角色名稱最多 50 字" };
+        if ((description?.Length ?? 0) > 200)
+            return new CustomApiViewModel { IsSuccess = false, Message = "說明最多 200 字" };
 
         var (wanted, error) = ResolvePermissionKeys(str_permission_keys);
         if (error is not null) return new CustomApiViewModel { IsSuccess = false, Message = error };
 
-        var groupNo = depCode.Trim();
-        var wantedKeys = wanted.Select(a => a.PermissionKey).ToHashSet();
-        var existing = scDb.MPermissionGroups
-            .Where(g => g.GroupType == PermissionGroupType.Department && g.GroupNo == groupNo)
-            .ToList();
-
-        // 同 SetPermissionKeys：PermissionKey 是 NULL 的舊功能列保留不碰
-        scDb.MPermissionGroups.RemoveRange(
-            existing.Where(g => g.PermissionKey is not null && !wantedKeys.Contains(g.PermissionKey)));
-
-        var kept = existing.Where(g => g.PermissionKey is not null).Select(g => g.PermissionKey!).ToHashSet();
-        var creator = GetAccountByToken();
-        foreach (var action in wanted.Where(a => !kept.Contains(a.PermissionKey)))
+        var operatorAccount = GetAccountByToken();
+        RBACRole role;
+        if (roleId == 0)
         {
-            scDb.MPermissionGroups.Add(new MPermissionGroup
+            if (!RoleCodePattern.IsMatch(code))
+                return new CustomApiViewModel { IsSuccess = false, Message = "角色代碼須為英文字母開頭，只能用英數字、底線、連字號，最多 50 字" };
+            if (scDb.RBACRoles.Any(r => r.RoleCode == code))
+                return new CustomApiViewModel { IsSuccess = false, Message = $"角色代碼 {code} 已存在" };
+
+            role = new RBACRole
             {
-                GroupType = PermissionGroupType.Department,
-                GroupNo = groupNo,
-                PermissionKey = action.PermissionKey,
-                FunctionNo = action.FunctionNo,
-                LinkType = action.LinkType,
+                RoleCode = code,
+                RoleName = name,
+                Description = description,
+                Sort = (scDb.RBACRoles.Max(r => (int?)r.Sort) ?? 0) + 1,
                 AStatus = ActiveStatus.Active,
-                Creator = creator,
+                Creator = operatorAccount,
                 CreateTime = DateTime.Now
-            });
+            };
+            scDb.RBACRoles.Add(role);
+        }
+        else
+        {
+            var found = scDb.RBACRoles.FirstOrDefault(r => r.Id == roleId && r.AStatus == ActiveStatus.Active);
+            if (found is null) return new CustomApiViewModel { IsSuccess = false, Message = "查無角色" };
+            role = found;
+
+            if (!role.IsSystem && code != role.RoleCode)
+            {
+                if (!RoleCodePattern.IsMatch(code))
+                    return new CustomApiViewModel { IsSuccess = false, Message = "角色代碼須為英文字母開頭，只能用英數字、底線、連字號，最多 50 字" };
+                if (scDb.RBACRoles.Any(r => r.RoleCode == code && r.Id != role.Id))
+                    return new CustomApiViewModel { IsSuccess = false, Message = $"角色代碼 {code} 已存在" };
+                role.RoleCode = code;
+            }
+            role.RoleName = name;
+            role.Description = description;
+            role.Modifier = operatorAccount;
+            role.ModiTime = DateTime.Now;
         }
 
+        using var tx = scDb.Database.BeginTransaction();
         scDb.SaveChanges();
-        WriteStepLog(nameof(SaveDepPermissionKeys), $"depCode:{groupNo}, keys:{wanted.Count}");
+
+        if (!role.IsSuperAdmin)
+        {
+            var wantedKeys = wanted.Select(a => a.PermissionKey).ToHashSet();
+            var existing = scDb.RBACRolePermissions.Where(rp => rp.RoleId == role.Id).ToList();
+            // 停用節點（自己或祖先 aStatus = 'N'）的權限列不動：畫面上是 disabled、前端也不會送，
+            // 照「沒勾就刪」會把它們清掉，節點重新啟用時角色的權限就回不來了。
+            var activeKeys = Permissions.ActiveNodes().Select(n => n.PermissionKey).ToHashSet();
+            scDb.RBACRolePermissions.RemoveRange(existing.Where(rp =>
+                rp.AStatus == ActiveStatus.Active
+                && activeKeys.Contains(rp.PermissionKey)
+                && !wantedKeys.Contains(rp.PermissionKey)));
+
+            var byKey = existing.ToDictionary(rp => rp.PermissionKey);
+            foreach (var key in wantedKeys)
+            {
+                if (byKey.TryGetValue(key, out var row))
+                {
+                    if (row.AStatus == ActiveStatus.Active) continue;
+                    row.AStatus = ActiveStatus.Active;
+                    row.Modifier = operatorAccount;
+                    row.ModiTime = DateTime.Now;
+                    continue;
+                }
+                scDb.RBACRolePermissions.Add(new RBACRolePermission
+                {
+                    RoleId = role.Id,
+                    PermissionKey = key,
+                    AStatus = ActiveStatus.Active,
+                    Creator = operatorAccount,
+                    CreateTime = DateTime.Now
+                });
+            }
+            scDb.SaveChanges();
+        }
+
+        tx.Commit();
+        Permissions.Invalidate();
+
+        WriteStepLog(nameof(SaveRole), $"roleId:{role.Id}, code:{role.RoleCode}, keys:{wanted.Count}");
+        return new CustomApiViewModel { IsSuccess = true, Body = role.Id };
+    }
+
+    /// <summary>刪除角色，連同它的權限與成員。系統角色不能刪。</summary>
+    [HttpGet]
+    public CustomApiViewModel DeleteRole(int roleId)
+    {
+        var ca = DenyIfNoPermissionManagerPermission();
+        if (ca is not null) return ca;
+
+        var role = scDb.RBACRoles.FirstOrDefault(r => r.Id == roleId);
+        if (role is null) return new CustomApiViewModel { IsSuccess = false, Message = "查無角色" };
+        if (role.IsSystem) return new CustomApiViewModel { IsSuccess = false, Message = "系統角色不能刪除" };
+
+        using var tx = scDb.Database.BeginTransaction();
+        scDb.RBACRoleUsers.Where(ur => ur.RoleId == roleId).ExecuteDelete();
+        scDb.RBACRolePermissions.Where(rp => rp.RoleId == roleId).ExecuteDelete();
+        scDb.RBACRoles.Where(r => r.Id == roleId).ExecuteDelete();
+        tx.Commit();
+        Permissions.Invalidate();
+
+        WriteStepLog(nameof(DeleteRole), $"roleId:{roleId}, code:{role.RoleCode}");
         return new CustomApiViewModel { IsSuccess = true };
     }
 
-    /// <summary>群組（部門）下拉。1.0 是 Razor 直接把 M_Department 渲染進 select，2.0 改成 API。</summary>
-    [HttpGet]
-    public CustomApiViewModel GetDepartmentList()
-        => new()
-        {
-            IsSuccess = true,
-            Body = scDb.MDepartments
-                .Where(d => d.IsEnable)
-                .OrderBy(d => d.DepCode)
-                .Select(d => new { d.DepCode, d.DepName })
-                .ToList()
-        };
-
-    // ------------------------------------------------------------------ 側欄
-
     /// <summary>
-    /// 目前登入者可以進入的功能清單，2.0 側欄用它決定看得到哪些模組／功能
-    /// （1.0 是在 _AuthLayout.cshtml 用同一組資料長選單）。
+    /// 設定角色成員（整批取代）。<paramref name="str_accounts"/> 是帳號陣列的 JSON 字串。
     ///
-    /// admin 全開；其他人看 M_Permission 裡 LinkNumber = 自己 或 000000（全體）的列。
-    /// 只回 aStatus != 'N' 的功能 —— 'N' 代表功能已停用，但權限列可能還留著。
+    /// - everyone 是所有人自動擁有，不能設成員。
+    /// - superAdmin 只有 superAdmin 自己能改成員，而且不能把自己移出（避免沒有人能管）。
     /// </summary>
     [HttpGet]
-    public CustomApiViewModel GetUserFunctions()
+    public CustomApiViewModel SetRoleMembers(int roleId, string str_accounts)
+    {
+        var ca = DenyIfNoPermissionManagerPermission();
+        if (ca is not null) return ca;
+
+        var accounts = JsonConvert.DeserializeObject<List<string>>(str_accounts ?? "");
+        if (accounts is null) return new CustomApiViewModel { IsSuccess = false, Message = "accounts is null!" };
+
+        var role = scDb.RBACRoles.FirstOrDefault(r => r.Id == roleId && r.AStatus == ActiveStatus.Active);
+        if (role is null) return new CustomApiViewModel { IsSuccess = false, Message = "查無角色" };
+        if (role.IsDefault)
+            return new CustomApiViewModel { IsSuccess = false, Message = "全體使用者角色不需要設定成員" };
+
+        var operatorAccount = GetAccountByToken();
+        var wanted = accounts.Select(a => a.Trim()).Where(a => a.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (role.IsSuperAdmin)
+        {
+            if (!IsAdmin(operatorAccount))
+                return new CustomApiViewModel { IsSuccess = false, Message = "只有系統管理員能變更系統管理員成員" };
+            if (!wanted.Contains(operatorAccount))
+                return new CustomApiViewModel { IsSuccess = false, Message = "不能把自己移出系統管理員" };
+        }
+
+        var knownAccounts = scDb.MUsers.Select(u => u.Account).ToList()
+            .Select(a => (a ?? "").Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var unknown = wanted.Where(a => !knownAccounts.Contains(a)).ToList();
+        if (unknown.Count > 0)
+            return new CustomApiViewModel { IsSuccess = false, Message = $"查無帳號：{string.Join(", ", unknown)}" };
+
+        var existing = scDb.RBACRoleUsers.Where(ur => ur.RoleId == roleId).ToList();
+        scDb.RBACRoleUsers.RemoveRange(existing.Where(ur =>
+            ur.AStatus == ActiveStatus.Active && !wanted.Contains(ur.Account.Trim())));
+        var byAccount = existing.ToDictionary(ur => ur.Account.Trim(), StringComparer.OrdinalIgnoreCase);
+        foreach (var account in wanted)
+        {
+            if (byAccount.TryGetValue(account, out var row))
+            {
+                if (row.AStatus == ActiveStatus.Active) continue;
+                row.AStatus = ActiveStatus.Active;
+                row.Modifier = operatorAccount;
+                row.ModiTime = DateTime.Now;
+                continue;
+            }
+            scDb.RBACRoleUsers.Add(new RBACRoleUser
+            {
+                Account = account,
+                RoleId = roleId,
+                AStatus = ActiveStatus.Active,
+                Creator = operatorAccount,
+                CreateTime = DateTime.Now
+            });
+        }
+        scDb.SaveChanges();
+        Permissions.Invalidate();
+
+        WriteStepLog(nameof(SetRoleMembers), $"roleId:{roleId}, members:{wanted.Count}");
+        return new CustomApiViewModel { IsSuccess = true };
+    }
+
+    /// <summary>
+    /// 設定某帳號的角色（整批取代，人員管理用）。<paramref name="str_role_ids"/> 是角色 ID 陣列的 JSON 字串。
+    /// IsDefault 角色（everyone）自動擁有，傳進來也會略過。superAdmin 的增減規則同 <see cref="SetRoleMembers"/>。
+    /// </summary>
+    [HttpGet]
+    public CustomApiViewModel SetUserRoles(string account, string str_role_ids)
+    {
+        var ca = DenyIfNoUserManagerPermission();
+        if (ca is not null) return ca;
+
+        var trimmed = (account ?? "").Trim();
+        if (trimmed.Length == 0) return new CustomApiViewModel { IsSuccess = false, Message = "請輸入帳號" };
+        if (!scDb.MUsers.ToList().Any(u => (u.Account ?? "").Trim() == trimmed))
+            return new CustomApiViewModel { IsSuccess = false, Message = $"查無帳號 {trimmed}" };
+
+        var roleIds = JsonConvert.DeserializeObject<List<int>>(str_role_ids ?? "");
+        if (roleIds is null) return new CustomApiViewModel { IsSuccess = false, Message = "role_ids is null!" };
+
+        var roles = scDb.RBACRoles.Where(r => r.AStatus == ActiveStatus.Active).ToList();
+        var byId = roles.ToDictionary(r => r.Id);
+        var unknown = roleIds.Where(id => !byId.ContainsKey(id)).ToList();
+        if (unknown.Count > 0)
+            return new CustomApiViewModel { IsSuccess = false, Message = $"查無角色：{string.Join(", ", unknown)}" };
+
+        var wanted = roleIds.Where(id => !byId[id].IsDefault).ToHashSet();
+        var existing = scDb.RBACRoleUsers.Where(ur => ur.Account == trimmed).ToList();
+        var current = existing.Where(ur => ur.AStatus == ActiveStatus.Active).Select(ur => ur.RoleId).ToHashSet();
+
+        var operatorAccount = GetAccountByToken();
+        var superAdminIds = roles.Where(r => r.IsSuperAdmin).Select(r => r.Id).ToHashSet();
+        var superAdminChanged = superAdminIds.Any(id => wanted.Contains(id) != current.Contains(id));
+        if (superAdminChanged)
+        {
+            if (!IsAdmin(operatorAccount))
+                return new CustomApiViewModel { IsSuccess = false, Message = "只有系統管理員能指派或移除系統管理員角色" };
+            if (string.Equals(trimmed, operatorAccount, StringComparison.OrdinalIgnoreCase)
+                && !superAdminIds.Any(wanted.Contains))
+                return new CustomApiViewModel { IsSuccess = false, Message = "不能把自己移出系統管理員" };
+        }
+
+        scDb.RBACRoleUsers.RemoveRange(existing.Where(ur =>
+            ur.AStatus == ActiveStatus.Active && !wanted.Contains(ur.RoleId)));
+        var byRole = existing.ToDictionary(ur => ur.RoleId);
+        foreach (var id in wanted.Where(id => !current.Contains(id)))
+        {
+            if (byRole.TryGetValue(id, out var row))
+            {
+                row.AStatus = ActiveStatus.Active;
+                row.Modifier = operatorAccount;
+                row.ModiTime = DateTime.Now;
+                continue;
+            }
+            scDb.RBACRoleUsers.Add(new RBACRoleUser
+            {
+                Account = trimmed,
+                RoleId = id,
+                AStatus = ActiveStatus.Active,
+                Creator = operatorAccount,
+                CreateTime = DateTime.Now
+            });
+        }
+        scDb.SaveChanges();
+        Permissions.Invalidate();
+
+        WriteStepLog(nameof(SetUserRoles), $"account:{trimmed}, roles:{string.Join(",", wanted)}");
+        return new CustomApiViewModel { IsSuccess = true };
+    }
+
+    private static RoleListItemViewModel ToListItem(RBACRole r, int permissionCount, int memberCount) => new()
+    {
+        Id = r.Id,
+        RoleCode = r.RoleCode,
+        RoleName = r.RoleName,
+        Description = r.Description,
+        IsSystem = r.IsSystem,
+        IsSuperAdmin = r.IsSuperAdmin,
+        IsDefault = r.IsDefault,
+        Sort = r.Sort,
+        PermissionCount = permissionCount,
+        MemberCount = memberCount
+    };
+
+    // ------------------------------------------------------------------ 目前登入者
+
+    /// <summary>
+    /// 目前登入者的有效權限，前端（usePermission）登入後載入一次快取，
+    /// 畫面上的細項判斷（例如金額欄位）直接查這份，不用每個 key 打一次 <see cref="CheckPermission"/>。
+    /// superAdmin 回 <c>isSuperAdmin = true</c>、keys 為空，前端自己當全放行。
+    /// </summary>
+    [HttpGet]
+    public CustomApiViewModel GetMyPermissions()
     {
         var account = GetAccountByToken();
         if (string.IsNullOrWhiteSpace(account))
             return new CustomApiViewModel { IsSuccess = false, Message = "token 無效" };
 
-        var functions = scDb.MFunctions.Where(f => f.AStatus != ActiveStatus.Inactive).ToList();
-        var systems = scDb.MSystems.ToList();
-
-        if (!IsAdmin(account))
+        var permissions = GetPermissions(account);
+        return new CustomApiViewModel
         {
-            var allowed = scDb.MPermissions
-                .Where(p => p.LinkNumber == account || p.LinkNumber == PermissionConst.AccountForAll)
-                .Select(p => p.FunctionNo)
-                .Distinct()
-                .ToList();
-            functions = functions.Where(f => allowed.Contains(f.FunctionNo)).ToList();
-        }
-
-        var body = (from f in functions
-                    join s in systems on f.SystemNo equals s.SystemNo
-                    orderby s.Sort, s.SystemNo, f.GroupNo, f.FunctionNo
-                    select new UserFunctionViewModel
-                    {
-                        SystemNo = s.SystemNo,
-                        SystemName = s.SystemName,
-                        SystemType = s.SystemType,
-                        TypeName = s.TypeName,
-                        SystemSort = s.Sort,
-                        FunctionNo = f.FunctionNo,
-                        FunctionName = f.FunctionName ?? "",
-                        GroupNo = f.GroupNo,
-                        GroupName = f.GroupName
-                    }).ToList();
-
-        return new CustomApiViewModel { IsSuccess = true, Body = body };
+            IsSuccess = true,
+            Body = new MyPermissionsViewModel
+            {
+                IsSuperAdmin = permissions.IsSuperAdmin,
+                Keys = [.. permissions.Keys.OrderBy(k => k)]
+            }
+        };
     }
 }

@@ -1,4 +1,4 @@
-namespace Proril.SalesIssue.Api.Models;
+﻿namespace Proril.SalesIssue.Api.Models;
 
 /// <summary>
 /// M_WorkProcessType.TypeCode。畫面上的「類別」是 02。
@@ -61,56 +61,77 @@ public static class FunctionIds
     /// </summary>
     public const string OrderInfoVerify = "0320201";
 
-    /// <summary>群組權限（2.0 新增，群組預設功能從權限管理獨立出來，PRORIL_WEB 沒有這個功能）。</summary>
-    public const string GroupPermission = "0000103";
+    // 0000103 群組權限已隨角色制停用（M_Function.aStatus = 'N'），號碼保留不再使用。
 }
 
 /// <summary>
-/// 字串權限 `module.function.action`（M_PermissionDef.PermissionKey），
-/// 取代「FunctionNo + LinkType 數字」的判斷。`.view` = 進得去這個功能，其餘是細項。
-/// 前端對照在 app/utils/permissionKeys.ts，資料在 database/PermissionDefObjectsMigration.sql，
-/// **三邊要一起改**。
+/// 權限樹節點的 PermissionKey（RBAC_Permission，單一樹自我參照）。
+/// 頁面節點 = `module.function`（勾了就進得去那個頁面），細項 = `module.function.action`。
+/// 前端對照在 app/utils/permissionKeys.ts，資料在 database/RbacObjectsMigration.sql，
+/// **三邊要一起改**。整支 Controller 用 <c>[RequirePermission(頁面 key)]</c> 把關。
 /// </summary>
 public static class PermissionKeys
 {
     // 不叫 System，免得在這個類別裡蓋掉 System 命名空間
     public static class SystemSetting
     {
-        public const string PermissionManagerView = "system.permissionManager.view";
-        public const string UserManagerView = "system.userManager.view";
-        public const string GroupPermissionView = "system.groupPermission.view";
+        public const string PermissionManager = "system.permissionManager";
+        public const string UserManager = "system.userManager";
+        // system.groupPermission 已隨角色制停用（RBAC_Permission.aStatus = 'N'），key 保留不再使用。
     }
 
     public static class SalesIssue
     {
-        public const string KindMaintainView = "salesIssue.kindMaintain.view";
-        public const string ProcessMaintainView = "salesIssue.processMaintain.view";
+        public const string KindMaintain = "salesIssue.kindMaintain";
+        public const string ProcessMaintain = "salesIssue.processMaintain";
         public const string ProcessMaintainCreateSop = "salesIssue.processMaintain.createSop";
         public const string ProcessMaintainPublishSop = "salesIssue.processMaintain.publishSop";
     }
 
     public static class SalesSearch
     {
-        public const string MixSalesShippingView = "salesSearch.mixSalesShipping.view";
+        public const string MixSalesShipping = "salesSearch.mixSalesShipping";
         public const string MixSalesShippingViewAmount = "salesSearch.mixSalesShipping.viewAmount";
-        public const string QueryUnFinishView = "salesSearch.queryUnFinish.view";
+        public const string QueryUnFinish = "salesSearch.queryUnFinish";
         public const string QueryUnFinishViewAmount = "salesSearch.queryUnFinish.viewAmount";
-        public const string CustomQueryView = "salesSearch.customQuery.view";
-        public const string OrderInfoVerifyView = "salesSearch.orderInfoVerify.view";
+        public const string CustomQuery = "salesSearch.customQuery";
+        public const string OrderInfoVerify = "salesSearch.orderInfoVerify";
         public const string OrderInfoVerifyViewAmount = "salesSearch.orderInfoVerify.viewAmount";
     }
 }
 
-/// <summary>M_PermissionGroup.GroupType。</summary>
-public static class PermissionGroupType
+/// <summary>RBAC_Permission.NodeType（資料庫有 CHECK 約束，只能這四種）。</summary>
+public static class PermissionNodeType
 {
-    /// <summary>部門預設功能。1.0 MainApiController._default_group_type = 10。</summary>
-    public const int Department = 10;
+    /// <summary>模組：側欄第一層，有 Path（模組首頁）。</summary>
+    public const string Module = "MODULE";
+    /// <summary>模組內的分組：側欄第二層的標題，不是頁面、沒有 Path。</summary>
+    public const string Group = "GROUP";
+    /// <summary>頁面：有 Path，勾了就進得去。</summary>
+    public const string Page = "PAGE";
+    /// <summary>頁面內的細項，例如顯示金額欄位。</summary>
+    public const string Action = "ACTION";
+}
+
+/// <summary>
+/// 系統角色的 RBAC_Role.RoleCode（database/RbacObjectsMigration.sql 建的兩個，IsSystem = 1）。
+/// 判斷一律看 IsSuperAdmin / IsDefault 旗標，這裡的常數只給「指派時要特別擋」的地方用。
+/// </summary>
+public static class RoleCodes
+{
+    /// <summary>系統管理員：全放行。只有 superAdmin 自己能指派／移除這個角色。</summary>
+    public const string SuperAdmin = "superAdmin";
+
+    /// <summary>全體使用者：所有啟用帳號自動擁有，不能設成員。</summary>
+    public const string Everyone = "everyone";
 }
 
 public static class PermissionConst
 {
-    /// <summary>保留帳號：代表「全體使用者」。少了它，新建的議題只有建立者看得到。</summary>
+    /// <summary>
+    /// 保留帳號：代表「全體使用者」。少了它，新建的議題只有建立者看得到。
+    /// 現在只剩 D_WorkProcessPermission（議題個別權限）在用；功能權限的「全體」改成 everyone 角色。
+    /// </summary>
     public const string AccountForAll = "000000";
 }
 

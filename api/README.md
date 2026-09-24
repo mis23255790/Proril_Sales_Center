@@ -43,12 +43,19 @@ dotnet run
 | `UploadApi` | SaveByFileName |
 | `CustomQueryApi` | GetCustom / GetERPCustom / SaveCustom / GetCustomMemo / SetCustomMemo / DeleteCustomMemo |
 | `OrderInfoVerifyApi` | GetPOCheckView / GetConditionList / CheckCOPOrderInfo / COPOrderInfoPassCheck / SP_GetCredit / SP_GetCreditCRM / ExportXls |
-| `MainApi`（權限） | CheckPermission（2.0 新增，取代 1.0 的 CheckUserPermissionLinkType） |
-| `MainApi`（人員管理） | GetUserSetting / AddUser / UpdateUser / DeleteUser / ResetPassword / UnlockUser / GetAllUserList |
-| `MainApi`（權限管理） | GetMSystem / GetMFunction / GetMPermissionLinkType / GetPermissionLinkType / GetDepartmentList / GetUserFunctions；2.0 新增 GetMPermissionDef / SetPermissionKeys / SaveDepPermissionKeys（取代 1.0 的 SetPermissionTree / SaveDepFunction） |
+| `MainApi`（權限） | CheckPermission（2.0 新增，取代 1.0 的 CheckUserPermissionLinkType）；2.0 新增 GetMyPermissions |
+| `MainApi`（人員管理） | GetUserSetting / AddUser / UpdateUser / DeleteUser / ResetPassword / UnlockUser / GetAllUserList；2.0 新增 SetUserRoles（`AddUser`/`UpdateUser` 不再收 `isAdmin`） |
+| `MainApi`（權限樹／側欄） | 2.0 新增 GetRBACPermission（`RBAC_Permission` 全部有效節點，權限樹、側欄、模組首頁共用）；GetMSystemWNo（topbar 環境圖示） |
+| `MainApi`（角色，2.0 新增） | GetRoleList / GetRole / SaveRole / DeleteRole / SetRoleMembers（取代 1.0 的逐人 SetPermissionTree 與部門範本 SaveDepFunction） |
 | `MixSalesShipApi` | GetSalesOrder / GetSalesOrder_1 / ExportXls / GetCustomerCredit / GetCustomerCreditCRM / GetSalesTotal / GetCustomerUnfinOrder |
 | `SalesOrderUnFinishApi` | GetUnfinOrder / QueryUnfinOrder_1 / ExportXls |
-| `CommonApi` | GetDepFunction |
+
+> 2026-09-23 改成角色制時移除：`SetPermissionKeys` / `SaveDepPermissionKeys` /
+> `GetPermissionLinkType` / `GetMPermissionLinkType` / `GetDepartmentList`，
+> 以及 `CommonApi/GetDepFunction`（`CommonApiController` 整支刪除）；`GetMPermissionDef` 改名 `GetRBACPermission`。
+>
+> 2026-09-24 權限樹改成 `RBAC_Permission` 單一表自我參照、側欄改由 DB 驅動時再移除：
+> `GetMSystem` / `GetMFunction` / `GetUserFunctions`（連同 `UserFunctionViewModel`）。
 
 **沒搬**：
 - 1.0 `ProrilWebContext` 的另外 335 個 DbSet。這裡只留業務議題碰得到的 12 個
@@ -123,6 +130,25 @@ dotnet run
    改用 `CheckPermission` / `SetPermissionKeys` / `SaveDepPermissionKeys`。
    群組範本存檔改要 `system.groupPermission.view`（群組權限，功能 `0000103`），不再跟權限管理綁在一起。
    細節見 `../docs/modules/SystemSetting/logic.md`。
+
+10. **權限改成角色制（RBAC）**（2026-09-23，取代上一點的逐人權限與群組範本）
+    主檔改名 `RBAC_Permission`，角色 `RBAC_Role` / `RBAC_RolePermission` / `RBAC_RoleUser`；
+    有效權限 = 所屬角色 ∪ `everyone`，`superAdmin` 全放行（取代 `M_User.IsAdmin`），
+    帳號停用或鎖定一律沒有權限。解析在 `Services/PermissionService.cs`（Scoped），
+    `HasPermission` / `IsAdmin` / `RequirePermissionAttribute` 共用。
+    `M_Permission` / `M_PermissionGroup` 只剩備份，應用層不讀不寫；群組權限（`0000103`）停用。
+    2026-09-24 起 `RBAC_Permission` 是單一表自我參照的權限樹（`NodeType` / `ParentKey` / `Path` / `Icon`），
+    側欄也由它驅動；頁面 key 拿掉 `.view`（`PermissionKeys.SalesSearch.MixSalesShipping`），
+    `FunctionNo` / `LinkType` 欄位拿掉，`M_System` / `M_Function` 不再組樹。
+11. **後端功能把關：`[RequirePermission]`**（`Filters/RequirePermissionAttribute.cs`）
+    1.0 只掛 `[Authorize]`、靠前端擋畫面；2.0 在 `WorkProcessApi` / `CustomQueryApi` /
+    `MixSalesShipApi` / `SalesOrderUnFinishApi` / `OrderInfoVerifyApi` 掛頁面 key（`module.function`），
+    權限不足回 **HTTP 403** + 信封（不用 200 + `isSuccess = false`，否則前端會當成查無資料）。
+    共用的 `CustomerApi` / `UploadApi` / `ManufacturingApi` 不掛。
+12. **金額欄位後端遮蔽**：`GetSalesOrder(_1)` / `GetUnfinOrder` / `QueryUnfinOrder_1` /
+    `GetPOCheckView` 沒有對應 `viewAmount` 時把金額欄位清成 `null`，直接打 API 也看不到
+    （訂單資料檢核連明細視窗的訂單金額／交易條件也一起遮，這是決定過的）。
+    欄位清單見 `../docs/modules/SystemSetting/logic.md`「金額欄位後端遮蔽」。
 
 ## 訂單資料檢核（`OrderInfoVerifyApi`）
 
@@ -247,12 +273,13 @@ dotnet run
 
 兩邊打同一個資料庫，可以同時運作，token 也互通（前提是 JwtSettings 相同）。
 
-> **例外：權限控管不能並存。** `M_User`/`M_Permission`/`M_PermissionGroup` 已經切到
-> `Proril_Sales_Center`，1.0 讀寫的還是 `PRORIL_WEB`，兩邊各改各的一定分岔。
+> **例外：權限控管不能並存。** `M_User` 已經切到 `Proril_Sales_Center`，
+> 權限也改成新庫的角色制（`RBAC_*`），1.0 讀寫的還是 `PRORIL_WEB` 的
+> `M_User`/`M_Permission`，兩邊各改各的一定分岔。
 > 上線時要把 1.0 的「系統設定 / 人員管理」「系統設定 / 權限管理」關掉。
 >
-> 功能主檔 `M_System`/`M_Function` 也切過去了，而且新庫**只保留 2.0 真的有頁面的
-> 3 個系統別 + 8 個功能**（`database/PermissionMasterSeed.sql`）——所以 2.0 的權限樹
+> 2.0 的權限樹與側欄由新庫的 `RBAC_Permission` 驅動（2026-09-24 起，原本是
+> `M_System`/`M_Function`），只收 2.0 真的有頁面的節點——所以 2.0 的權限樹
 > 只長得出 2.0 管得到的功能，勾不到 1.0 還沒搬的模組。
 
 切換期間要注意的是：1.0 的議題畫面仍然有上面第 1 點的 inner join 問題，

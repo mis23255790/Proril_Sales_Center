@@ -1,4 +1,4 @@
-using Proril.SalesIssue.Api.Data;
+﻿using Proril.SalesIssue.Api.Data;
 using SC = Proril.SalesIssue.Api.Data.SalesCenter;
 
 namespace Proril.SalesIssue.Api.Models;
@@ -294,34 +294,40 @@ public class UserSettingViewModel
     public string Account { get; set; } = string.Empty;
     public string UserName { get; set; } = string.Empty;
     public bool IsEnable { get; set; }
+    /// <summary>有沒有掛 superAdmin 角色（不再讀 M_User.IsAdmin）。</summary>
     public bool IsAdmin { get; set; }
     public bool IsLocked { get; set; }
     public bool IsFirstLogin { get; set; }
+    /// <summary>所屬角色（RBAC_RoleUser），不含自動擁有的 everyone。</summary>
+    public List<int> RoleIds { get; set; } = [];
     public DateTime? LastChangePwd { get; set; }
 }
 
-/// <summary>群組預設功能（M_PermissionGroup）+ 對照出來的功能／細項名稱。比照 1.0 的 MPermissionGroupVM。</summary>
-public class PermissionGroupViewModel
+/// <summary>角色清單（角色管理左側、人員管理的角色下拉）。</summary>
+public class RoleListItemViewModel
 {
     public int Id { get; set; }
-    public string? GroupNo { get; set; }
-    public string? FunctionNo { get; set; }
-    public byte? LinkType { get; set; }
-    public string? PermissionKey { get; set; }
-    public string FunctionName { get; set; } = string.Empty;
-    public string LinkTypeName { get; set; } = string.Empty;
+    public string RoleCode { get; set; } = string.Empty;
+    public string RoleName { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public bool IsSystem { get; set; }
+    public bool IsSuperAdmin { get; set; }
+    public bool IsDefault { get; set; }
+    public int Sort { get; set; }
+    public int PermissionCount { get; set; }
+    public int MemberCount { get; set; }
 }
 
-/// <summary>側欄用：目前登入者可以進入的功能（M_Function + 所屬 M_System）。</summary>
-public class UserFunctionViewModel
+/// <summary>單一角色：基本資料 + 權限 + 成員帳號。</summary>
+public class RoleDetailViewModel : RoleListItemViewModel
 {
-    public int SystemNo { get; set; }
-    public string SystemName { get; set; } = string.Empty;
-    public int SystemType { get; set; }
-    public string? TypeName { get; set; }
-    public int SystemSort { get; set; }
-    public string FunctionNo { get; set; } = string.Empty;
-    public string FunctionName { get; set; } = string.Empty;
-    public int? GroupNo { get; set; }
-    public string? GroupName { get; set; }
+    public List<string> PermissionKeys { get; set; } = [];
+    public List<string> Members { get; set; } = [];
+}
+
+/// <summary>目前登入者的有效權限，前端一次載入後快取（usePermission）。</summary>
+public class MyPermissionsViewModel
+{
+    public bool IsSuperAdmin { get; set; }
+    public List<string> Keys { get; set; } = [];
 }

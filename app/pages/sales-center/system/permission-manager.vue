@@ -1,64 +1,93 @@
 <script setup lang="ts">
 /**
- * 權限管理。對應 1.0 系統設定 / 權限管理（Views/System/PermissionManager.cshtml
- * + wwwroot/js/system/permission-manager*.js）。
+ * 權限管理（角色制，RBAC）。取代 1.0 系統設定 / 權限管理的「逐人勾權限」。
  *
- * 兩件事：
- *   1. 選一個人 → 樹上勾他可用的功能與細項 → 儲存（以 PermissionKey 寫 M_Permission）
- *   2. 群組預設功能套用 → 先看差異清單，再把群組範本勾進目前這個人的樹裡，
- *      **還要再按儲存**才生效
+ * 左邊是角色清單，點一列進編輯：
+ *   - 基本資料：代碼、名稱、說明
+ *   - 權限：樹上勾這個角色可用的功能與細項（存到 RBAC_RolePermission）
+ *   - 成員：哪些帳號掛這個角色（存到 RBAC_RoleUser）
+ * 一個人的有效權限 = 他所有角色的聯集 ∪ everyone，不做個人例外。
  *
- * 群組範本的「編輯」2.0 已獨立成群組權限頁（system/group-permission.vue，功能 0000103）。
- * 樹的組法、存檔規則與差異計算在 app/utils/permissionTree.ts，兩頁共用。
+ * 系統角色兩個：superAdmin（全放行，不用勾樹）、everyone（所有人自動擁有，不用設成員），
+ * 都不能刪、不能改代碼。superAdmin 的成員只有 superAdmin 自己能改（後端也擋）。
+ * 樹來自 RBAC_Permission 單一表（模組 → 分組 → 頁面 → 細項），組法與存檔規則在
+ * app/utils/permissionTree.ts；勾細項會連帶開所屬頁面、分組與模組，後端也會再補。
  */
 import type { TableColumn } from '@nuxt/ui'
-import type { DepartmentListItem, PermissionDiffItem, PermissionTreeNode, UserListItem } from '~/types/system'
+import ConfirmDialog from '~/components/common/ConfirmDialog.vue'
+import type { PermissionTreeNode, RoleListItem, UserListItem } from '~/types/system'
 
 useSeoMeta({ title: '權限管理 · 系統管理 · PRORIL 業務中心' })
 
-const FUNCTION_NO = '0000101'
+const PAGE_KEY = PERMISSION_KEYS.system.permissionManager
 
 const api = useSystemSettingApi()
 const toast = useToast()
+const overlay = useOverlay()
 const { breadcrumbFor, appPath, canAccess, loadUserFunctions } = useAppNavigation()
+const { loadPermissions, isSuperAdmin } = usePermission()
 
 const loading = ref(false)
 const saving = ref(false)
+/**
+ * 切換角色時只讓編輯區變淡、不蓋整頁遮罩：GetRole 通常一兩百毫秒就回來，
+ * 用 FullPageLoading 會整頁閃一下。
+ */
+const roleLoading = ref(false)
 
+const roles = ref<RoleListItem[]>([])
 const users = ref<UserListItem[]>([])
-const departments = ref<DepartmentListItem[]>([])
-const account = ref('')
-const depCode = ref('')
 
-/** 三層主檔只載一次，換人時只重打「他有哪些權限」。 */
+/** 權限樹（RBAC_Permission 單一樹）只載一次，換角色時只重打「這個角色有哪些權限」。 */
 const tree = ref<PermissionTreeNode[]>([])
 const selected = ref(new Set<string>())
 const expanded = ref(new Set<string>())
 
+/** 0 = 新增中；null = 還沒選。 */
+const editingId = ref<number | null>(null)
+const form = reactive({
+  roleCode: '',
+  roleName: '',
+  description: '',
+  isSystem: false,
+  isSuperAdmin: false,
+  isDefault: false
+})
+const members = ref<string[]>([])
+/** 載入時的成員，存檔時比對有沒有改，沒改就不打 SetRoleMembers（superAdmin 成員只有 superAdmin 能動）。 */
+const originalMembers = ref<string[]>([])
+
 const userOptions = computed(() =>
-  users.value.map(u => ({ label: `${u.userName || '(未命名)'} (${u.account})`, value: u.account.trim() }))
+  users.value.map(u => ({
+    label: `${u.userName || '(未命名)'} (${u.account.trim()})${u.isEnable ? '' : ' [停用]'}`,
+    value: u.account.trim()
+  }))
 )
-const depOptions = computed(() =>
-  departments.value.map(d => ({ label: `${d.depName} (${d.depCode})`, value: d.depCode.trim() }))
-)
+const userNameOf = (account: string) =>
+  users.value.find(u => u.account.trim() === account.trim())?.userName || ''
+
+const columns: TableColumn<RoleListItem>[] = [
+  { accessorKey: 'roleName', header: '角色' },
+  { accessorKey: 'permissionCount', header: '權限', meta: { class: { td: 'text-right tabular-nums', th: 'text-right' } } },
+  { accessorKey: 'memberCount', header: '成員', meta: { class: { td: 'text-right tabular-nums', th: 'text-right' } } }
+]
+
+const loadRoles = async () => {
+  const res = await api.getRoleList()
+  roles.value = res?.isSuccess ? (res.body ?? []) : []
+}
 
 const loadMasters = async () => {
   loading.value = true
   try {
-    const [systems, functions, actions, userList, depList] = await Promise.all([
-      api.getSystems(),
-      api.getFunctions(),
-      api.getPermissionDefs(),
-      api.getAllUserList(),
-      api.getDepartments()
+    const [permissions, userList] = await Promise.all([
+      // 連停用節點一起拿，樹上顯示成 disabled
+      api.getPermissions(true),
+      api.getAllUserList()
     ])
-    tree.value = buildPermissionTree(
-      systems?.body ?? [],
-      functions?.body ?? [],
-      actions?.body ?? []
-    )
+    tree.value = buildPermissionTree(permissions?.body ?? [])
     users.value = userList?.body ?? []
-    departments.value = depList?.body ?? []
+    await loadRoles()
   } catch (err) {
     console.log('permission-manager load masters failed -->', err)
   } finally {
@@ -71,26 +100,49 @@ onMounted(async () => {
   await loadMasters()
 })
 
-const loadUserPermissions = async () => {
-  const value = account.value.trim()
-  selected.value = new Set()
-  if (!value) return
-
-  loading.value = true
+const openRole = async (roleId: number) => {
+  roleLoading.value = true
   try {
-    const res = await api.getUserPermissions(value)
-    const keys = selectedKeysFromPermissions(tree.value, res?.body ?? [])
+    const res = await api.getRole(roleId)
+    if (!res?.isSuccess || !res.body) {
+      toast.add({ title: res?.message || '讀取角色失敗', color: 'error' })
+      return
+    }
+    const role = res.body
+    editingId.value = role.id
+    form.roleCode = role.roleCode
+    form.roleName = role.roleName
+    form.description = role.description ?? ''
+    form.isSystem = role.isSystem
+    form.isSuperAdmin = role.isSuperAdmin
+    form.isDefault = role.isDefault
+    members.value = role.members.map(a => a.trim())
+    originalMembers.value = [...members.value]
+
+    const keys = selectedKeysFromPermissionKeys(tree.value, role.permissionKeys)
     selected.value = keys
-    // 有勾的節點就把它的祖先展開，不然使用者要自己一層層點開才看得到勾了什麼
-    for (const key of expandedKeysFor(tree.value, keys)) expanded.value.add(key)
+    // 有勾的節點就把它的祖先展開，不然要自己一層層點開才看得到勾了什麼
+    expanded.value = expandedKeysFor(tree.value, keys)
   } catch (err) {
-    console.log('load user permissions failed -->', err)
+    console.log('open role failed -->', err)
   } finally {
-    loading.value = false
+    roleLoading.value = false
   }
 }
 
-watch(account, loadUserPermissions)
+const newRole = () => {
+  editingId.value = 0
+  form.roleCode = ''
+  form.roleName = ''
+  form.description = ''
+  form.isSystem = false
+  form.isSuperAdmin = false
+  form.isDefault = false
+  members.value = []
+  originalMembers.value = []
+  selected.value = new Set()
+  expanded.value = new Set()
+}
 
 const toggleSelect = (key: string) => {
   if (selected.value.has(key)) selected.value.delete(key)
@@ -116,85 +168,92 @@ const collapseAll = () => {
   expanded.value = new Set()
 }
 
+const removeMember = (account: string) => {
+  members.value = members.value.filter(a => a !== account)
+}
+
+const sameMembers = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',')
+
+/** superAdmin 的成員只有 superAdmin 能改，其他人看得到但不能動。 */
+const membersReadonly = computed(() => form.isSuperAdmin && !isSuperAdmin.value)
+
 const save = async () => {
-  const value = account.value.trim()
-  if (!value) {
-    toast.add({ title: '未選擇人員', color: 'warning' })
+  if (editingId.value === null) return
+  if (!form.roleName.trim()) {
+    toast.add({ title: '請輸入角色名稱', color: 'warning' })
+    return
+  }
+  if (editingId.value === 0 && !form.roleCode.trim()) {
+    toast.add({ title: '請輸入角色代碼', color: 'warning' })
     return
   }
 
   saving.value = true
   try {
-    const res = await api.savePermissionKeys(value, collectSelection(tree.value, selected.value))
-    if (!res?.isSuccess) {
-      toast.add({ title: '設定失敗', description: res?.message ?? undefined, color: 'error' })
+    const res = await api.saveRole({
+      roleId: editingId.value,
+      roleCode: form.roleCode.trim(),
+      roleName: form.roleName.trim(),
+      description: form.description.trim(),
+      permissionKeys: form.isSuperAdmin ? [] : collectSelection(tree.value, selected.value)
+    })
+    if (!res?.isSuccess || !res.body) {
+      toast.add({ title: '角色儲存失敗', description: res?.message ?? undefined, color: 'error' })
       return
     }
-    toast.add({ title: '設定成功', color: 'success' })
+    const roleId = res.body
+
+    if (!form.isDefault && !sameMembers(members.value, originalMembers.value)) {
+      const memberRes = await api.setRoleMembers(roleId, members.value)
+      if (!memberRes?.isSuccess) {
+        toast.add({ title: '角色已儲存，但成員設定失敗', description: memberRes?.message ?? undefined, color: 'error' })
+        await loadRoles()
+        await openRole(roleId)
+        return
+      }
+    }
+
+    toast.add({ title: '角色已儲存', color: 'success' })
+    await loadRoles()
+    await openRole(roleId)
+    // 改到的可能是自己的角色，側欄與畫面權限一併重載
+    await Promise.all([loadPermissions(true), loadUserFunctions(true)])
   } catch (err) {
-    console.log('save permission tree failed -->', err)
+    console.log('save role failed -->', err)
   } finally {
     saving.value = false
   }
 }
 
-// ------------------------------------------------------------------ 群組預設功能套用
+const confirmModal = overlay.create(ConfirmDialog)
 
-/** 套用用的第二棵樹，跟上面那棵共用節點資料、選取狀態分開，可以先微調再套。 */
-const applyOpen = ref(false)
-const applySelected = ref(new Set<string>())
-const applyExpanded = ref(new Set<string>())
+const remove = async () => {
+  if (!editingId.value || form.isSystem) return
+  const confirmed = await confirmModal.open({
+    title: '刪除角色',
+    description: `確定要刪除角色「${form.roleName}」？這個角色的權限與成員指派會一起刪除，成員會失去這個角色給的權限，無法復原。`,
+    confirmLabel: '刪除',
+    confirmColor: 'error'
+  }).result
+  if (!confirmed) return
 
-const openApply = async () => {
-  if (!depCode.value.trim()) {
-    toast.add({ title: '請先選擇群組', color: 'warning' })
-    return
-  }
-  if (!account.value.trim()) {
-    toast.add({ title: '請先選擇人員', color: 'warning' })
-    return
-  }
-
-  loading.value = true
+  saving.value = true
   try {
-    const res = await api.getDepFunctions(depCode.value.trim())
-    const keys = selectedKeysFromDepFunctions(tree.value, res?.body ?? [])
-    applySelected.value = keys
-    applyExpanded.value = expandedKeysFor(tree.value, keys)
-    applyOpen.value = true
+    const res = await api.deleteRole(editingId.value)
+    if (!res?.isSuccess) {
+      toast.add({ title: '角色刪除失敗', description: res?.message ?? undefined, color: 'error' })
+      return
+    }
+    toast.add({ title: '角色已刪除', color: 'success' })
+    editingId.value = null
+    await loadRoles()
+    await Promise.all([loadPermissions(true), loadUserFunctions(true)])
   } catch (err) {
-    console.log('load dep functions failed -->', err)
+    console.log('delete role failed -->', err)
   } finally {
-    loading.value = false
+    saving.value = false
   }
-}
-
-/**
- * 套用只是把勾勾點上去，**不會存檔**——跟 1.0 一樣，套完還要按「儲存」。
- * 也不會取消掉他原本就有的權限，是聯集不是覆蓋。
- */
-/**
- * 差異清單：套下去會新增哪些、哪些本來就有、哪些是他原有但群組沒有（保留不動）。
- * 跟著套用樹的勾選即時重算，微調時看得到結果怎麼變。
- */
-const applyDiff = computed(() => diffSelection(tree.value, selected.value, applySelected.value))
-
-const diffColumns: TableColumn<PermissionDiffItem>[] = [
-  { accessorKey: 'path', header: '功能 / 細項' },
-  { accessorKey: 'permissionKey', header: '權限代碼', meta: { class: { td: 'font-mono text-xs text-muted' } } }
-]
-
-const diffSections = computed(() => [
-  { key: 'added', label: '將新增', color: 'success' as const, rows: applyDiff.value.added },
-  { key: 'existing', label: '已有', color: 'neutral' as const, rows: applyDiff.value.existing },
-  { key: 'keptOnly', label: '本人原有、群組沒有（保留不動）', color: 'info' as const, rows: applyDiff.value.keptOnly }
-])
-
-const applyDepFunctions = () => {
-  for (const key of applySelected.value) selected.value.add(key)
-  for (const key of expandedKeysFor(tree.value, applySelected.value)) expanded.value.add(key)
-  applyOpen.value = false
-  toast.add({ title: `已套用（新增 ${applyDiff.value.added.length} 項），記得按儲存`, color: 'info' })
 }
 </script>
 
@@ -209,126 +268,195 @@ const applyDepFunctions = () => {
         權限管理
       </h1>
       <p class="mt-1 text-sm text-muted">
-        逐人設定可用功能與細項權限。可以先用群組預設功能套進來再微調，套用後仍要按「儲存」才會寫入。
-        群組範本本身在「群組權限」維護。
+        以角色管理權限：每個角色勾選可用的功能與細項，再指派成員。一個人的權限是他所有角色的聯集，
+        加上「全體使用者」角色。人員的角色也可以在人員管理指派。
       </p>
     </div>
 
     <UAlert
-      v-if="!canAccess(FUNCTION_NO)"
+      v-if="!canAccess(PAGE_KEY)"
       icon="i-lucide-shield-alert"
       color="warning"
       variant="subtle"
       title="沒有權限管理權限"
-      description="請洽系統管理員在權限管理開啟「權限管理」。"
+      description="請洽系統管理員把「權限管理」加進你的角色。"
       class="mb-4"
     />
 
-    <div class="mb-4 flex flex-wrap items-end gap-3">
-      <UFormField label="工號">
-        <USelectMenu
-          v-model="account"
-          :items="userOptions"
-          value-key="value"
-          placeholder="選擇人員"
-          class="w-full sm:w-72"
-        />
-      </UFormField>
-
-      <UFormField label="套用群組">
-        <USelectMenu
-          v-model="depCode"
-          :items="depOptions"
-          value-key="value"
-          placeholder="選擇群組"
-          class="w-full sm:w-72"
-        />
-      </UFormField>
-
-      <UButton variant="outline" icon="i-lucide-copy-plus" @click="openApply">
-        群組預設功能套用
-      </UButton>
-    </div>
-
-    <USeparator label="權限列表" class="mb-4" />
-
-    <div class="mb-3 flex flex-wrap items-center gap-2">
-      <UButton size="xs" variant="ghost" icon="i-lucide-unfold-vertical" @click="expandAll">
-        全部展開
-      </UButton>
-      <UButton size="xs" variant="ghost" icon="i-lucide-fold-vertical" @click="collapseAll">
-        全部收合
-      </UButton>
-
-      <UButton
-        class="ml-auto"
-        icon="i-lucide-save"
-        :loading="saving"
-        :disabled="!account"
-        @click="save"
-      >
-        儲存
-      </UButton>
-    </div>
-
-    <div class="max-w-3xl rounded-lg border border-default p-3">
-      <p v-if="!account" class="py-8 text-center text-sm text-muted">
-        請先選擇人員。
-      </p>
-      <PermissionTree
-        v-else
-        :nodes="tree"
-        :selected="selected"
-        :expanded="expanded"
-        @toggle-select="toggleSelect"
-        @toggle-expand="toggleExpand"
-      />
-    </div>
-
-    <!-- 群組預設功能套用 -->
-    <UModal v-model:open="applyOpen" title="群組預設功能套用" :ui="{ content: 'max-w-4xl' }">
-      <template #body>
-        <p class="mb-3 text-sm text-muted">
-          預設帶入該群組的預設功能，可再微調。套用是聯集，不會取消目前這個人原本就有的權限。
-        </p>
-        <div class="max-h-[40vh] overflow-y-auto rounded-lg border border-default p-3">
-          <PermissionTree
-            :nodes="tree"
-            :selected="applySelected"
-            :expanded="applyExpanded"
-            @toggle-select="(key: string) => applySelected.has(key) ? applySelected.delete(key) : applySelected.add(key)"
-            @toggle-expand="(key: string) => applyExpanded.has(key) ? applyExpanded.delete(key) : applyExpanded.add(key)"
-          />
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <!-- 角色清單 -->
+      <section>
+        <div class="mb-2 flex items-center justify-between">
+          <h2 class="font-semibold text-highlighted">
+            角色
+          </h2>
+          <UButton size="sm" icon="i-lucide-plus" @click="newRole">
+            新增角色
+          </UButton>
         </div>
 
-        <USeparator label="套用後差異" class="my-4" />
-
-        <div class="space-y-4">
-          <section v-for="section in diffSections" :key="section.key">
-            <div class="mb-1 flex items-center gap-2">
-              <UBadge :color="section.color" variant="subtle">
-                {{ section.label }}
+        <UTable
+          :data="roles"
+          :columns="columns"
+          :ui="{ tr: clickableRowTr }"
+          class="rounded-lg border border-default"
+          @select="(_e: Event, row: any) => openRole(row.original.id)"
+        >
+          <template #roleName-cell="{ row }">
+            <div class="flex flex-wrap items-center gap-2" :class="{ 'font-semibold': row.original.id === editingId }">
+              <span>{{ row.original.roleName }}</span>
+              <UBadge v-if="row.original.isSuperAdmin" color="error" variant="subtle" size="sm">
+                全放行
               </UBadge>
-              <span class="text-sm text-muted">{{ section.rows.length }} 項</span>
+              <UBadge v-else-if="row.original.isDefault" color="info" variant="subtle" size="sm">
+                所有人
+              </UBadge>
             </div>
-            <UTable
-              v-if="section.rows.length"
-              :data="section.rows"
-              :columns="diffColumns"
-              class="max-h-48 overflow-y-auto rounded-lg border border-default"
-            />
-          </section>
-        </div>
-      </template>
+            <div class="font-mono text-xs text-muted">
+              {{ row.original.roleCode }}
+            </div>
+          </template>
+          <template #permissionCount-cell="{ row }">
+            {{ row.original.isSuperAdmin ? '全部' : row.original.permissionCount }}
+          </template>
+          <template #memberCount-cell="{ row }">
+            {{ row.original.isDefault ? '全部' : row.original.memberCount }}
+          </template>
+        </UTable>
+      </section>
 
-      <template #footer>
-        <UButton color="neutral" variant="outline" @click="applyOpen = false">
-          取消
-        </UButton>
-        <UButton @click="applyDepFunctions">
-          套用
-        </UButton>
-      </template>
-    </UModal>
+      <!-- 編輯區 -->
+      <section
+        class="transition-opacity duration-150"
+        :class="{ 'pointer-events-none opacity-60': roleLoading }"
+        :aria-busy="roleLoading"
+      >
+        <div v-if="editingId === null" class="rounded-lg border border-dashed border-default py-16 text-center text-sm text-muted">
+          從左邊選一個角色編輯，或按「新增角色」。
+        </div>
+
+        <div v-else class="space-y-5">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-lg font-semibold text-highlighted">
+              {{ editingId === 0 ? '新增角色' : form.roleName }}
+            </h2>
+            <UBadge v-if="form.isSystem" color="neutral" variant="subtle">
+              系統角色
+            </UBadge>
+            <div class="ml-auto flex gap-2">
+              <UButton
+                v-if="editingId && !form.isSystem"
+                icon="i-lucide-trash-2"
+                color="error"
+                variant="outline"
+                :loading="saving"
+                @click="remove"
+              >
+                刪除
+              </UButton>
+              <UButton icon="i-lucide-save" :loading="saving" @click="save">
+                儲存
+              </UButton>
+            </div>
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <UFormField label="角色代碼" hint="英文開頭，英數字、底線、連字號" required>
+              <UInput
+                v-model="form.roleCode"
+                class="w-full font-mono"
+                :disabled="form.isSystem"
+                placeholder="例如 salesAssistant"
+              />
+            </UFormField>
+            <UFormField label="角色名稱" required>
+              <UInput v-model="form.roleName" class="w-full" placeholder="例如 業務助理" />
+            </UFormField>
+            <UFormField label="說明" class="sm:col-span-2">
+              <UInput v-model="form.description" class="w-full" />
+            </UFormField>
+          </div>
+
+          <!-- 成員 -->
+          <div>
+            <USeparator label="成員" class="mb-3" />
+            <p v-if="form.isDefault" class="text-sm text-muted">
+              所有啟用中的帳號都自動擁有這個角色，不需要設定成員。
+            </p>
+            <template v-else>
+              <UAlert
+                v-if="membersReadonly"
+                icon="i-lucide-lock"
+                color="neutral"
+                variant="subtle"
+                title="只有系統管理員能變更系統管理員的成員"
+                class="mb-3"
+              />
+              <USelectMenu
+                v-model="members"
+                :items="userOptions"
+                value-key="value"
+                multiple
+                placeholder="搜尋並加入成員"
+                class="w-full"
+                :disabled="membersReadonly"
+              />
+              <div v-if="members.length" class="mt-3 flex flex-wrap gap-2">
+                <UBadge
+                  v-for="m in members"
+                  :key="m"
+                  color="neutral"
+                  variant="outline"
+                  class="gap-1"
+                >
+                  {{ userNameOf(m) || '(未命名)' }} ({{ m }})
+                  <UButton
+                    v-if="!membersReadonly"
+                    size="xs"
+                    color="neutral"
+                    variant="link"
+                    icon="i-lucide-x"
+                    class="p-0"
+                    :aria-label="`移除 ${m}`"
+                    @click="removeMember(m)"
+                  />
+                </UBadge>
+              </div>
+              <p v-else class="mt-2 text-sm text-muted">
+                還沒有成員。
+              </p>
+            </template>
+          </div>
+
+          <!-- 權限 -->
+          <div>
+            <USeparator label="權限" class="mb-3" />
+            <p v-if="form.isSuperAdmin" class="text-sm text-muted">
+              系統管理員全部功能放行，不需要勾選權限。
+            </p>
+            <template v-else>
+              <div class="mb-3 flex flex-wrap items-center gap-2">
+                <UButton size="xs" variant="ghost" icon="i-lucide-unfold-vertical" @click="expandAll">
+                  全部展開
+                </UButton>
+                <UButton size="xs" variant="ghost" icon="i-lucide-fold-vertical" @click="collapseAll">
+                  全部收合
+                </UButton>
+                <span class="ml-auto text-xs text-muted">勾選細項會自動開啟所屬頁面</span>
+              </div>
+              <div class="rounded-lg border border-default p-3">
+                <PermissionTree
+                  :nodes="tree"
+                  :selected="selected"
+                  :expanded="expanded"
+                  @toggle-select="toggleSelect"
+                  @toggle-expand="toggleExpand"
+                />
+              </div>
+            </template>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 </template>

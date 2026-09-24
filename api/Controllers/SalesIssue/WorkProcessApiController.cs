@@ -1,6 +1,7 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Controllers.Shared;
+using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Helpers;
@@ -18,6 +19,7 @@ namespace Proril.SalesIssue.Api.Controllers.SalesIssue;
 /// 這支不再需要 <c>ProrilWebDbContext</c>，見 CLAUDE.md 「權限控管已完成搬遷」段落。
 /// </summary>
 [Authorize]
+[RequirePermission(PermissionKeys.SalesIssue.ProcessMaintain)]
 public partial class WorkProcessApiController : BaseApiController
 {
     private const int SopTitleMaxLength = 80;
@@ -70,11 +72,9 @@ public partial class WorkProcessApiController : BaseApiController
         var account = GetAccountByToken();
         var isAdmin = IsAdmin(account);
 
-        // 有「公開」層級的功能權限就看得到全部
-        var isPublic = scDb.MPermissions.Any(p =>
-            p.LinkNumber == account
-            && p.FunctionNo == FunctionIds.ProcessMaintain
-            && p.LinkType == (byte)EWorkProcessPermission.Public);
+        // 有「SOP-公開」細項權限就看得到全部（原本是 FunctionNo 0070102 + LinkType 20，只認本人的列；
+        // 改成字串權限後同其他檢查一樣看所屬角色 ∪ everyone）
+        var isPublic = HasPermission(account, PermissionKeys.SalesIssue.ProcessMaintainPublishSop);
 
         ca = GetSopListCore(type2_phrase_name, type3_phrase_name, caption_name, content_name, pub_only);
         if (!ca.IsSuccess) return ca;
@@ -735,6 +735,7 @@ public partial class WorkProcessApiController : BaseApiController
 
     /// <summary>依 phraseType 取關鍵字（只回有效的）。</summary>
     [HttpGet]
+    [RequirePermission(PermissionKeys.SalesIssue.ProcessMaintain, PermissionKeys.SalesIssue.KindMaintain)]
     public CustomApiViewModel GetKindList(string typeCode)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
@@ -763,6 +764,7 @@ public partial class WorkProcessApiController : BaseApiController
     /// 呼叫端要自己確保編號不重複（前端 kind-maintain.vue 會先檢查）。
     /// </summary>
     [HttpGet]
+    [RequirePermission(PermissionKeys.SalesIssue.KindMaintain)]
     public CustomApiViewModel SaveKindData([FromQuery] MWorkProcessPhrase mPhrase)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
@@ -965,6 +967,8 @@ public partial class WorkProcessApiController : BaseApiController
     /// erpCustomerNo 都沒收，前端有送也被忽略）。
     /// </summary>
     [HttpGet]
+    // 客戶相關資訊（客戶檢索底下的頁面）也在查這個客戶的議題
+    [RequirePermission(PermissionKeys.SalesIssue.ProcessMaintain, PermissionKeys.SalesSearch.CustomQuery)]
     public CustomApiViewModel GetWPOrderForCustom(string? customerNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };

@@ -36,7 +36,7 @@
 > `BaseApiController` 注入，子類別直接用 `db` / `scDb`：
 > `WorkProcessApiController`（含 `.Attach.cs`/`.Permission.cs`）、
 > `CustomQueryApiController.SaveCustom`、`UploadApiController.AddFileLog`、
-> `MainApiController`（含 `.User.cs`/`.SystemSetting.cs`）、`CommonApiController`
+> `MainApiController`（含 `.User.cs`/`.SystemSetting.cs`）
 > 已改讀寫 `SalesCenterDbContext`，這幾張表**已經是真的切連線，不再只是快照**；
 > 其餘表（`COP_*`、`M_PermissionLinkType`、`M_Department`）維持只在 `PRORIL_WEB` 有效，
 > 兩邊之後不會自動同步。
@@ -57,16 +57,28 @@
 > 兩邊永久分岔** —— `publish.ps1` / `drift.ps1` 對快照庫一定會報
 > `M_Function`／`M_Permission`／`M_PermissionGroup`／`M_PermissionLinkType`／
 > `H_FileLink` 這幾個欄位的差異，**那是預期的，不要套用回去**。
-> 常數在 `api/Models/Enums.cs` 的 `FunctionIds` 與 `useAppNavigation.ts` 的 `NAV_MODULES`，
-> 新增功能時**兩邊都要加**，再改 `PermissionMasterSeed.sql` 的對照表。
 > 完整對照與腳本見 `database/FunctionNoFormatMigration.sql`。
+> **2026-09-24 起權限樹、側欄、權限判斷都不再用 `FunctionNo`**：`NAV_MODULES` 已刪除，
+> `api/Models/Enums.cs` 的 `FunctionIds` 只剩 `H_FileLink` 上傳紀錄對照用，
+> 新增功能**不用**再加 `FunctionIds`／改 `PermissionMasterSeed.sql`。
 >
-> **權限判斷一律用字串權限 `module.function.action`**（2026-09-23 起，例如
-> `salesSearch.mixSalesShipping.viewAmount`），不要再用 `FunctionNo + LinkType` 數字判斷。
-> 主檔 `M_PermissionDef`（`database/PermissionDefObjectsMigration.sql`），
+> **權限判斷一律用字串權限**（2026-09-23 起）：頁面是 `module.function`（勾了 = 進得去，
+> 例如 `salesSearch.mixSalesShipping`，**2026-09-24 起不帶 `.view`**），細項是 `module.function.action`
+> （例如 `salesSearch.mixSalesShipping.viewAmount`），不要再用 `FunctionNo + LinkType` 數字判斷。
+> 主檔 `RBAC_Permission`（原 `M_PermissionDef`，`database/RbacObjectsMigration.sql`）
+> **2026-09-24 起是單一表自我參照的權限樹**（`NodeType` = MODULE / GROUP / PAGE / ACTION，
+> `ParentKey` 指父節點，`Label`／`Path`／`Icon`／`Sort` 給側欄用），**側欄也由它驅動**：
+> 位置、名稱、icon、順序直接在 DB 改（改 `ParentKey` 搬位置、改 `Sort` 換順序），
+> 節點 `aStatus = 'N'` 連同底下整棵子樹一起失效。
 > 常數在後端 `api/Models/Enums.cs` 的 `PermissionKeys` 與前端 `app/utils/permissionKeys.ts`；
-> 後端檢查用 `BaseApiController.HasPermission(key)`，前端用 `usePermission().checkPermission(key)`。
-> 新增功能時**這三處也要加**（至少一個 `.view`），完整步驟見
+> 誰有哪些 key 由**角色**決定（RBAC，2026-09-23 起）：有效權限 = 所屬角色
+> （`RBAC_RoleUser` → `RBAC_RolePermission`）∪ `everyone`，`superAdmin` 全放行，
+> 解析集中在 `api/Services/PermissionService.cs`。
+> 後端：**整支 Controller 掛 `[RequirePermission(PermissionKeys.Xxx.Yyy)]`**（頁面 key）
+> （`api/Filters/RequirePermissionAttribute.cs`，不足回 HTTP 403），Action 內細項用
+> `BaseApiController.HasPermission(key)`；前端用 `usePermission().can(key)` / `checkPermission(key)`。
+> 新增功能要改的是：頁面檔 → `RBAC_Permission` 加 PAGE（與 ACTION）節點 → 前後端常數 →
+> `[RequirePermission]` → 權限管理勾進角色，完整步驟見
 > `docs/modules/SystemSetting/logic.md`「新增一個功能要改哪裡」。
 
 > **2.0 的登入只走 SSO**，`Proril_Sales_Center.M_User.Password` 已全部清成 `NULL`
@@ -76,20 +88,28 @@
 > 新建的帳號會是唯一有密碼的那個。
 >
 > `M_System`／`M_Function`（功能主檔）已切到 `SalesCenterDbContext`，但 `api/` 仍**只讀不寫**
-> （應用層本來就沒有寫入路徑，直接維護在 DB）。關鍵是新庫**只保留 2.0 真的有頁面的
+> （應用層本來就沒有寫入路徑，直接維護在 DB）。**2026-09-24 起兩張都不再組權限樹與側欄**
+> （`M_System` 只剩 topbar 環境圖示 `GetMSystemWNo` 在讀；`M_Function` 已不被讀，
+> **`SalesCenterDbContext` 的對映也已拿掉**、`scaffold-sales-center.ps1` 排除它，
+> **2.0 新增功能不要寫 `M_Function`**，只加 `RBAC_Permission` 節點），
+> 下面是當初的背景。關鍵是新庫**只保留 2.0 真的有頁面的
 > 3 個系統別 + 8 個功能**，不是整份複製——否則權限樹會長出一堆點下去 404 的功能。
 > 資料由 `database/PermissionMasterSeed.sql` 維護（`copy-snapshot-data.ps1` 會跳過這兩張，
 > 也不要靠 `publish.ps1` 建表）。
 > （原本這裡還有一條「DACPAC 的 `M_Function` 是 `varchar`、中文會變 `?`」——
 > 2026-09-14 把資料庫定序對齊成 `Chinese_Taiwan_Stroke_BIN` 之後，`varchar` 存得下中文，
 > 這個限制已經不存在。）
-> **要讓新功能出現在權限樹，得先在 `NAV_MODULES` 加路由，再改那支腳本的 `@FunctionNos`。**
+> **要讓新功能出現在權限樹與側欄，是在 `RBAC_Permission` 加節點**（`RbacObjectsMigration.sql`
+> 第 4b.4 段的 seed 只在還沒有 MODULE 節點時跑一次，既有的庫要直接 INSERT 或另寫
+> `*ObjectsMigration.sql`），不用再動 `NAV_MODULES`（已刪除）或 `@FunctionNos`。
 >
-> **權限控管已完成搬遷（2026-09-14）**：`M_User`／`M_Permission`／`M_PermissionGroup`
+> **權限控管已完成搬遷（2026-09-14）**：`M_User` 與權限資料
 > 已連同 1.0 的人員管理（`MainApiController`）與權限管理
 > （`MainApiController_SystemSetting`）邏輯一起搬進
-> `api/Controllers/Shared/MainApiController.User.cs` / `.SystemSetting.cs` /
-> `CommonApiController.cs`，改打 `SalesCenterDbContext` 讀寫。
+> `api/Controllers/Shared/MainApiController.User.cs` / `.SystemSetting.cs`，
+> 改打 `SalesCenterDbContext` 讀寫。2026-09-23 權限再改成角色制，
+> 讀寫的是 `RBAC_Role`／`RBAC_RolePermission`／`RBAC_RoleUser`；
+> `M_Permission`／`M_PermissionGroup` 只剩備份，**應用層不讀不寫**，`M_User.IsAdmin` 也不再被讀。
 > **代價是 1.0 的人員管理／權限管理必須停用**——兩邊各改各的一定分岔。
 > 還沒搬的是「登入失敗自動鎖定」（要連 `H_Logins` 一起搬，屬登入流程），
 > 所以 1.0 鎖的是舊庫、2.0 讀的是新庫，鎖定狀態不互通；2.0 補了
@@ -103,7 +123,8 @@
 > `CustomQueryApiController.SaveCustom`；`WorkProcessApiController` 讀它組客戶顯示欄位，
 > 一併改讀 `SalesCenterDbContext`）、`CRM_CustomerMemo`（客戶情報，只有
 > `CustomQueryApiController.Memo.cs`）、`H_FileLink`（只有 `UploadApiController` 內的
-> `AddFileLog`）、權限控管 3 張（`M_User`／`M_Permission`／`M_PermissionGroup`）。
+> `AddFileLog`）、權限控管（`M_User` + 角色制 3 張 `RBAC_Role`／`RBAC_RolePermission`／
+> `RBAC_RoleUser`；`M_Permission`／`M_PermissionGroup` 已降為備份表）。
 > `COP_PoCheck`/`COP_PoDetailCheck`/`COP_PassCheck`/
 > `COP_AvailableAmt`/`COP_ProductCheck` 應用層完全沒有直寫，只有預存程序
 > （`prc_COPOrderChk`/`prc_COPPassCheck`/`prc_ProductChk`）在寫，但呼叫入口分散在
@@ -206,6 +227,8 @@
   - 例外情況（這兩支不算「boilerplate」，仍保留各自的 try/catch，不要拿掉）：
     - `BaseApiController` 的 `GetAccountByToken` / `GetUserNameByToken` / `IsAdmin`：
       token 解析失敗時刻意當「匿名／非管理員」處理並繼續往下走，不是單純記錄後 rethrow。
+      （`IsAdmin` 2026-09-23 起是「有沒有 `superAdmin` 角色」，經 `PermissionService` 解析，
+      不再讀 `M_User.IsAdmin`；try/catch 照樣保留。）
     - `UploadApiController.AddFileLog`：檔案已經存檔成功，只是記錄 `H_FileLink` 失敗，
       要讓呼叫端知道「上傳成功但記錄失敗」這種部分失敗語意，不能被全域 filter 蓋掉。
   - 前端（Nuxt/Vue）目前沒有對應機制，該包還是要包，這條只適用後端 `api/`。

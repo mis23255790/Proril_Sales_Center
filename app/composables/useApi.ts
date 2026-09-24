@@ -14,6 +14,15 @@ export const useApi = () => {
         }
       }) as T
     } catch (err: any) {
+      // 403 = 後端 RequirePermission 擋下來（沒有這個功能的權限），不是連線問題
+      if (err?.statusCode === 403 || err?.status === 403) {
+        toast.add({
+          title: '沒有權限',
+          description: err?.data?.message || '沒有此功能的權限，請洽系統管理員。',
+          color: 'warning'
+        })
+        throw err
+      }
       toast.add({
         title: '無法連接後端 API',
         description: err?.data?.message || err?.message || `${path} 請求失敗`,

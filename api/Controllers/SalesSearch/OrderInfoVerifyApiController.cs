@@ -1,9 +1,10 @@
-using System.Data;
+﻿using System.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Proril.SalesIssue.Api.Controllers.Shared;
+using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Helpers;
@@ -18,6 +19,7 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 /// 寫回 COP_PoCheck/COP_PoDetailCheck/COP_PassCheck），所以後端也整支搬過來，不是純轉發。
 /// </summary>
 [Authorize]
+[RequirePermission(PermissionKeys.SalesSearch.OrderInfoVerify)]
 public partial class OrderInfoVerifyApiController : BaseApiController
 {
     public OrderInfoVerifyApiController(
@@ -83,11 +85,38 @@ public partial class OrderInfoVerifyApiController : BaseApiController
         };
 
         var list = GetOrderInfoList(copSource, orderType, orderNo, customerNo, startDate, endDate, confirmFlag, pageIndex, pageSize, allOrders);
+        MaskAmounts(list, HasPermission(PermissionKeys.SalesSearch.OrderInfoVerifyViewAmount));
 
         ca.IsSuccess = true;
         ca.Body = list;
         ca.Body2 = summary;
         return ca;
+    }
+
+    /// <summary>
+    /// 沒有 viewAmount 權限時把金額相關欄位清掉。權限不足時後端也清掉金額，不只靠前端隱藏欄位
+    /// （直接打 API 一樣看不到）。清的欄位與匯出 Excel 在 showAmount=false 時拿掉的那組一致：
+    /// 表頭的訂單金額、交易條件、交易條件名稱；明細（<see cref="VPoListDetailViewModel.VPoDetail"/>）
+    /// 的幣別、匯率、外幣單價、外幣金額、台幣金額。
+    /// <c>交易條件名稱</c> 是非 nullable 字串，清成空字串（前端明細 modal 是直接字串插值，
+    /// 清成 null 會顯示成 "null"）。
+    /// </summary>
+    private static void MaskAmounts(List<VPoListDetailViewModel> rows, bool showAmount)
+    {
+        if (showAmount) return;
+
+        foreach (var row in rows)
+        {
+            row.訂單金額 = null;
+            row.交易條件 = null;
+            row.交易條件名稱 = "";
+
+            row.VPoDetail.幣別 = null;
+            row.VPoDetail.匯率 = null;
+            row.VPoDetail.外幣單價 = null;
+            row.VPoDetail.外幣金額 = null;
+            row.VPoDetail.台幣金額 = null;
+        }
     }
 
     /// <summary>「檢核條件」說明清單，全部有效規則。</summary>

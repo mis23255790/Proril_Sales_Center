@@ -1,6 +1,8 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Models;
+
+using Proril.SalesIssue.Api.Filters;
 
 namespace Proril.SalesIssue.Api.Controllers.Shared;
 
@@ -25,6 +27,7 @@ public partial class CustomQueryApiController
     /// </summary>
     /// <param name="wpNo">1.0 簽章裡有這個參數，但過濾邏輯整段被註解掉，沒有作用。維持原樣。</param>
     [HttpGet]
+    [RequirePermission(PermissionKeys.SalesSearch.CustomQuery)]
     public CustomApiViewModel GetCustomMemo(string? wpNo, string? customerNo, string? erpCustomerNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
@@ -68,6 +71,7 @@ public partial class CustomQueryApiController
     /// 反射整包覆蓋很容易在加欄位時把不該改的欄位一起改掉。
     /// </summary>
     [HttpGet]
+    [RequirePermission(PermissionKeys.SalesSearch.CustomQuery)]
     public CustomApiViewModel SetCustomMemo([FromQuery] CrmCustomerMemo customMemo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
@@ -124,6 +128,7 @@ public partial class CustomQueryApiController
     /// 因為情報是自由輸入的備註，打錯字或貼錯客戶沒有補救管道並不合理。
     /// </summary>
     [HttpGet]
+    [RequirePermission(PermissionKeys.SalesSearch.CustomQuery)]
     public CustomApiViewModel DeleteCustomMemo(int id)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };

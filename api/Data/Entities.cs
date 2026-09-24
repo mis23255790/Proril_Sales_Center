@@ -8,9 +8,10 @@ namespace Proril.SalesIssue.Api.Data;
  * api/Data/SalesCenter/（dotnet ef dbcontext scaffold 產生，不要手改，
  * 要改欄位對映去跑 database/scripts/scaffold-sales-center.ps1）。
  *
- * M_User / M_Permission / M_PermissionGroup / M_System / M_Function 也在 2026 的權限控管搬遷裡切到
+ * M_User / M_Permission / M_PermissionGroup / M_System 也在 2026 的權限控管搬遷裡切到
  * Proril_Sales_Center（人員管理與權限管理的 Controller 已一併搬過來，
  * 見 api/Controllers/Shared/MainApiController.User.cs / .SystemSetting.cs）。
+ * M_Function 2026-09-24 起已不對映（權限樹改由 RBAC_Permission 驅動，沒有人讀它）。
  *
  * 這裡只留還在打 PRORIL_WEB 的表：
  *   - M_Department：1.0 Controllers/System/OrgApiController（組織維護）在寫，
