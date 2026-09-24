@@ -21,9 +21,16 @@
 #   docker volume create --driver local --opt type=none --opt o=bind \
 #     --opt device="D:\proril-sales-center.proril\proril-sales-center-dev.proril\ProrilWebFiles" \
 #     proril-sales-center-dev-prorilwebfiles
+#
+# container_name 固定死：142 的 nginx_proxy（/etc/nginx/conf.d/proril-sales-center-dev.conf）是用
+# 容器名稱 proxy_pass http://proril_sales_center_dev_app:3000 轉發，交給 compose 自動命名
+# （proril_sales_center_dev-app-1）的話 CI 建出來的新容器永遠接不到 nginx，畫面一直是舊的。
+# 第一次切過來前要先刪掉手動建的同名舊容器，否則名稱衝突起不來：
+#   docker rm -f proril_sales_center_dev_app proril_sales_center_dev_api
 name: proril_sales_center_dev
 services:
   app:
+    container_name: proril_sales_center_dev_app
     image: proril-sales-center-app-dev.proril
     build:
       context: .
@@ -42,6 +49,7 @@ services:
       - nginx-proxy
 
   api:
+    container_name: proril_sales_center_dev_api
     image: proril-sales-center-api-dev.proril
     build:
       context: ./api
