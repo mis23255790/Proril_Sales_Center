@@ -33,8 +33,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: err?.message || '票證驗證失敗' })
   }
 
+  let result: LoginModel
   try {
-    return await $fetch<LoginModel>(`${config.public.apiBase}/MainApi/LoginSso`, {
+    result = await $fetch<LoginModel>(`${config.public.apiBase}/MainApi/LoginSso`, {
       method: 'POST',
       headers: { 'X-Internal-Secret': config.ssoInternalSecret },
       body: { account }
@@ -43,4 +44,7 @@ export default defineEventHandler(async (event) => {
     console.log('handoff LoginSso failed -->', err)
     throw createError({ statusCode: 502, statusMessage: '後端登入失敗' })
   }
+
+  // token 只寫進 httpOnly cookie，不回給瀏覽器（見 server/utils/authCookie.ts）
+  return finishLogin(event, result)
 })

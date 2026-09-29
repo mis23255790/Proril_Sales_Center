@@ -3,7 +3,7 @@
  * PRORIL 通行證登入完成後導回的頁面（NUXT_PUBLIC_OAUTH_REDIRECT_URI 要指到這裡）。
  *
  * 流程：比對 state -> 拿 code + nonce 打 /api/auth/sso（server 端換 token、驗 id_token、換內部 JWT）
- * -> 存 proril-token -> 導回登入前要去的頁面（沒有就回業務中心首頁）。
+ * -> server 端寫 httpOnly cookie -> 導回登入前要去的頁面（沒有就回業務中心首頁）。
  *
  * 這是正式登入流程（見 utils/ssoAuth.ts），Manufacturing Center 的 /auth/handoff 只是過渡。
  */
@@ -40,18 +40,18 @@ onMounted(async () => {
   }
 
   try {
-    const result = await $fetch<{ status: boolean, token?: string | null, message?: string | null }>('/api/auth/sso', {
+    const result = await $fetch<{ status: boolean, message?: string | null }>('/api/auth/sso', {
       method: 'POST',
       body: { code, nonce: sso.nonce }
     })
 
-    if (!result.status || !result.token) {
+    // token 已由 server 端寫進 httpOnly cookie，這裡只看成功與否
+    if (!result.status) {
       status.value = 'error'
       errorMessage.value = result.message || 'SSO 登入失敗'
       return
     }
 
-    setAuthToken(result.token)
     await navigateTo(sso.returnTo)
   } catch (err: any) {
     console.log('SSO callback failed -->', err)

@@ -28,18 +28,18 @@ onMounted(async () => {
   }
 
   try {
-    const result = await $fetch<{ status: boolean, token?: string | null, message?: string | null }>('/api/auth/handoff', {
+    const result = await $fetch<{ status: boolean, message?: string | null }>('/api/auth/handoff', {
       method: 'POST',
       body: { ticket }
     })
 
-    if (!result.status || !result.token) {
+    // token 已由 server 端寫進 httpOnly cookie，這裡只看成功與否
+    if (!result.status) {
       status.value = 'error'
       errorMessage.value = result.message || '身分驗證失敗'
       return
     }
 
-    setAuthToken(result.token)
     await navigateTo('/sales-center')
   } catch (err: any) {
     console.log('handoff failed -->', err)

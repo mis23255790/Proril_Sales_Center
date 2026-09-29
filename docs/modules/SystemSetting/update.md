@@ -1,6 +1,30 @@
 <details>
   <summary>版號2026.09.29</summary>
 
+##### feat(auth): 登入 token 改放 httpOnly cookie（BFF）
+      原本 token 由前端 JS 寫進 cookie `proril-token`、每次請求自己帶 Authorization，
+      XSS 讀得到 token。改成只由 Nuxt server 端寫、JS 讀不到。
+
+      server 端（server/utils/authCookie.ts）
+        /api/auth/sso、/api/auth/handoff 登入成功後由 server 端寫兩個 cookie：
+          proril-token：httpOnly，內部 JWT 本身；
+          proril-session：非 httpOnly，只有 { account, exp }，給前端守門與顯示帳號，不含 token。
+        兩者 SameSite=Lax、Path=/、Max-Age = token 剩餘秒數；HTTPS（看 X-Forwarded-Proto）才加 Secure，
+        **反向代理要轉 X-Forwarded-Proto**，否則正式站的 cookie 不會帶 Secure。
+        回給瀏覽器的登入結果拿掉 token（只剩 status / username / message）。
+        /api/proxy 把 proril-token 轉成 Authorization: Bearer 給後端（沒有 cookie 才用 NUXT_PUBLIC_DEV_TOKEN）。
+        cookie 會被自動帶上，proxy 與 logout 加 CSRF 檢查：Sec-Fetch-Site = cross-site 擋，
+        非 GET 的 Origin 與本站 host 不符擋（403）。
+        新增 POST /api/auth/logout 清兩個 cookie（httpOnly 的只能由 server 端清）。
+
+      前端
+        useApi 不再帶 Authorization；getAuthToken / setAuthToken / clearAuthToken 拿掉，
+        改成 getAuthSession / isAuthSessionValid / logoutAuth（app/composables/useApi.ts）。
+        auth.global.ts、useAuthAccount 改讀 proril-session；utils/authToken.ts 的 isTokenExpired 拿掉。
+
+      上線影響
+        已登入的使用者只有舊的 proril-token、沒有 proril-session，上線後會被導去重新登入一次。
+
 ##### feat(system): 人員管理列表加「角色」欄
       MainApi/GetAllUserList 每筆多回 roleIds（有效的 RBAC_RoleUser，依角色 Sort 排），
       前端用 GetRoleList 對照角色名稱顯示成標籤。原「狀態」欄更名「帳號狀態」。

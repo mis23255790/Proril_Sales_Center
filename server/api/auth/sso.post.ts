@@ -3,7 +3,8 @@
  *
  * 一定要在 server 端做：交換需要帶 client secret，不能讓瀏覽器看到。
  * 換到 id_token 後解出帳號，呼叫後端 MainApi/LoginSso 換成本站的內部 JWT
- * （沿用 1.0 的 JwtSettings，跟密碼登入拿到的 token 完全通用）。
+ * （沿用 1.0 的 JwtSettings，跟密碼登入拿到的 token 完全通用），
+ * 寫進 httpOnly cookie，回給瀏覽器的只有 status / username / message。
  *
  * id_token 一律驗簽章、iss、aud、exp、nonce（見 server/utils/verifyIdToken.ts）才採信裡面的帳號。
  *
@@ -84,8 +85,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 502, statusMessage: 'id_token 內無法辨識帳號' })
   }
 
+  let result: LoginModel
   try {
-    return await $fetch<LoginModel>(`${config.public.apiBase}/MainApi/LoginSso`, {
+    result = await $fetch<LoginModel>(`${config.public.apiBase}/MainApi/LoginSso`, {
       method: 'POST',
       headers: { 'X-Internal-Secret': config.ssoInternalSecret },
       body: { account }
@@ -94,4 +96,7 @@ export default defineEventHandler(async (event) => {
     console.log('sso.post LoginSso failed -->', err)
     throw createError({ statusCode: 502, statusMessage: '後端 SSO 登入失敗' })
   }
+
+  // token 只寫進 httpOnly cookie，不回給瀏覽器（見 server/utils/authCookie.ts）
+  return finishLogin(event, result)
 })
