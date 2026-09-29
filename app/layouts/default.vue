@@ -96,7 +96,9 @@ const items = computed<NavigationMenuItem[][]>(() => [
       :collapsed-size="4"
     >
       <template #header="{ collapsed: isCollapsed }">
-        <AppLogo :collapsed="isCollapsed" />
+        <div class="flex w-full justify-center">
+          <AppLogo :collapsed="isCollapsed" />
+        </div>
       </template>
 
       <template #default="{ collapsed: isCollapsed }">
