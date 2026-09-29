@@ -23,27 +23,26 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 ///
 /// <c>SerialNosJson</c>（銘版序號）原本是 SP 背後的 V_UnfinOrder 用跨庫 LEFT JOIN
 /// 即時查 PRORIL_WEB.dbo.NPS_D_Order，51002 執行帳號對 PRORIL_WEB 沒有 SELECT 權限會
-/// 直接失敗，已把那段 JOIN 拿掉，改成這裡呼叫 <see cref="ManufacturingSerialNoLookupService"/>
-/// 在應用層 left join 回去（見 <see cref="ApplySerialNos"/>）。
+/// 直接失敗，已把那段 JOIN 拿掉，改成這裡透過 <see cref="ISerialNoSource"/>
+/// （預設讀 V_NPS_SerialNo 直連 View，之後可切 API）在應用層 left join 回去（見 <see cref="ApplySerialNos"/>）。
 /// </summary>
 [Authorize]
 [RequirePermission(PermissionKeys.SalesSearch.QueryUnFinish)]
 public partial class SalesOrderUnFinishApiController : BaseApiController
 {
     public SalesOrderUnFinishApiController(
-        ProrilWebDbContext db,
         Data.SalesCenter.SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ManufacturingSerialNoLookupService serialNoLookup,
-        ILogger<SalesOrderUnFinishApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ISerialNoSource serialNoLookup,
+        ILogger<SalesOrderUnFinishApiController> logger) : base(scDb, jwtHelper, logger)
     {
         _paths = paths;
         _serialNoLookup = serialNoLookup;
     }
 
     private readonly StoragePaths _paths;
-    private readonly ManufacturingSerialNoLookupService _serialNoLookup;
+    private readonly ISerialNoSource _serialNoLookup;
 
     /// <summary>依品號（TD004）分群的查詢，餵給「品號細項」「品號統計」兩個頁籤。</summary>
     [HttpGet]

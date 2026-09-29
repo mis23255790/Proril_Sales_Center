@@ -2,14 +2,11 @@
   "//": [
     "複製成 appsettings.Development.json 後填值（該檔已被 .gitignore 擋掉，不會進版控）。",
     "部署環境請改用環境變數，變數名把 : 換成 __，例如：",
-    "  ConnectionStrings__ProrilWeb, JwtSettings__SignKey, Security__AesKey, Storage__ShareRoot"
+    "  ConnectionStrings__SalesCenter, JwtSettings__SignKey, Security__AesKey, Storage__ShareRoot"
   ],
 
   "ConnectionStrings": {
-    "//": "PRORIL_WEB。測試區與正式區的資料庫同名，靠 port 區分（測試 ,50002 / 正式 ,51002）。",
-    "ProrilWeb": "Server=<host>,50002;Database=PRORIL_WEB;User Id=<user>;Password=<password>;TrustServerCertificate=True;",
-
-    "//SalesCenter": "獨立資料庫 Proril_Sales_Center（目前只是快照，見 CLAUDE.md）。SalesCenterDbContext 現階段還沒有任何 Entity 對映，這裡先能連上即可。",
+    "//SalesCenter": "獨立資料庫 Proril_Sales_Center，api/ 唯一的連線（2026-09-29 起不再連 PRORIL_WEB）。測試區與正式區靠 port 區分（測試 ,50002 / 正式 ,51002）。",
     "SalesCenter": "Server=<host>,50002;Database=Proril_Sales_Center;User Id=<user>;Password=<password>;TrustServerCertificate=True;"
   },
 
@@ -41,8 +38,9 @@
 
   "Services": {
     "ManufacturingCenter": {
-      "//": "Proril_Manufacturing_Center 還沒有對應端點，先留空。ManufacturingSerialNoLookupService 在空值時會直接丟例外，不會靜默失敗。API 上線後把根網址填進來即可，呼叫端不用改。",
-      "BaseUrl": ""
+      "//": "銘版序號來源。SerialNoSource = View（預設，讀 Proril_Sales_Center 的 V_NPS_SerialNo 直連 View）或 Api（呼叫 Proril_Manufacturing_Center，BaseUrl 必填）。Api 端點還沒上線，BaseUrl 先留空；ManufacturingSerialNoLookupService 在空值時會直接丟例外，不會靜默失敗。",
+      "BaseUrl": "",
+      "SerialNoSource": "View"
     }
   }
 }

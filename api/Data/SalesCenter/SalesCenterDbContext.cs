@@ -8,7 +8,7 @@ namespace Proril.SalesIssue.Api.Data.SalesCenter;
 /*
  * CopCheckRule / CopDepData / CopPassCheck / CopPoCheck / CopPoDetailCheck / CopGetCredit /
  * CopGetCreditCrm / VPoList / VPoDetailList / VProductEnglishAll / VUpFileData 對映到
- * OrderInfoVerifyEntities.cs 的手寫 POCO（跟 ProrilWebDbContext 共用同一份型別），
+ * OrderInfoVerifyEntities.cs 的手寫 POCO（原本跟已刪除的 ProrilWebDbContext 共用同一份型別），
  * 不是這支 scaffold 自己產生的型別——專案慣例是手寫乾淨命名，不要 dotnet ef scaffold
  * 產生的 VPolist / CopDepDatum 這種怪名字（見 OrderInfoVerifyEntities.cs 開頭註解）。
  * scaffold-sales-center.ps1 重跑時會把這幾個 DbSet 洗回 scaffold 型別，記得跑完要照這裡改回來。
@@ -1740,7 +1740,7 @@ public partial class SalesCenterDbContext : DbContext
 
         // prc_QueryUnfinOrder(_1) 的結果集欄位是 ID / COP_Source / Mq002 / Tc001...，
         // 其餘屬性跟 1.0 同名同型免對映，只有 Id 跟 CopSource 的實際欄名不同，
-        // 照抄 ProrilWebDbContext 的 HasColumnName，少了會噴
+        // 照抄原本 ProrilWebDbContext（已刪除）的 HasColumnName，少了會噴
         // 「Cannot create a DbSet for 'UnfinOrder' because this type is not included in the model」。
         modelBuilder.Entity<UnfinOrder>(entity =>
         {

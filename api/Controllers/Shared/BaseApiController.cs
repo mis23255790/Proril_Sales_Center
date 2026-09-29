@@ -14,24 +14,20 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 ///   - PRORILContext (dsWorkFlowContext)：另一個資料庫，業務議題用不到
 ///   - LogHelper 自製檔案 log：改用 ILogger，交給 host 的 logging 設定
 ///
-/// 兩個 DbContext 都在這裡注入，子類別直接用 <c>db</c>（PRORIL_WEB）與
-/// <c>scDb</c>（Proril_Sales_Center）。帳號與權限（M_User / RBAC_Role / RBAC_RoleUser /
+/// 只注入 <c>scDb</c>（Proril_Sales_Center）。2026-09-29 起 api/ 已不連 PRORIL_WEB，
+/// <c>ProrilWebDbContext</c> 已刪除。帳號與權限（M_User / RBAC_Role / RBAC_RoleUser /
 /// RBAC_RolePermission）都在 <c>scDb</c>，權限解析集中在 <see cref="PermissionService"/>。
 /// </summary>
 [ApiController]
 [Route("[controller]/[action]")]
 public abstract class BaseApiController : ControllerBase
 {
-    // protected readonly ProrilWebDbContext db;
     protected readonly SalesCenterDbContext scDb;
     protected readonly JwtHelper jwtHelper;
     private readonly ILogger _logger;
 
-    protected BaseApiController(
-        ProrilWebDbContext db, SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
-        // SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
+    protected BaseApiController(SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
     {
-        // this.db = db;
         this.scDb = scDb;
         this.jwtHelper = jwtHelper;
         _logger = logger;

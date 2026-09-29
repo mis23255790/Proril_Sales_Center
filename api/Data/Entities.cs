@@ -1,7 +1,9 @@
 namespace Proril.SalesIssue.Api.Data;
 
 /*
- * PRORIL_WEB 用到的共用表。
+ * 原本 ProrilWebDbContext 用到的共用表。2026-09-29 起 api/ 已不連 PRORIL_WEB、
+ * ProrilWebDbContext 已刪除，下面的 POCO 已沒有 DbContext 對映，
+ * 以下「還在打 PRORIL_WEB」的說明是刪除前的狀態，保留作為背景。
  *
  * 業務議題本體（D_WorkProcess* / M_WorkProcessPhrase / M_WorkProcessType）、
  * CRM_Customer、H_FileLink 已切到 Proril_Sales_Center，對映搬到

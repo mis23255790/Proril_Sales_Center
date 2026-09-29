@@ -30,11 +30,10 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 public partial class MixSalesShipApiController : BaseApiController
 {
     public MixSalesShipApiController(
-        ProrilWebDbContext db,
         Data.SalesCenter.SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<MixSalesShipApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<MixSalesShipApiController> logger) : base(scDb, jwtHelper, logger)
     {
         _paths = paths;
     }
