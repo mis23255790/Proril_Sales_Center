@@ -339,9 +339,17 @@ public partial class OrderInfoVerifyApiController : BaseApiController
         var copPoDetailCheckList = copPoDetailCheckRaw
             .Select(c => new CopPoDetailCheckExRule(c, checkRules)).ToList();
 
-        var vpoDetailList = scDb.VPoDetailLists.AsNoTracking()
-            .Where(d => copSources.Contains(d.CopSource) && orderNos.Contains(d.單號.Trim()))
-            .ToList();
+        // 單號在 EF 對映是 nchar(11)（IsFixedLength），參數化的 Contains 會翻成
+        // OPENJSON(...) WITH ([value] nchar(11))，對 V_PODetailList（跨 linked server 的 View）
+        // 只要清單超過 1 個值就一筆都比對不到（1 個值剛好正常，所以只有一張單的「未確認」頁看不出來），
+        // 已確認頁與匯出因此整頁空白。改用 EF.Constant 讓它翻成 IN (N'...', ...) 常值；
+        // 不分頁（匯出）時候選單號接近全表、常值清單會太長，直接不加單號條件，最後的 join 一樣會對齊。
+        var vpoDetailQuery = scDb.VPoDetailLists.AsNoTracking().Where(d => copSources.Contains(d.CopSource));
+        if (pageSize > 0)
+        {
+            vpoDetailQuery = vpoDetailQuery.Where(d => EF.Constant(orderNos).Contains(d.單號.Trim()));
+        }
+        var vpoDetailList = vpoDetailQuery.ToList();
 
         var productNos = vpoDetailList.Select(d => d.品號).Where(p => p != null).Distinct().ToList();
         var productEnglishAlls = productNos.Count == 0

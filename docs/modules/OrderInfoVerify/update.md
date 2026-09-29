@@ -1,4 +1,23 @@
 <details>
+  <summary>版號2026.09.29</summary>
+
+##### fix: 已確認訂單頁（與匯出）整頁空白
+      症狀：頁籤筆數正常（已確認 5006），列表卻顯示「沒有符合條件的訂單」；未確認頁正常。
+
+      原因：GetOrderInfoList 撈 V_PODetailList 用 orderNos.Contains(d.單號.Trim())，
+      單號在 EF 對映是 nchar(11)（IsFixedLength），EF 8 把清單參數翻成
+      OPENJSON(...) WITH ([value] nchar(11))。這個寫法對 V_PODetailList（跨 linked server
+      的 View）只要清單超過 1 個值就一筆都比對不到（已在 DB 實測：1 個值 2 筆、2 個值 0 筆；
+      改 nvarchar 或常值 IN 都正常）。品號明細是 inner join，撈不到就整張訂單消失。
+      未確認頁剛好只有 1 張單，所以看不出來；匯出已確認同樣是空的。
+
+      修正：分頁時改用 EF.Constant(orderNos)（翻成 IN (N'...') 常值，最多一頁的單號數）；
+      不分頁（匯出）不加單號條件，只用 COP_Source 過濾，最後的 join 一樣會對齊。
+      實測已確認第 1 頁 20 張單／64 筆明細、匯出全部 5003 張單正常。
+
+</details>
+
+<details>
   <summary>版號2026.09.18.1200</summary>
 
 ##### feat: 訂單資料檢核列表改後端分頁
