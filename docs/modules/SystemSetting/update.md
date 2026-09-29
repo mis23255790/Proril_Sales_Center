@@ -1,6 +1,11 @@
 <details>
   <summary>版號2026.09.29</summary>
 
+##### feat(system): 人員管理列表加「角色」欄
+      MainApi/GetAllUserList 每筆多回 roleIds（有效的 RBAC_RoleUser，依角色 Sort 排），
+      前端用 GetRoleList 對照角色名稱顯示成標籤。原「狀態」欄更名「帳號狀態」。
+      人員管理、權限管理的編輯區改成右側抽屜（USlideover）。
+
 ##### feat(auth): 登入改回業務中心自己走 PRORIL 通行證 OAuth，Manufacturing Center handoff 降為過渡
       原本正式流程是 Manufacturing Center 登入後帶 HMAC 票證導過來（/auth/handoff），
       業務中心自己的 OAuth 只當本機開發／備用。改成業務中心自己對通行證走

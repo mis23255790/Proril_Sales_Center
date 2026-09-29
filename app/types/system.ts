@@ -91,6 +91,8 @@ export interface UserListItem {
   /** 有沒有掛 superAdmin 角色。 */
   isAdmin: boolean
   isLocked: boolean
+  /** 掛的角色（不含 everyone，依角色 Sort 排）。 */
+  roleIds: number[]
 }
 
 /**

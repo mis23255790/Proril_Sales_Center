@@ -63,7 +63,8 @@ watch([keyword, statusFilter], () => {
 const columns: TableColumn<UserListItem>[] = [
   { accessorKey: 'account', header: '工號' },
   { accessorKey: 'userName', header: '姓名' },
-  { id: 'status', header: '狀態' }
+  { id: 'roles', header: '角色' },
+  { id: 'status', header: '帳號狀態' }
 ]
 
 // ------------------------------------------------------------------ 編輯
@@ -348,6 +349,20 @@ const drawerOpen = computed({
             <span :class="{ 'font-semibold text-highlighted': isCurrentRow(row.original) }">
               {{ row.original.userName || '(未命名)' }}
             </span>
+          </template>
+          <template #roles-cell="{ row }">
+            <div v-if="row.original.roleIds?.length" class="flex flex-wrap gap-1">
+              <UBadge
+                v-for="id in row.original.roleIds"
+                :key="id"
+                color="neutral"
+                variant="outline"
+                size="sm"
+              >
+                {{ roleNameOf(id) }}
+              </UBadge>
+            </div>
+            <span v-else class="text-muted">—</span>
           </template>
           <template #status-cell="{ row }">
             <div class="flex flex-wrap gap-1">

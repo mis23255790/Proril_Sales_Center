@@ -201,14 +201,19 @@ public partial class MainApiController
     [HttpGet]
     public CustomApiViewModel GetAllUserList()
     {
-        // IsAdmin 改由 superAdmin 角色推導，欄位名不變
-        var superAdmins = (from ur in scDb.RBACRoleUsers
-                           join r in scDb.RBACRoles on ur.RoleId equals r.Id
-                           where r.IsSuperAdmin && r.AStatus == ActiveStatus.Active
-                                 && ur.AStatus == ActiveStatus.Active
-                           select ur.Account)
-            .ToList()
-            .Select(a => a.Trim())
+        // 每個帳號掛的角色（列表「角色」欄用，依角色 Sort 排）；IsAdmin 改由 superAdmin 角色推導，欄位名不變
+        var roleLinks = (from ur in scDb.RBACRoleUsers
+                         join r in scDb.RBACRoles on ur.RoleId equals r.Id
+                         where r.AStatus == ActiveStatus.Active && ur.AStatus == ActiveStatus.Active
+                         orderby r.Sort, r.Id
+                         select new { ur.Account, r.Id, r.IsSuperAdmin })
+            .ToList();
+        var rolesByAccount = roleLinks
+            .GroupBy(x => x.Account.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Id).Distinct().ToList(), StringComparer.OrdinalIgnoreCase);
+        var superAdmins = roleLinks
+            .Where(x => x.IsSuperAdmin)
+            .Select(x => x.Account.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return new CustomApiViewModel
@@ -224,7 +229,8 @@ public partial class MainApiController
                     u.UserName,
                     u.IsEnable,
                     IsAdmin = superAdmins.Contains((u.Account ?? "").Trim()),
-                    u.IsLocked
+                    u.IsLocked,
+                    RoleIds = rolesByAccount.TryGetValue((u.Account ?? "").Trim(), out var ids) ? ids : []
                 })
                 .ToList()
         };
