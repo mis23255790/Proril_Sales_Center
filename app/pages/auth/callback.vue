@@ -2,7 +2,7 @@
 /**
  * PRORIL 通行證登入完成後導回的頁面（NUXT_PUBLIC_OAUTH_REDIRECT_URI 要指到這裡）。
  *
- * 流程：比對 state -> 拿 code 打 /api/auth/sso（server 端換 token + 換內部 JWT）
+ * 流程：比對 state -> 拿 code + nonce 打 /api/auth/sso（server 端換 token、驗 id_token、換內部 JWT）
  * -> 存 proril-token -> 導回業務中心。
  *
  * 現況：Manufacturing Center 已定案為唯一入口，正式流程走 /auth/handoff，
@@ -33,7 +33,8 @@ onMounted(async () => {
     return
   }
 
-  if (!consumeSsoState(state)) {
+  const nonce = consumeSsoState(state)
+  if (!nonce) {
     status.value = 'error'
     errorMessage.value = 'state 比對失敗，可能是逾時或被重放的連結，請重新登入'
     return
@@ -42,7 +43,7 @@ onMounted(async () => {
   try {
     const result = await $fetch<{ status: boolean, token?: string | null, message?: string | null }>('/api/auth/sso', {
       method: 'POST',
-      body: { code }
+      body: { code, nonce }
     })
 
     if (!result.status || !result.token) {

@@ -34,10 +34,15 @@ export const buildAuthorizeUrl = () => {
   return `${config.public.oauthAuthorizeUrl}?${params.toString()}`
 }
 
-/** 比對 callback 帶回的 state 是否跟發送時一致，避免 CSRF；比對完就清掉，一次性使用。 */
-export const consumeSsoState = (returnedState: string): boolean => {
+/**
+ * 比對 callback 帶回的 state 是否跟發送時一致，避免 CSRF；比對完就清掉，一次性使用。
+ * 比對成功回傳發送時的 nonce（要送給 server 端比對 id_token 的 nonce claim），失敗回 null。
+ */
+export const consumeSsoState = (returnedState: string): string | null => {
   const savedState = sessionStorage.getItem(STATE_KEY)
+  const savedNonce = sessionStorage.getItem(NONCE_KEY)
   sessionStorage.removeItem(STATE_KEY)
   sessionStorage.removeItem(NONCE_KEY)
-  return !!savedState && savedState === returnedState
+  if (!savedState || savedState !== returnedState || !savedNonce) return null
+  return savedNonce
 }
