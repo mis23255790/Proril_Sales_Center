@@ -12,7 +12,8 @@ const collapsed = ref(false)
 
 const logout = () => {
   clearAuthToken()
-  navigateTo('/login')
+  // 帶 logged_out，登入頁才不會自動導去通行證又立刻登回來（見 pages/login.vue）
+  navigateTo('/login?logged_out=1')
 }
 
 const userMenuItems = computed<DropdownMenuItem[][]>(() => [

@@ -1,5 +1,6 @@
 /**
- * 全站登入守門：沒有有效（存在且未過期）token 一律導去 /login。
+ * 全站登入守門：沒有有效（存在且未過期）token 一律導去 /login，
+ * 並帶上 `redirect`（原本要去的頁面），登入完成後導回去（見 utils/ssoAuth.ts）。
  *
  * token 存在 cookie（見 useApi.ts 的 getAuthToken），server 端跟 client 端都擋得到，
  * 未登入者不會先拿到受保護頁面的完整 SSR HTML 再等 client 導頁。
@@ -16,6 +17,6 @@ export default defineNuxtRouteMiddleware((to) => {
   const token = getAuthToken() || config.public.devToken
 
   if (!token || isTokenExpired(token)) {
-    return navigateTo('/login')
+    return navigateTo({ path: '/login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } })
   }
 })

@@ -1,4 +1,33 @@
 <details>
+  <summary>版號2026.09.29</summary>
+
+##### feat(auth): 登入改回業務中心自己走 PRORIL 通行證 OAuth，Manufacturing Center handoff 降為過渡
+      原本正式流程是 Manufacturing Center 登入後帶 HMAC 票證導過來（/auth/handoff），
+      業務中心自己的 OAuth 只當本機開發／備用。改成業務中心自己對通行證走
+      Authorization Code，SSO 體驗靠通行證的 session（登入過任一系統就不用再輸入帳密）。
+
+      id_token 驗證（server/utils/verifyIdToken.ts，新增 jose 套件）
+        驗 RS256 簽章（JWKS）、iss、aud = client_id、exp / iat、nonce，通過才採信帳號。
+        nonce 由 callback 從 sessionStorage 取出跟 code 一起送到 /api/auth/sso。
+        新增設定 NUXT_OAUTH_ISSUER / NUXT_OAUTH_JWKS_URL（預設值取自通行證 discovery）。
+
+      流程
+        auth.global.ts：未登入導 /login?redirect=<原路徑>。
+        login.vue：有 NUXT_PUBLIC_OAUTH_CLIENT_ID 就自動導去通行證；沒有則退回
+        「從製造中心進入」（NUXT_PUBLIC_MFG_CENTER_URL）。
+        callback.vue：登入完成導回 redirect（只接受站內相對路徑，擋開放轉址）。
+        登出導 /login?logged_out=1，不自動導去通行證——通行證沒有 end_session 端點，
+        登出只清得掉本站 token，自動導過去會立刻被登回來。
+        handoff 照常可用（相容 Manufacturing Center 現況），失敗時優先提供通行證登入。
+
+      待辦
+        Manufacturing Center 改成只放連結、不帶票證後，移除 handoff.vue / handoff.post.ts /
+        verifyHandoffTicket.ts / NUXT_MFG_HANDOFF_SECRET。
+        帳號取自哪個 claim（目前依序 sub / account / preferred_username / email）
+        要用真實 id_token 確認是否等於 M_User.Account。
+</details>
+
+<details>
   <summary>版號2026.09.24.1018</summary>
 
 ##### feat!: 權限樹改成單一表自我參照，側欄改由 DB 驅動

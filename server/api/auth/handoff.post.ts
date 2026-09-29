@@ -1,5 +1,5 @@
 /**
- * Manufacturing Center 轉來的身分交接（handoff）：
+ * Manufacturing Center 轉來的身分交接（handoff，**過渡用**，正式流程是 sso.post.ts）：
  * 驗證票證 -> 呼叫後端 MainApi/LoginSso 換成 Sales Center 自己的內部 JWT。
  *
  * 跟 /api/auth/sso（PRORIL 通行證 OAuth，見 sso.post.ts）共用同一支 LoginSso，

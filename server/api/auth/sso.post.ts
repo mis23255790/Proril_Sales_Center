@@ -7,8 +7,7 @@
  *
  * id_token 一律驗簽章、iss、aud、exp、nonce（見 server/utils/verifyIdToken.ts）才採信裡面的帳號。
  *
- * 現況：Manufacturing Center 已定案為唯一入口，正式流程走 handoff.post.ts，
- * 這支只留給本機開發／備用，見 app/pages/login.vue 的說明。
+ * 這是正式登入流程；handoff.post.ts（Manufacturing Center 票證）只是過渡。
  */
 interface TokenResponse {
   id_token?: string

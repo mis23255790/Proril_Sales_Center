@@ -3,10 +3,9 @@
  * PRORIL 通行證登入完成後導回的頁面（NUXT_PUBLIC_OAUTH_REDIRECT_URI 要指到這裡）。
  *
  * 流程：比對 state -> 拿 code + nonce 打 /api/auth/sso（server 端換 token、驗 id_token、換內部 JWT）
- * -> 存 proril-token -> 導回業務中心。
+ * -> 存 proril-token -> 導回登入前要去的頁面（沒有就回業務中心首頁）。
  *
- * 現況：Manufacturing Center 已定案為唯一入口，正式流程走 /auth/handoff，
- * 這條路只留給本機開發／備用，見 pages/login.vue 的說明。
+ * 這是正式登入流程（見 utils/ssoAuth.ts），Manufacturing Center 的 /auth/handoff 只是過渡。
  */
 definePageMeta({
   layout: false
@@ -33,8 +32,8 @@ onMounted(async () => {
     return
   }
 
-  const nonce = consumeSsoState(state)
-  if (!nonce) {
+  const sso = consumeSsoState(state)
+  if (!sso) {
     status.value = 'error'
     errorMessage.value = 'state 比對失敗，可能是逾時或被重放的連結，請重新登入'
     return
@@ -43,7 +42,7 @@ onMounted(async () => {
   try {
     const result = await $fetch<{ status: boolean, token?: string | null, message?: string | null }>('/api/auth/sso', {
       method: 'POST',
-      body: { code, nonce }
+      body: { code, nonce: sso.nonce }
     })
 
     if (!result.status || !result.token) {
@@ -53,7 +52,7 @@ onMounted(async () => {
     }
 
     setAuthToken(result.token)
-    await navigateTo('/sales-center')
+    await navigateTo(sso.returnTo)
   } catch (err: any) {
     console.log('SSO callback failed -->', err)
     status.value = 'error'
