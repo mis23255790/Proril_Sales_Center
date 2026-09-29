@@ -188,13 +188,14 @@ public partial class MainApiController : BaseApiController
     ///
     /// 沿用 1.0 MainApiController_SystemSetting.GetMSystemWNo：ImagePath 在正式區/測試區
     /// 各自的 DB 存了不同圖檔路徑，靠資料本身區分環境，這支不判斷任何環境變數。
+    /// 只回 aStatus = 'Y' 的列（2.0 新增，1.0 沒有這欄）。
     /// </summary>
     [HttpGet]
     public CustomApiViewModel GetMSystemWNo(int systemNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
 
-        var msystemList = scDb.MSystems.Where(o => o.SystemNo == systemNo).ToList();
+        var msystemList = scDb.MSystems.Where(o => o.SystemNo == systemNo && o.AStatus == "Y").ToList();
         ca.Body = msystemList;
         ca.IsSuccess = true;
         return ca;

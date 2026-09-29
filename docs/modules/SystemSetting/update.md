@@ -25,6 +25,13 @@
         verifyHandoffTicket.ts / NUXT_MFG_HANDOFF_SECRET。
         帳號取自哪個 claim（目前依序 sub / account / preferred_username / email）
         要用真實 id_token 確認是否等於 M_User.Account。
+
+##### feat(system): M_System 加 aStatus
+      新庫 M_System 加 aStatus VARCHAR(1) NOT NULL DEFAULT 'Y'
+      （database/MSystemAStatusMigration.sql，可重複執行；PRORIL_WEB 不加，Tables/M_System.sql 不動）。
+      MainApi/GetMSystemWNo 只回 aStatus = 'Y'；目前唯一讀 M_System 的地方就是這支（topbar 環境圖示）。
+      PermissionMasterSeed.sql 的建表同步補欄位；它重灌 M_System 後 aStatus 一律回到 'Y'。
+      **api/ 部署前要先對 Proril_Sales_Center 跑腳本**，否則 EF 查不到欄位，topbar 圖示會載入失敗。
 </details>
 
 <details>

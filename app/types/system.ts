@@ -9,6 +9,8 @@ export interface MSystem {
   imagePath?: string | null
   href: string
   redirectHref?: string | null
+  /** 'Y' 有效、'N' 失效；GetMSystemWNo 只回 'Y'。 */
+  aStatus: string
 }
 
 // ---------------------------------------------------------------- 權限控管

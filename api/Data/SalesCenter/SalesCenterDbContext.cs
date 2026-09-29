@@ -1229,6 +1229,11 @@ public partial class SalesCenterDbContext : DbContext
             entity.ToTable("M_System");
 
             entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.AStatus)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasDefaultValue("Y")
+                .HasColumnName("aStatus");
             entity.Property(e => e.Href)
                 .HasMaxLength(50)
                 .HasDefaultValue("");
