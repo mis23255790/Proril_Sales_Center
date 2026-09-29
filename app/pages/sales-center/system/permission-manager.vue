@@ -2,7 +2,7 @@
 /**
  * 權限管理（角色制，RBAC）。取代 1.0 系統設定 / 權限管理的「逐人勾權限」。
  *
- * 左邊是角色清單，點一列進編輯：
+ * 角色清單點一列，從右邊滑出編輯抽屜：
  *   - 基本資料：代碼、名稱、說明
  *   - 權限：樹上勾這個角色可用的功能與細項（存到 RBAC_RolePermission）
  *   - 成員：哪些帳號掛這個角色（存到 RBAC_RoleUser）
@@ -255,6 +255,14 @@ const remove = async () => {
     saving.value = false
   }
 }
+
+/** 編輯抽屜：editingId 不是 null 就開著；按 X／點遮罩／Esc 關掉等於取消選取。 */
+const drawerOpen = computed({
+  get: () => editingId.value !== null,
+  set: (value: boolean) => {
+    if (!value) editingId.value = null
+  }
+})
 </script>
 
 <template>
@@ -283,83 +291,72 @@ const remove = async () => {
       class="mb-4"
     />
 
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-      <!-- 角色清單 -->
-      <section>
-        <div class="mb-2 flex items-center justify-between">
-          <h2 class="font-semibold text-highlighted">
-            角色
-          </h2>
-          <UButton size="sm" icon="i-lucide-plus" @click="newRole">
-            新增角色
-          </UButton>
-        </div>
+    <!-- 角色清單 -->
+    <section
+      class="transition-opacity duration-150"
+      :class="{ 'pointer-events-none opacity-60': roleLoading && editingId === null }"
+      :aria-busy="roleLoading"
+    >
+      <div class="mb-2 flex items-center justify-between">
+        <h2 class="font-semibold text-highlighted">
+          角色
+        </h2>
+        <UButton size="sm" icon="i-lucide-plus" @click="newRole">
+          新增角色
+        </UButton>
+      </div>
 
-        <UTable
-          :data="roles"
-          :columns="columns"
-          :ui="{ tr: clickableRowTr }"
-          class="rounded-lg border border-default"
-          @select="(_e: Event, row: any) => openRole(row.original.id)"
-        >
-          <template #roleName-cell="{ row }">
-            <div class="flex flex-wrap items-center gap-2" :class="{ 'font-semibold': row.original.id === editingId }">
-              <span>{{ row.original.roleName }}</span>
-              <UBadge v-if="row.original.isSuperAdmin" color="error" variant="subtle" size="sm">
-                全放行
-              </UBadge>
-              <UBadge v-else-if="row.original.isDefault" color="info" variant="subtle" size="sm">
-                所有人
-              </UBadge>
-            </div>
-            <div class="font-mono text-xs text-muted">
-              {{ row.original.roleCode }}
-            </div>
-          </template>
-          <template #permissionCount-cell="{ row }">
-            {{ row.original.isSuperAdmin ? '全部' : row.original.permissionCount }}
-          </template>
-          <template #memberCount-cell="{ row }">
-            {{ row.original.isDefault ? '全部' : row.original.memberCount }}
-          </template>
-        </UTable>
-      </section>
-
-      <!-- 編輯區 -->
-      <section
-        class="transition-opacity duration-150"
-        :class="{ 'pointer-events-none opacity-60': roleLoading }"
-        :aria-busy="roleLoading"
+      <UTable
+        :data="roles"
+        :columns="columns"
+        :ui="{ tr: clickableRowTr }"
+        class="rounded-lg border border-default"
+        @select="(_e: Event, row: any) => openRole(row.original.id)"
       >
-        <div v-if="editingId === null" class="rounded-lg border border-dashed border-default py-16 text-center text-sm text-muted">
-          從左邊選一個角色編輯，或按「新增角色」。
-        </div>
-
-        <div v-else class="space-y-5">
-          <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-semibold text-highlighted">
-              {{ editingId === 0 ? '新增角色' : form.roleName }}
-            </h2>
-            <UBadge v-if="form.isSystem" color="neutral" variant="subtle">
-              系統角色
+        <template #roleName-cell="{ row }">
+          <div class="flex flex-wrap items-center gap-2" :class="{ 'font-semibold': row.original.id === editingId }">
+            <span>{{ row.original.roleName }}</span>
+            <UBadge v-if="row.original.isSuperAdmin" color="error" variant="subtle" size="sm">
+              全放行
             </UBadge>
-            <div class="ml-auto flex gap-2">
-              <UButton
-                v-if="editingId && !form.isSystem"
-                icon="i-lucide-trash-2"
-                color="error"
-                variant="outline"
-                :loading="saving"
-                @click="remove"
-              >
-                刪除
-              </UButton>
-              <UButton icon="i-lucide-save" :loading="saving" @click="save">
-                儲存
-              </UButton>
-            </div>
+            <UBadge v-else-if="row.original.isDefault" color="info" variant="subtle" size="sm">
+              所有人
+            </UBadge>
           </div>
+          <div class="font-mono text-xs text-muted">
+            {{ row.original.roleCode }}
+          </div>
+        </template>
+        <template #permissionCount-cell="{ row }">
+          {{ row.original.isSuperAdmin ? '全部' : row.original.permissionCount }}
+        </template>
+        <template #memberCount-cell="{ row }">
+          {{ row.original.isDefault ? '全部' : row.original.memberCount }}
+        </template>
+      </UTable>
+    </section>
 
+    <!-- 編輯抽屜 -->
+    <USlideover
+      v-model:open="drawerOpen"
+      :dismissible="!saving"
+      :ui="{ content: 'sm:max-w-2xl' }"
+    >
+      <template #title>
+        <span class="flex flex-wrap items-center gap-2">
+          {{ editingId === 0 ? '新增角色' : form.roleName }}
+          <UBadge v-if="form.isSystem" color="neutral" variant="subtle">
+            系統角色
+          </UBadge>
+        </span>
+      </template>
+
+      <template #body>
+        <div
+          class="space-y-5 transition-opacity duration-150"
+          :class="{ 'pointer-events-none opacity-60': roleLoading }"
+          :aria-busy="roleLoading"
+        >
           <div class="grid gap-4 sm:grid-cols-2">
             <UFormField label="角色代碼" hint="英文開頭，英數字、底線、連字號" required>
               <UInput
@@ -456,7 +453,29 @@ const remove = async () => {
             </template>
           </div>
         </div>
-      </section>
-    </div>
+      </template>
+
+      <template #footer>
+        <div class="flex w-full flex-wrap gap-2">
+          <UButton icon="i-lucide-save" :loading="saving" @click="save">
+            儲存
+          </UButton>
+          <UButton color="neutral" variant="outline" :disabled="saving" @click="drawerOpen = false">
+            取消
+          </UButton>
+          <UButton
+            v-if="editingId && !form.isSystem"
+            icon="i-lucide-trash-2"
+            color="error"
+            variant="outline"
+            class="ml-auto"
+            :loading="saving"
+            @click="remove"
+          >
+            刪除
+          </UButton>
+        </div>
+      </template>
+    </USlideover>
   </div>
 </template>
