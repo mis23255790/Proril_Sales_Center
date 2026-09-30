@@ -679,7 +679,10 @@ migration 會先把 4 張表複製成 `*_bak_FunctionNo`。腳本**不可重入*
   否則非 admin 帳號會變成什麼權限都沒有。
 
 執行順序：先跑這兩支腳本，再部署 `api/` 與前端——新版 `api/` 的權限檢查全部讀 `PermissionKey`。
-## 角色制 RBAC（2026-09-23，**測試區已執行**，正式區還沒建庫）
+## 角色制 RBAC（2026-09-23，**測試區已執行**；正式區 2026-09-30 已執行）
+
+> 51002 的執行過程（含 `M_Permission` 補換號、節點狀態對齊 Dev、欄位對齊、清密碼）
+> 見 `database/prod-migration-2026-09-30/README.md`。
 
 權限模型從「逐人勾權限（`M_Permission`）+ 部門範本（`M_PermissionGroup`）」改成角色制：
 角色綁一組 PermissionKey、帳號掛多個角色，有效權限 = 所屬角色 ∪ `everyone`，
