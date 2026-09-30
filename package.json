@@ -1,10 +1,6 @@
 {
   "name": "proril-sales-center",
-<<<<<<< HEAD
-  "version": "2026.9.24.1140",
-=======
   "version": "2026.9.29.1615",
->>>>>>> dev
   "private": true,
   "type": "module",
   "scripts": {
