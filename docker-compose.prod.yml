@@ -49,7 +49,7 @@ services:
       - api
     restart: unless-stopped
     networks:
-      - dev-mssql-2022-network
+      - prod-mssql-2022-network
       - nginx-proxy
 
   api:
@@ -68,11 +68,11 @@ services:
       - proril-sales-center-prod-logs:/app/Logs
     restart: unless-stopped
     networks:
-      - dev-mssql-2022-network
+      - prod-mssql-2022-network
       - nginx-proxy
 
 networks:
-  dev-mssql-2022-network:
+  prod-mssql-2022-network:
     external: true
   nginx-proxy:
     external: true
