@@ -3,7 +3,7 @@ import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
 const { public: { appVersion } } = useRuntimeConfig()
-const { modules, modulePath, itemPath, appBaseLabel, loadUserFunctions, isLoadingUserFunctions, hasNoAccessibleModule } = useAppNavigation()
+const { sidebarModules, modulePath, itemPath, appBaseLabel, loadUserFunctions, isLoadingUserFunctions, hasNoAccessibleModule } = useAppNavigation()
 const { account } = useAuthAccount()
 const { getCurrentUser } = useCurrentUser()
 const { getSystemByNo } = useSystemInfo()
@@ -65,19 +65,27 @@ onMounted(async () => {
 // （split('/') 之後 [0] 是空字串、[1] 是 sales-center）
 const activeModuleSlug = computed(() => route.path.split('/')[2] || '')
 
+/**
+ * 側欄列出全部功能，沒權限的頁面 disable（不隱藏），讓使用者知道有這個功能、只是還沒開通。
+ * 只 disable 頁面這一層：NavigationMenu 在 vertical 模式會把 disabled 的節點連同展開一起鎖住，
+ * 模組／分組若 disable 就看不到底下的頁面了。模組底下一個能進的頁面都沒有時拿掉連結，
+ * 點模組名稱只展開、不進模組首頁（那頁依權限過濾後會是空的）。
+ */
 const items = computed<NavigationMenuItem[][]>(() => [
   [
     { label: appBaseLabel, type: 'label' as const },
-    ...modules.value.map(mod => ({
+    ...sidebarModules.value.map(mod => ({
       label: mod.label,
       icon: mod.icon,
       // 點模組名稱進模組首頁（跟首頁卡片同一個目的地），展開則看得到底下的功能
-      to: modulePath(mod),
+      to: mod.accessible ? modulePath(mod) : undefined,
       defaultOpen: route.path.startsWith(modulePath(mod)),
       children: mod.groups.map(group => ({
         label: group.groupName,
         defaultOpen: group.items.some(item => itemPath(item) === route.path),
-        children: group.items.map(item => ({ label: item.label, to: itemPath(item) }))
+        children: group.items.map(item => item.accessible
+          ? { label: item.label, to: itemPath(item) }
+          : { label: item.label, disabled: true, trailingIcon: 'i-lucide-lock' })
       }))
     }))
   ]
@@ -108,7 +116,7 @@ const items = computed<NavigationMenuItem[][]>(() => [
           :items="items"
           orientation="vertical"
           class="-mx-1"
-          :ui="{ link: 'cursor-pointer', childLink: 'cursor-pointer' }"
+          :ui="{ link: 'cursor-pointer aria-disabled:cursor-not-allowed aria-disabled:opacity-50', childLink: 'cursor-pointer' }"
         />
 
         <!-- 權限清單回來之前先放佔位，不先列出全部功能（否則沒權限的項目會閃一下再消失） -->

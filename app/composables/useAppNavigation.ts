@@ -8,6 +8,8 @@ export type AppNavItem = {
   description?: string
   /** RBAC_Permission.PermissionKey（頁面節點），側欄靠它對目前登入者的權限過濾。 */
   permissionKey: string
+  /** 只有 sidebarModules 會填：目前登入者進不進得去，false 時側欄 disable 這一項。 */
+  accessible?: boolean
 }
 
 export type AppNavModule = {
@@ -185,6 +187,27 @@ export const useAppNavigation = () => {
   })
 
   /**
+   * 側欄用：列出**全部**頁面（不依權限過濾），沒權限的標 accessible = false 由側欄 disable，
+   * 讓使用者知道有哪些功能、只是還沒開通。載入中回空陣列（同 modules，避免閃動）。
+   * aStatus = 'N' 的節點後端本來就不回，那是「功能停用」不是「沒權限」，照樣不出現。
+   * 沒有任何頁面的分組與模組照樣拿掉（那是資料還沒建好，不是權限問題）。
+   */
+  const sidebarModules = computed<(AppNavModule & { accessible: boolean })[]>(() => {
+    if (isLoadingUserFunctions.value) return []
+    return allModules.value
+      .map((mod) => {
+        const groups = mod.groups
+          .map(group => ({
+            ...group,
+            items: group.items.map(item => ({ ...item, accessible: canAccess(item.permissionKey) }))
+          }))
+          .filter(group => group.items.length > 0)
+        return { ...mod, groups, accessible: groups.some(g => g.items.some(i => i.accessible)) }
+      })
+      .filter(mod => mod.groups.length > 0)
+  })
+
+  /**
    * 已經載完、而且這個人連一個功能都沒有（或功能表本身載入失敗）。
    * 用來顯示「沒有可用功能」的提示，跟「還沒載完」要分得開。
    */
@@ -248,6 +271,7 @@ export const useAppNavigation = () => {
     appBaseLabel: APP_BASE_LABEL,
     modules,
     allModules,
+    sidebarModules,
     loadUserFunctions,
     isLoadingUserFunctions,
     hasNoAccessibleModule,
