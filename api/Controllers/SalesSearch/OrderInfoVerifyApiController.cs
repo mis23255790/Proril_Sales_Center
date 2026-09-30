@@ -257,19 +257,19 @@ public partial class OrderInfoVerifyApiController : BaseApiController
             vpoQuery = vpoQuery.Where(v => v.客戶代號 == trimmed);
         }
 
-        var vpoList = vpoQuery.ToList();
-
         // 訂單日期是 yyyyMMdd 字串，用字串比較（照抄 1.0）。
         if (!string.IsNullOrEmpty(startDate) && DateTime.TryParse(startDate, out var start))
         {
             var startCompact = start.ToString("yyyyMMdd");
-            vpoList = vpoList.Where(v => string.Compare(v.訂單日期, startCompact, StringComparison.Ordinal) >= 0).ToList();
+            vpoQuery = vpoQuery.Where(v => string.Compare(v.訂單日期, startCompact, StringComparison.Ordinal) >= 0);
         }
         if (!string.IsNullOrEmpty(endDate) && DateTime.TryParse(endDate, out var end))
         {
             var endCompact = end.AddDays(1).ToString("yyyyMMdd");
-            vpoList = vpoList.Where(v => string.Compare(v.訂單日期, endCompact, StringComparison.Ordinal) < 0).ToList();
+            vpoQuery = vpoQuery.Where(v => string.Compare(v.訂單日期, endCompact, StringComparison.Ordinal) < 0);
         }
+
+        var vpoList = vpoQuery.ToList();
 
         return vpoList;
     }
