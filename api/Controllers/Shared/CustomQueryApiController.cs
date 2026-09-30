@@ -23,11 +23,9 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 public partial class CustomQueryApiController : BaseApiController
 {
     public CustomQueryApiController(
-        // Proril.SalesIssue.Api.Data.ProrilWebDbContext db,
-        ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
-        ILogger<CustomQueryApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<CustomQueryApiController> logger) : base(scDb, jwtHelper, logger)
     {
     }
 

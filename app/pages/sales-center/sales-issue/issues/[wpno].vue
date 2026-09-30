@@ -86,7 +86,12 @@ const loadIssue = async () => {
 
   loading.value = true
   try {
-    const res = await api.getIssue(wpno.value)
+    // 三支互不相依，並行打；進度（GetSOPDetail）只需要 wpno，不必等表頭。
+    const [res, linkRes] = await Promise.all([
+      api.getIssue(wpno.value),
+      api.getIssueCustomers(wpno.value),
+      loadDetails()
+    ])
     if (!res?.isSuccess || !res.body) {
       toast.add({ title: '找不到這筆議題', description: res?.message ?? '', color: 'error' })
       return
@@ -104,14 +109,11 @@ const loadIssue = async () => {
 
     // 單選，但舊資料可能在 D_WorkProcessCustomer 掛了不只一個客戶；
     // GetSOPOrder 的 customerNo 對早期資料常是空的，兩邊都要看，取第一個當顯示值即可。
-    const linkRes = await api.getIssueCustomers(wpno.value)
     const linkedNos = (linkRes?.body ?? [])
       .map(c => String(c?.customerNo ?? '').trim())
       .filter(Boolean)
     const headerNo = (res.body.customerNo ?? '').trim()
     selectedCustomerNo.value = headerNo || linkedNos[0] || ''
-
-    await loadDetails()
   } catch (err) {
     console.log('issue editor loadIssue failed -->', err)
   } finally {
@@ -119,9 +121,13 @@ const loadIssue = async () => {
   }
 }
 
+/**
+ * 主檔與議題並行載入：GetCustom 會讀 V_ERPCustomer（ERP linked server），要 2–3 秒，
+ * 若先 await 它，議題表頭與進度紀錄都得跟著等。客戶下拉在主檔回來前暫時空白，
+ * 顯示名稱會先退回 GetSOPOrder 的 customerName。
+ */
 onMounted(async () => {
-  await loadMasters()
-  await loadIssue()
+  await Promise.all([loadMasters(), loadIssue()])
 })
 
 // ------------------------------------------------------------------ 衍生

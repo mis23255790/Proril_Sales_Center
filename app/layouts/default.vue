@@ -10,9 +10,10 @@ const { getSystemByNo } = useSystemInfo()
 
 const collapsed = ref(false)
 
-const logout = () => {
-  clearAuthToken()
-  navigateTo('/login')
+const logout = async () => {
+  await logoutAuth()
+  // 帶 logged_out，登入頁才不會自動導去通行證又立刻登回來（見 pages/login.vue）
+  navigateTo('/login?logged_out=1')
 }
 
 const userMenuItems = computed<DropdownMenuItem[][]>(() => [
@@ -95,7 +96,9 @@ const items = computed<NavigationMenuItem[][]>(() => [
       :collapsed-size="4"
     >
       <template #header="{ collapsed: isCollapsed }">
-        <AppLogo :collapsed="isCollapsed" />
+        <div class="flex w-full justify-center">
+          <AppLogo :collapsed="isCollapsed" />
+        </div>
       </template>
 
       <template #default="{ collapsed: isCollapsed }">

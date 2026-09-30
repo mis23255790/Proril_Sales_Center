@@ -22,4 +22,6 @@ public partial class MSystem
     public string Href { get; set; } = null!;
 
     public string? RedirectHref { get; set; }
+
+    public string AStatus { get; set; } = null!;
 }

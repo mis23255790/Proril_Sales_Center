@@ -68,6 +68,37 @@ Nuxt 頁面 ──▶ useSalesOrderUnfinishApi() ──▶ /api/proxy/... ──
 過濾參數比銷貨檢索多兩組：**訂單日期起訖**（`startDate`/`endDate`）與
 **預交日期起訖**（`deliveryStartDate`/`deliveryEndDate`，各自獨立、預設不套用）。
 
+> 2026-09-30 起外層四個頁籤不再直接打這兩支，改打 `GetUnfinOrderPage`（見下一節）；
+> 這兩支維持 1.0 的一次全撈，只剩兩個明細 modal 與 1.0 相容性在用。
+
+# 分頁（2026-09-30 起）：後端分頁 + 查詢結果快取
+
+`V_UnfinOrder` 沒有落地快取表，每次查都直接打 ERP linked server，「每次翻頁就重跑 SP」
+代價太高；但一次全撈回瀏覽器、前端 `getPaginationRowModel()` 分頁，資料量大時傳輸與渲染都重。
+所以折衷成 `GetUnfinOrderPage`（`SalesOrderUnFinishApiController.Paged.cs`）：
+
+- **`refresh=true`（按查詢／重設／Enter／進頁面）**：後端平行跑 `prc_QueryUnfinOrder` +
+  `prc_QueryUnfinOrder_1`（各自 new 一個 `SalesCenterDbContext`，DbContext 不能跨執行緒），
+  套用 orderType 過濾、銘版序號、金額遮罩後放進 `IMemoryCache`，**10 分鐘**。
+- **`refresh=false`（翻頁、切頁籤、切每頁筆數）**：有快取就直接切那一頁，不重跑 SP；
+  快取過期會自動重跑，不會出錯，只是那一次比較慢。
+- 快取 key = 全部查詢條件 + 有沒有金額權限（遮罩後的結果才進快取，不同權限不共用）。
+- `tab` = `productDetail` / `productGroup` / `soDetail` / `soGroup`，FooterFlag 篩選
+  （細項 != Y、統計 != N）與總金額原本在前端 `app/utils/salesOrderUnfinish.ts` 算，
+  已搬到後端、那支檔案刪除。`body2`（`UnfinOrderPageSummary`）帶四個頁籤筆數、
+  總金額與目前頁籤筆數，頁籤按鈕上的筆數徽章就是它。`pageSize <= 0` 代表不分頁（前端「全部」）。
+
+資料庫與 ERP 的負載跟改之前一樣（一次查詢跑兩支 SP），省的是傳輸量與瀏覽器記憶體。
+
+**前端要送「上次按查詢時」的條件**：`unfinished-orders.vue` 的 `lastQuery` 是按查詢當下的
+條件快照，翻頁、切頁籤、兩個明細 modal 都用它，不用畫面上改到一半的條件——
+送不一樣的條件會對不到快取，變成重跑 SP，也會出現「顯示的資料跟條件對不起來」。
+匯出 Excel 仍用畫面上目前的條件（跟改之前一樣）。
+
+四個頁籤合成一個 `UTable`（`manualPagination` + `rowCount`，比照訂單資料檢核），
+`#` 欄會加上前面幾頁的筆數；品號統計／訂單統計有明細 modal，整列可點。
+銷貨檢索仍是前端分頁（`prc_QuerySalesOrder(_1)` 會觸發 ERP 同步），兩邊不同。
+
 # orderType 只做後端二次過濾，SP 不支援
 
 `prc_QueryUnfinOrder(_1)` **沒有 `orderType` 參數**（跟銷貨檢索的 `prc_QuerySalesOrder_1`

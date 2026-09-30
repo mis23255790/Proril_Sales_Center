@@ -13,7 +13,7 @@ defineProps<{
   >
   <img
     v-else
-    src="/images/logo_proril_long.png"
+    src="/images/logo_proril.png"
     alt="PRORIL 業務中心"
     class="h-10 w-auto object-contain shrink-0"
   >

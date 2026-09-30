@@ -84,6 +84,8 @@ BEGIN
         [ImagePath]    VARCHAR (50)  NULL,
         [Href]         NVARCHAR (50) CONSTRAINT [DF_M_System_Href] DEFAULT ('') NOT NULL,
         [RedirectHref] NVARCHAR (50) NULL,
+        -- 新庫專用（PRORIL_WEB 沒有這欄），見 MSystemAStatusMigration.sql；重灌時一律回到 'Y'
+        [aStatus]      VARCHAR (1)   CONSTRAINT [DF_M_System_aStatus] DEFAULT ('Y') NOT NULL,
         CONSTRAINT [PK__M_System__3214EC279302271C] PRIMARY KEY CLUSTERED ([ID] ASC)
     );
     PRINT '已建立 dbo.M_System';

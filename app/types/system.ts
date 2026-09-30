@@ -9,6 +9,8 @@ export interface MSystem {
   imagePath?: string | null
   href: string
   redirectHref?: string | null
+  /** 'Y' 有效、'N' 失效；GetMSystemWNo 只回 'Y'。 */
+  aStatus: string
 }
 
 // ---------------------------------------------------------------- 權限控管
@@ -89,6 +91,8 @@ export interface UserListItem {
   /** 有沒有掛 superAdmin 角色。 */
   isAdmin: boolean
   isLocked: boolean
+  /** 掛的角色（不含 everyone，依角色 Sort 排）。 */
+  roleIds: number[]
 }
 
 /**

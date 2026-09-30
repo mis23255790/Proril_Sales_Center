@@ -14,7 +14,9 @@
   還沒搬的模組，一律先把邏輯從 1.0 搬過來 `Proril_Sales_Center`（`api/` 對應模組資料夾）
   再繼續開發，不要留在 1.0 那邊直接改。
 
-> `api/` 與 1.0 打**同一個** `PRORIL_WEB`，可以並存。
+> **`api/` 2026-09-29 起只連 `Proril_Sales_Center`**（`ConnectionStrings:SalesCenter`），
+> 不再直連 `PRORIL_WEB`（`ProrilWebDbContext` 與 `ConnectionStrings:ProrilWeb` 已刪除）。
+> 1.0 仍用 `PRORIL_WEB`，兩邊可以並存。
 > `api/appsettings` 的 `JwtSettings` / `Security:AesKey` / `Storage:ShareRoot`
 > **必須與 1.0 相同**，分別對應 token 互通、密碼驗證、讀得到既有附件。
 > 三者任一不同的症狀都不會直說原因（全 401 / 密碼永遠錯 / 附件讀不到）。
@@ -27,26 +29,31 @@
 > **main branch 的 `database/Tables/*.sql` == 正式區 schema**，未上線欄位放 feature branch。
 > 詳見 `database/README.md`。
 
-> **獨立資料庫 `Proril_Sales_Center`：業務議題本體 + `CRM_Customer` + `H_FileLink` + 權限控管已切連線，其餘仍是快照**：
+> **獨立資料庫 `Proril_Sales_Center`：`api/` 用到的表、View、SP 已全部在新庫，`api/` 只剩這一條連線**：
 > `database/PortingNotes.md` 記錄了把 18 張表（業務議題白名單 8 張 + `M_User` /
 > `M_Permission` / `H_FileLink` / `COP_CheckRule` / `COP_DepData` 5 張 + 訂單資料檢核
-> SP 寫入目標 5 張）從 `PRORIL_WEB` **一次性複製**到獨立資料庫 `Proril_Sales_Center`。
-> `api/` 同時注入 `ProrilWebDbContext`（連 `ConnectionStrings:ProrilWeb`）與
-> `SalesCenterDbContext`（連 `ConnectionStrings:SalesCenter`），兩者都在
-> `BaseApiController` 注入，子類別直接用 `db` / `scDb`：
-> `WorkProcessApiController`（含 `.Attach.cs`/`.Permission.cs`）、
-> `CustomQueryApiController.SaveCustom`、`UploadApiController.AddFileLog`、
-> `MainApiController`（含 `.User.cs`/`.SystemSetting.cs`）
-> 已改讀寫 `SalesCenterDbContext`，這幾張表**已經是真的切連線，不再只是快照**；
-> 其餘表（`COP_*`、`M_PermissionLinkType`、`M_Department`）維持只在 `PRORIL_WEB` 有效，
-> 兩邊之後不會自動同步。
+> SP 寫入目標 5 張）從 `PRORIL_WEB` **一次性複製**到獨立資料庫 `Proril_Sales_Center`，
+> 之後各模組的 View / SP 再以 `database/*ObjectsMigration.sql` 陸續搬進來。
+> `api/` 只注入 `SalesCenterDbContext`（`BaseApiController` 的 `scDb`），
+> **所有 Controller 都讀寫新庫**，兩邊之後不會自動同步。
 >
-> **下列表在 1.0 有業務議題／訂單資料檢核以外的其他功能在寫，不能只切連線就當作遷移完成**
-> （已用 grep 逐一核對 1.0 全部 Controller，非只查已知模組）：
-> - `M_Department`（部門／群組主檔）—— `Controllers/System/OrgApiController.cs`
->   （組織維護）在寫。
+> **還要讀 `PRORIL_WEB` 的資料，一律在新庫建「直連 View」**（View 內跨庫參照
+> `PRORIL_WEB.dbo.xxx`），應用層只認那個 View，**不要再把 `ProrilWebDbContext` 加回來**。
+> 目前唯一的直連 View 是 `V_NPS_SerialNo`（銘版序號，`database/NpsSerialNoObjectsMigration.sql`）：
+> - 讀取端一律透過 `api/Services/SerialNoSource.cs` 的 `ISerialNoSource`
+>   （`SalesOrderUnFinishApi`、`ManufacturingApi`、`SerialNoSyncHostedService` 共用）。
+>   `Services:ManufacturingCenter:SerialNoSource` = `View`（預設，讀 View）或 `Api`
+>   （呼叫 Proril_Manufacturing_Center，`ManufacturingSerialNoLookupService`，目前端點還是空殼），
+>   之後改用 API 取資料只要改設定、呼叫端不用動。
+> - `SerialNoSyncHostedService` 每 10 分鐘補寫新庫 `COP_SalesOrder.SerialNosJson`
+>   （View 模式一句 `UPDATE ... JOIN V_NPS_SerialNo`；Api 模式在應用層比對）。
+>   2026-09-29 以前它是用 `ProrilWebDbContext` 更新**舊庫**的 `COP_SalesOrder`，新庫一直沒被補過。
+> - **權限前提**：跨庫 View 要求執行帳號在 `PRORIL_WEB` 有 `NPS_D_Order` 的 SELECT 權限
+>   （預設沒開 cross-database ownership chaining），51002 的帳號目前沒有，見腳本開頭註解。
 >
-> 它在 `api/` 維持**唯讀**（打 `ProrilWebDbContext`），**新增功能一律不要對它加寫入邏輯**。
+> **`M_Department`（部門／群組主檔）在 1.0 還有 `Controllers/System/OrgApiController.cs`
+> （組織維護）在寫**，新庫那份是快照、不會同步。`api/` 目前沒有任何地方讀它，
+> **新增功能一律不要對它加寫入邏輯**；真的要用，比照上面建直連 View。
 > （`M_PermissionLinkType` 原本也在這一類——1.0 `FileQueryApiController` 會 `Add`——
 > 但 `FunctionNo` 改格式之後跨庫對不起來，2026-09-14 已被迫一起搬進新庫，
 > 代價是 1.0 之後新增的細項不會自動同步，見 `database/PortingNotes.md`。）
@@ -125,25 +132,20 @@
 > `CustomQueryApiController.Memo.cs`）、`H_FileLink`（只有 `UploadApiController` 內的
 > `AddFileLog`）、權限控管（`M_User` + 角色制 3 張 `RBAC_Role`／`RBAC_RolePermission`／
 > `RBAC_RoleUser`；`M_Permission`／`M_PermissionGroup` 已降為備份表）。
-> `COP_PoCheck`/`COP_PoDetailCheck`/`COP_PassCheck`/
-> `COP_AvailableAmt`/`COP_ProductCheck` 應用層完全沒有直寫，只有預存程序
-> （`prc_COPOrderChk`/`prc_COPPassCheck`/`prc_ProductChk`）在寫，但呼叫入口分散在
-> `ErpImportApiController.cs`／`BomQueryApiController.cs`／`OrderInfoVerifyApiController.cs`
-> 三支 controller，之後切連線要三支都一併確認能連到新 DB 執行對應 SP，**這幾張還沒切**。
-> 資料庫物件本身（7 View / 5 SP / 1 函式 / 5 表）**2026-09-14 已在測試區的
-> `Proril_Sales_Center` 建好**（`database/OrderCheckObjectsMigration.sql`，
-> 7 個 View 的筆數與舊庫一致，代表 ERP linked server 在新庫可用）；
-> **但 `api/` 還沒切**，`OrderInfoVerifyApiController` 仍打 `ProrilWebDbContext`。
-> `COP_CheckRule`/`COP_DepData` 應用層目前完全查不到任何寫入路徑（含維護畫面），
-> 可能是直接維護在 DB，遷移時沒有既有 CRUD 邏輯可搬，**同樣還沒切**。
-> `COP_SalesOrder`（銷貨檢索的 ERP 銷貨單快取）是 2026-09-14 新收進 DACPAC 的第 21 張，
-> 寫入者只有預存程序 `prc_ImportSalesOrder`（由 `prc_QuerySalesOrder(_1)` 呼叫，
-> 所以**銷貨檢索的「查詢」其實會寫資料**）。原本另一個讀者 `V_SalesTotal` 已於
-> 2026-09-16 隨客戶相關資訊搬進新庫（`database/CustomerRelatedObjectsMigration.sql`），
-> 2.0 這側不再有讀舊庫的路徑，**現在算單一擁有者了，但 `api/` 還沒切**（`CopSalesOrder`
-> 仍對映在 `ProrilWebDbContext`，剩下的前置條件是正式區還沒建庫）。
-> 表 + 3 支 SP 的搬移腳本是 `database/SalesShippingObjectsMigration.sql`，
-> **測試區已執行完成**（走 `database/scripts/run-objects-migration.ps1`），正式區還沒建庫。
+> 訂單資料檢核（`COP_PoCheck`/`COP_PoDetailCheck`/`COP_PassCheck`/`COP_AvailableAmt`/
+> `COP_ProductCheck` + `COP_CheckRule`/`COP_DepData` + 7 View / 5 SP / 1 函式）
+> `api/` 已改打新庫（`OrderInfoVerifyApiController` 用 `scDb` 讀 View、執行
+> `prc_COPOrderChk`/`prc_COPPassCheck`）；物件由 `database/OrderCheckObjectsMigration.sql` 建立。
+> 注意 1.0 的 `ErpImportApiController.cs`／`BomQueryApiController.cs` 也會呼叫這幾支 SP
+> 寫**舊庫**，那兩個功能還沒搬，兩邊的檢核結果不會同步。
+> `COP_CheckRule`/`COP_DepData` 應用層完全查不到任何寫入路徑（含維護畫面），
+> 是直接維護在 DB 的，改規則要兩個庫都改。
+> `COP_SalesOrder`（銷貨檢索的 ERP 銷貨單快取）寫入者只有預存程序 `prc_ImportSalesOrder`
+> （由 `prc_QuerySalesOrder(_1)` 呼叫，所以**銷貨檢索的「查詢」其實會寫資料**），
+> `api/` 已改打新庫（`MixSalesShipApiController` 用 `scDb`），
+> 表 + 3 支 SP 的搬移腳本是 `database/SalesShippingObjectsMigration.sql`。
+> 各 `*ObjectsMigration.sql` 在測試區的執行狀態與正式區（51002）的建庫進度，
+> 以 `database/PortingNotes.md` 與 `database/prod-migration-2026-09-21/README.md` 為準。
 
 > **`Proril_Sales_Center` 的建表一律走 `*ObjectsMigration.sql`，不要用 `publish.ps1`。**
 > `database/Tables/` 對照的是 `PRORIL_WEB` 的 schema，新庫已經刻意分岔好幾處

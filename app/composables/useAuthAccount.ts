@@ -1,18 +1,15 @@
 /**
- * 從 JWT 取出登入帳號。
+ * 目前登入帳號。
  *
- * 後端 JwtHelper 把帳號放在 `sub` claim（JwtRegisteredClaimNames.Sub）。
+ * 後端 JwtHelper 把帳號放在 `sub` claim，token 在 httpOnly cookie 讀不到，
+ * 由 server 端登入時把 `sub` 抄進 `proril-session` cookie（見 server/utils/authCookie.ts）。
  * 舊系統是靠 `$.session.get('account')`，2.0 沒有 jQuery session，
- * 直接解 token 比再打一支 API 便宜。
+ * 讀 cookie 比再打一支 API 便宜。
  */
 export const useAuthAccount = () => {
   const account = computed(() => {
     try {
-      const config = useRuntimeConfig()
-      const token = getAuthToken() || config.public.devToken
-      if (!token) return ''
-      const payload = decodeJwtPayload(token)
-      return (payload?.sub as string) || ''
+      return (getAuthSession()?.account || '').trim()
     } catch (err) {
       console.log('useAuthAccount account failed -->', err)
       return ''

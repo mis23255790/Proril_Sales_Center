@@ -33,6 +33,9 @@ export default defineNuxtConfig({
     // 以下只在 server 端讀得到（code 換 token 要帶 client secret，不能進瀏覽器）
     oauthTokenUrl: process.env.NUXT_OAUTH_TOKEN_URL || 'https://oauth.proril.com/oauth/token',
     oauthClientSecret: process.env.NUXT_OAUTH_CLIENT_SECRET || '',
+    // 驗 id_token 用，對應 https://oauth.proril.com/.well-known/openid-configuration 的 issuer / jwks_uri
+    oauthIssuer: process.env.NUXT_OAUTH_ISSUER || 'https://oauth.proril.com',
+    oauthJwksUrl: process.env.NUXT_OAUTH_JWKS_URL || 'https://oauth.proril.com/.well-known/jwks.json',
     // 呼叫 MainApi/LoginSso 用的內部密鑰，必須跟 api/appsettings 的 Sso:InternalSecret 一致
     ssoInternalSecret: process.env.NUXT_SSO_INTERNAL_SECRET || '',
     // 驗證 Manufacturing Center 轉來的身分交接票證用，必須跟對方簽發票證的密鑰一致

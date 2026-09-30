@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { h } from 'vue'
-import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableColumn } from '@nuxt/ui'
 import type { UnfinOrderQuery } from '~/composables/useSalesOrderUnfinishApi'
 import {
   type UnfinOrder,
+  type UnfinOrderPageSummary,
   type UnfinOrderRow,
+  type UnfinOrderTab,
   isUnfinishDetailRow
 } from '~/types/salesOrderUnfinish'
 import type { SalesShippingCustomer } from '~/types/salesShipping'
@@ -49,14 +50,19 @@ const filters = reactive({
   deliveryEndDate: ''
 })
 
-const productRows = ref<UnfinOrder[]>([])
-const soRows = ref<UnfinOrder[]>([])
+/** 目前頁籤、目前這一頁的資料（後端分頁，見 GetUnfinOrderPage）。 */
+const pageRows = ref<UnfinOrderRow[]>([])
 
-const productDetailRows = computed(() => toUnfinishProductDetailRows(productRows.value))
-const productGroupRows = computed(() => toUnfinishProductGroupRows(productRows.value))
-const soDetailRows = computed(() => toUnfinishSoDetailRows(soRows.value))
-const soGroupRows = computed(() => toUnfinishSoGroupRows(soRows.value))
-const totalAmount = computed(() => sumUnfinishTotalAmount(productRows.value))
+const EMPTY_SUMMARY: UnfinOrderPageSummary = {
+  totalCount: 0,
+  productDetailCount: 0,
+  productGroupCount: 0,
+  soDetailCount: 0,
+  soGroupCount: 0,
+  totalAmount: 0
+}
+/** 四個頁籤筆數 + 總金額 + 目前頁籤筆數，後端算好放在 body2。 */
+const summary = ref<UnfinOrderPageSummary>({ ...EMPTY_SUMMARY })
 
 /**
  * USelectMenu（Reka UI Combobox）不允許 item 的 value 是空字串（保留給「清空選取」），
@@ -113,36 +119,66 @@ const baseQuery = (): Omit<UnfinOrderQuery, 'groupName'> => ({
   inPlanNumber: filters.planNum.trim()
 })
 
-const load = async () => {
+/**
+ * 上次按「查詢」時的條件快照。翻頁／切頁籤／兩個明細 modal 都用它，不用畫面上
+ * 改到一半還沒按查詢的條件——後端快取 key 就是這組條件，送不一樣的會對不到快取、重跑 SP。
+ */
+const lastQuery = ref<Omit<UnfinOrderQuery, 'groupName'>>(baseQuery())
+
+/**
+ * 實際打 API 的唯一入口。refresh=true 會讓後端重跑兩支 SP（按查詢／重設），
+ * false 是翻頁、切頁籤，後端直接從快取切那一頁。
+ */
+const load = async (refresh: boolean) => {
   loading.value = true
   try {
-    const [productRes, soRes] = await Promise.all([
-      api.getUnfinOrder({ ...baseQuery(), groupName: 'TD004' }),
-      api.queryUnfinOrder1({ ...baseQuery(), groupName: 'TC001' })
-    ])
+    const res = await api.getUnfinOrderPage(lastQuery.value, {
+      tab: activeTab.value,
+      pageIndex: pagination.value.pageIndex,
+      // ALL_PAGE_SIZE 是前端「全部」選項的哨兵值，後端用 pageSize <= 0 代表不分頁
+      pageSize: pagination.value.pageSize >= ALL_PAGE_SIZE ? 0 : pagination.value.pageSize,
+      refresh
+    })
 
     // 查無資料時後端回 isSuccess: false + 說明訊息，不是錯誤，當空清單處理。
-    productRows.value = productRes?.isSuccess ? (productRes.body ?? []) : []
-    soRows.value = soRes?.isSuccess ? (soRes.body ?? []) : []
-    pagination.value.pageIndex = 0
+    pageRows.value = res?.isSuccess ? ((res.body ?? []) as UnfinOrderRow[]) : []
+    summary.value = res?.isSuccess ? (res.body2 ?? { ...EMPTY_SUMMARY }) : { ...EMPTY_SUMMARY }
 
-    if (productRes && !productRes.isSuccess && productRes.message) {
-      toast.add({ title: '品號查詢無資料', description: productRes.message, color: 'warning' })
+    if (res && !res.isSuccess && res.message) {
+      toast.add({ title: '查詢無資料', description: res.message, color: 'warning' })
     }
   } catch (err) {
     console.log('unfinished-orders load failed -->', err)
-    productRows.value = []
-    soRows.value = []
+    pageRows.value = []
+    summary.value = { ...EMPTY_SUMMARY }
     toast.add({ title: '查詢失敗', color: 'error' })
   } finally {
     loading.value = false
   }
 }
 
+/** 按查詢：記下目前條件、回第一頁、重跑 SP。 */
+const search = () => {
+  lastQuery.value = baseQuery()
+  pagination.value.pageIndex = 0
+  load(true)
+}
+
+/**
+ * UTable 分頁狀態變更的唯一入口（翻頁、切每頁筆數），比照訂單資料檢核：
+ * 不用 v-model:pagination + watch，避免 search() 把 pageIndex 歸零時又多打一次。
+ */
+const onPaginationUpdate = (value?: { pageIndex: number, pageSize: number }) => {
+  if (!value) return
+  const sizeChanged = value.pageSize !== pagination.value.pageSize
+  pagination.value = sizeChanged ? { pageIndex: 0, pageSize: value.pageSize } : value
+  load(false)
+}
+
 onMounted(() => {
   loadPermission()
   loadCustomers()
-  load()
+  search()
 })
 
 const onClickReset = () => {
@@ -160,7 +196,7 @@ const onClickReset = () => {
   filters.endDate = toDateString(new Date())
   filters.deliveryStartDate = ''
   filters.deliveryEndDate = ''
-  load()
+  search()
 }
 
 const onClickClearOrderDate = () => {
@@ -194,19 +230,29 @@ const onExport = async () => {
 
 // ---------------------------------------------------------------- 頁籤
 
-const activeTab = ref<'productDetail' | 'productGroup' | 'soDetail' | 'soGroup'>('productDetail')
+const activeTab = ref<UnfinOrderTab>('productDetail')
 
-// 換頁籤時回到第一頁，否則在第 3 頁切到只有 1 頁的頁籤會看到空白表格。
-watch(activeTab, () => {
+// 換頁籤時回到第一頁（否則在第 3 頁切到只有 1 頁的頁籤會看到空白表格），從後端快取取該頁籤。
+const onClickTab = (tab: UnfinOrderTab) => {
+  if (tab === activeTab.value) return
+  activeTab.value = tab
   pagination.value.pageIndex = 0
-})
+  load(false)
+}
 
 const tabItems = [
-  { label: '品號細項', value: 'productDetail', icon: 'i-lucide-list' },
-  { label: '品號統計', value: 'productGroup', icon: 'i-lucide-chart-bar' },
-  { label: '訂單細項', value: 'soDetail', icon: 'i-lucide-list' },
-  { label: '訂單統計', value: 'soGroup', icon: 'i-lucide-chart-bar' }
+  { label: '品號細項', value: 'productDetail', icon: 'i-lucide-list', countKey: 'productDetailCount' },
+  { label: '品號統計', value: 'productGroup', icon: 'i-lucide-chart-bar', countKey: 'productGroupCount' },
+  { label: '訂單細項', value: 'soDetail', icon: 'i-lucide-list', countKey: 'soDetailCount' },
+  { label: '訂單統計', value: 'soGroup', icon: 'i-lucide-chart-bar', countKey: 'soGroupCount' }
 ] as const
+
+const EMPTY_TEXT: Record<UnfinOrderTab, string> = {
+  productDetail: '沒有符合條件的品號細項',
+  productGroup: '沒有符合條件的品號統計',
+  soDetail: '沒有符合條件的訂單細項',
+  soGroup: '沒有符合條件的訂單統計'
+}
 
 // ---------------------------------------------------------------- 欄位定義
 
@@ -321,12 +367,19 @@ const SO_MODAL_COLS: ColDef[] = [
   { key: 'td013', header: '預交日' }
 ]
 
-const buildColumns = (defs: ColDef[], amountAllowed: boolean, withAction?: string): TableColumn<UnfinOrderRow>[] => {
+/**
+ * paged = true 是外層四個頁籤（後端分頁，row.index 只是當頁第幾列，要加上前面幾頁的筆數），
+ * 明細 modal 是一次全撈，不用加。
+ */
+const buildColumns = (defs: ColDef[], amountAllowed: boolean, withAction?: string, paged = false): TableColumn<UnfinOrderRow>[] => {
   const cols: TableColumn<UnfinOrderRow>[] = [
     {
       id: 'no',
       header: '#',
-      cell: ({ row }) => h('span', { class: 'block text-right text-dimmed' }, String(row.index + 1))
+      cell: ({ row }) => {
+        const offset = paged ? pagination.value.pageIndex * pagination.value.pageSize : 0
+        return h('span', { class: 'block text-right text-dimmed' }, String(offset + row.index + 1))
+      }
     }
   ]
 
@@ -346,10 +399,18 @@ const buildColumns = (defs: ColDef[], amountAllowed: boolean, withAction?: strin
   return cols
 }
 
-const productDetailColumns = computed(() => buildColumns(PRODUCT_DETAIL_COLS, showAmount.value))
-const productGroupColumns = computed(() => buildColumns(PRODUCT_GROUP_COLS, showAmount.value, '內容'))
-const soDetailColumns = computed(() => buildColumns(SO_DETAIL_COLS, showAmount.value))
-const soGroupColumns = computed(() => buildColumns(SO_GROUP_COLS, showAmount.value, '內容'))
+const productDetailColumns = computed(() => buildColumns(PRODUCT_DETAIL_COLS, showAmount.value, undefined, true))
+const productGroupColumns = computed(() => buildColumns(PRODUCT_GROUP_COLS, showAmount.value, '內容', true))
+const soDetailColumns = computed(() => buildColumns(SO_DETAIL_COLS, showAmount.value, undefined, true))
+const soGroupColumns = computed(() => buildColumns(SO_GROUP_COLS, showAmount.value, '內容', true))
+
+/** 四個頁籤共用一個 UTable，欄位依目前頁籤切換。 */
+const activeColumns = computed(() => ({
+  productDetail: productDetailColumns.value,
+  productGroup: productGroupColumns.value,
+  soDetail: soDetailColumns.value,
+  soGroup: soGroupColumns.value
+})[activeTab.value])
 const productModalColumns = computed(() => buildColumns(PRODUCT_MODAL_COLS, showAmount.value))
 const soModalColumns = computed(() => buildColumns(SO_MODAL_COLS, showAmount.value))
 
@@ -372,7 +433,7 @@ const openProductDetail = async (row: UnfinOrderRow) => {
   productModalLoading.value = true
   try {
     const res = await api.getUnfinOrder({
-      ...baseQuery(),
+      ...lastQuery.value,
       productNo: row.td004 ?? '',
       groupName: 'TD004'
     })
@@ -404,7 +465,7 @@ const openSoDetail = async (row: UnfinOrderRow) => {
   try {
     // SP 不支援 orderType/orderNo 篩單一筆，靠 poNo 帶 "單別-單號" 組合字串（對照舊版 onClickShowSoDetail）。
     const res = await api.queryUnfinOrder1({
-      ...baseQuery(),
+      ...lastQuery.value,
       poNo: `${row.tc001 ?? ''}-${row.tc002 ?? ''}`,
       orderType: '',
       groupName: 'TC001'
@@ -418,6 +479,12 @@ const openSoDetail = async (row: UnfinOrderRow) => {
     soModalLoading.value = false
   }
 }
+
+/** 品號統計／訂單統計有明細 modal，細項兩個頁籤沒有。 */
+const isGroupTab = computed(() => activeTab.value === 'productGroup' || activeTab.value === 'soGroup')
+
+const openGroupDetail = (row: UnfinOrderRow) =>
+  activeTab.value === 'productGroup' ? openProductDetail(row) : openSoDetail(row)
 </script>
 
 <template>
@@ -457,31 +524,31 @@ const openSoDetail = async (row: UnfinOrderRow) => {
         </UFormField>
 
         <UFormField label="品號" size="sm">
-          <UInput v-model="filters.productNo" placeholder="品號" class="w-full" @keyup.enter="load" />
+          <UInput v-model="filters.productNo" placeholder="品號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="品名" size="sm">
-          <UInput v-model="filters.productName" placeholder="品名" class="w-full" @keyup.enter="load" />
+          <UInput v-model="filters.productName" placeholder="品名" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="規格" size="sm">
-          <UInput v-model="filters.productSpec" placeholder="規格" class="w-full" @keyup.enter="load" />
+          <UInput v-model="filters.productSpec" placeholder="規格" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="序號" size="sm">
-          <UInput v-model="filters.serialNo" placeholder="銘版序號" class="w-full" @keyup.enter="load" />
+          <UInput v-model="filters.serialNo" placeholder="銘版序號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="訂單單別" size="sm">
-          <UInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="load" />
+          <UInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="訂單單號" size="sm">
-          <UInput v-model="filters.orderNo" placeholder="訂單單號" class="w-full" @keyup.enter="load" />
+          <UInput v-model="filters.orderNo" placeholder="訂單單號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="計畫批號" size="sm">
-          <UInput v-model="filters.planNum" placeholder="計畫批號" class="w-full" @keyup.enter="load" />
+          <UInput v-model="filters.planNum" placeholder="計畫批號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="訂單日期（起~迄）" size="sm" class="md:col-span-2">
@@ -506,7 +573,7 @@ const openSoDetail = async (row: UnfinOrderRow) => {
       <div class="mt-3 flex items-center justify-between gap-2">
         <p v-if="showAmount" class="text-sm">
           總金額 NT
-          <span class="font-semibold text-highlighted">{{ formatAmount(totalAmount) || '0' }}</span>
+          <span class="font-semibold text-highlighted">{{ formatAmount(summary.totalAmount) || '0' }}</span>
         </p>
         <p v-else class="text-xs text-muted">
           無金額欄位檢視權限
@@ -515,7 +582,7 @@ const openSoDetail = async (row: UnfinOrderRow) => {
           <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
             重設
           </UButton>
-          <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="load">
+          <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
             查詢
           </UButton>
           <UButton icon="i-lucide-file-spreadsheet" color="success" variant="outline" size="sm" :loading="exporting" @click="onExport">
@@ -534,92 +601,46 @@ const openSoDetail = async (row: UnfinOrderRow) => {
         :color="activeTab === tab.value ? 'primary' : 'neutral'"
         :variant="activeTab === tab.value ? 'solid' : 'outline'"
         size="sm"
-        @click="activeTab = tab.value"
+        @click="onClickTab(tab.value)"
       >
         {{ tab.label }}
+        <UBadge
+          :label="String(summary[tab.countKey])"
+          :color="activeTab === tab.value ? 'neutral' : 'primary'"
+          variant="soft"
+          size="sm"
+        />
       </UButton>
     </div>
 
+    <!-- 統計兩個頁籤有明細 modal，整列可點；細項兩個頁籤沒有，不掛。 -->
     <div class="overflow-x-auto rounded-lg border border-default">
       <UTable
-        v-if="activeTab === 'productDetail'"
         ref="table"
-        v-model:pagination="pagination"
-        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-        :data="productDetailRows"
-        :columns="productDetailColumns"
+        :pagination="pagination"
+        :pagination-options="{ manualPagination: true, rowCount: summary.totalCount }"
+        :data="pageRows"
+        :columns="activeColumns"
         :loading="loading"
-        :ui="{ td: 'whitespace-nowrap' }"
-      >
-        <template #empty>
-          <p class="py-12 text-center text-sm text-muted">
-            沒有符合條件的品號細項
-          </p>
-        </template>
-      </UTable>
-
-      <UTable
-        v-else-if="activeTab === 'productGroup'"
-        ref="table"
-        v-model:pagination="pagination"
-        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-        :data="productGroupRows"
-        :columns="productGroupColumns"
-        :loading="loading"
-        :ui="{ td: 'whitespace-nowrap' }"
+        :ui="{ tr: isGroupTab ? clickableRowTr : '', td: 'whitespace-nowrap' }"
+        @update:pagination="onPaginationUpdate"
+        @select="(_e: Event, row: any) => isGroupTab && openGroupDetail(row.original)"
       >
         <template #actions-cell="{ row }">
-          <UButton size="xs" color="primary" variant="outline" @click="openProductDetail(row.original)">
-            內容
-          </UButton>
+          <div @click.stop>
+            <UButton size="xs" color="primary" variant="outline" @click="openGroupDetail(row.original)">
+              內容
+            </UButton>
+          </div>
         </template>
         <template #empty>
           <p class="py-12 text-center text-sm text-muted">
-            沒有符合條件的品號統計
+            {{ EMPTY_TEXT[activeTab] }}
           </p>
         </template>
       </UTable>
 
-      <UTable
-        v-else-if="activeTab === 'soDetail'"
-        ref="table"
-        v-model:pagination="pagination"
-        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-        :data="soDetailRows"
-        :columns="soDetailColumns"
-        :loading="loading"
-        :ui="{ td: 'whitespace-nowrap' }"
-      >
-        <template #empty>
-          <p class="py-12 text-center text-sm text-muted">
-            沒有符合條件的訂單細項
-          </p>
-        </template>
-      </UTable>
-
-      <UTable
-        v-else
-        ref="table"
-        v-model:pagination="pagination"
-        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-        :data="soGroupRows"
-        :columns="soGroupColumns"
-        :loading="loading"
-        :ui="{ td: 'whitespace-nowrap' }"
-      >
-        <template #actions-cell="{ row }">
-          <UButton size="xs" color="primary" variant="outline" @click="openSoDetail(row.original)">
-            內容
-          </UButton>
-        </template>
-        <template #empty>
-          <p class="py-12 text-center text-sm text-muted">
-            沒有符合條件的訂單統計
-          </p>
-        </template>
-      </UTable>
-
-      <TablePaginationBar :table="table" />
+      <TablePaginationBar :table="table" :total="summary.totalCount" />
     </div>
 
     <QueryDetailModal

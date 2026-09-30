@@ -27,11 +27,10 @@ public partial class WorkProcessApiController : BaseApiController
     private readonly StoragePaths _paths;
 
     public WorkProcessApiController(
-        ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
-        ILogger<WorkProcessApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<WorkProcessApiController> logger) : base(scDb, jwtHelper, logger)
     {
         _paths = paths;
     }

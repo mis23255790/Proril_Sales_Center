@@ -1,8 +1,9 @@
 /**
  * 驗證 Manufacturing Center 轉來的身分交接票證（handoff ticket）。
  *
- * Manufacturing Center 是全 Proril2 家族唯一直接對「統一入口網」做 OAuth 的入口，
- * 使用者在那邊登入完成後，導頁到 Sales Center 時帶上這張票證證明「這個帳號剛通過驗證」。
+ * **過渡用**：正式流程是業務中心自己對 PRORIL 通行證走 OAuth（server/api/auth/sso.post.ts）。
+ * 這張票證是相容 Manufacturing Center 目前的做法：使用者在那邊登入完成後，
+ * 導頁到 Sales Center 時帶上這張票證證明「這個帳號剛通過驗證」。
  *
  * 格式：base64url(payload JSON) + '.' + base64url(HMAC-SHA256(payload, 共用密鑰))
  * 共用密鑰放 NUXT_MFG_HANDOFF_SECRET，必須跟 Manufacturing Center 那邊簽發票證用的密鑰一致，

@@ -14,18 +14,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------- 設定檢查
 
-var prorilWebConnectionString = builder.Configuration.GetConnectionString("ProrilWeb");
-if (string.IsNullOrWhiteSpace(prorilWebConnectionString))
-{
-    // 早點爆比之後每支 API 都回 500 好追
-    throw new InvalidOperationException(
-        "ConnectionStrings:ProrilWeb 未設定。請在 appsettings.Development.json（本機）"
-        + "或環境變數 ConnectionStrings__ProrilWeb（部署）填入 PRORIL_WEB 的連線字串。");
-}
-
 var salesCenterConnectionString = builder.Configuration.GetConnectionString("SalesCenter");
 if (string.IsNullOrWhiteSpace(salesCenterConnectionString))
 {
+    // 早點爆比之後每支 API 都回 500 好追
     throw new InvalidOperationException(
         "ConnectionStrings:SalesCenter 未設定。請在 appsettings.Development.json（本機）"
         + "或環境變數 ConnectionStrings__SalesCenter（部署）填入 Proril_Sales_Center 的連線字串。");
@@ -33,13 +25,8 @@ if (string.IsNullOrWhiteSpace(salesCenterConnectionString))
 
 // ---------------------------------------------------------------- 服務
 
-// PRORIL_WEB 舊庫：M_User / M_Permission（1.0 還在寫，2.0 唯讀）+ 尚未搬遷的檢核表/ERP view。
-builder.Services.AddDbContext<ProrilWebDbContext>(options =>
-    options.UseSqlServer(prorilWebConnectionString));
-
-// Proril_Sales_Center 獨立庫：業務議題本體 + CRM_Customer + H_FileLink，已確認單一擁有者，
-// WorkProcessApiController / CustomQueryApiController.SaveCustom / UploadApiController.AddFileLog
-// 都打這裡讀寫，見 CLAUDE.md 「已核對」段落。
+// Proril_Sales_Center 獨立庫：api/ 唯一的 DbContext（2026-09-29 起不再連 PRORIL_WEB，
+// ProrilWebDbContext 已刪除）。還要讀 PRORIL_WEB 的資料一律在新庫建直連 View（例如 V_NPS_SerialNo）。
 builder.Services.AddDbContext<SalesCenterDbContext>(options =>
     options.UseSqlServer(salesCenterConnectionString));
 
@@ -47,12 +34,23 @@ builder.Services.AddSingleton<JwtHelper>();
 builder.Services.AddSingleton<AesHelper>();
 builder.Services.AddSingleton<StoragePaths>();
 builder.Services.AddSingleton<LogHelper>();
+// 未完成訂單檢索／銷貨檢索的後端分頁：SP 結果快取幾分鐘，翻頁／切頁籤不重跑 SP
+// （SalesOrderUnFinishApiController.Paged.cs、MixSalesShipApiController.Paged.cs）
+builder.Services.AddMemoryCache();
 
-// Proril_Manufacturing_Center 還沒有對應端點，BaseUrl 現在是空的（見 appsettings），
-// 呼叫端 ManufacturingSerialNoLookupService 在空值時會丟例外，不在這裡註冊時就先擋下來
-// ——不然開發環境還沒設定這個服務，整個 api 會直接起不來。
+// 銘版序號來源（見 Services/SerialNoSource.cs）：預設 View（V_NPS_SerialNo 直連 View），
+// Services:ManufacturingCenter:SerialNoSource = Api 時改呼叫 Proril_Manufacturing_Center。
+// Api 模式的 BaseUrl 現在是空的（見 appsettings），ManufacturingSerialNoLookupService 在空值時
+// 會丟例外，不在這裡註冊時就先擋下來——不然開發環境還沒設定這個服務，整個 api 會直接起不來。
 builder.Services.AddHttpClient("ManufacturingCenter");
-builder.Services.AddScoped<ManufacturingSerialNoLookupService>();
+if (SerialNoSourceConfig.GetMode(builder.Configuration) == SerialNoSourceMode.Api)
+{
+    builder.Services.AddScoped<ISerialNoSource, ManufacturingSerialNoLookupService>();
+}
+else
+{
+    builder.Services.AddScoped<ISerialNoSource, ViewSerialNoSource>();
+}
 // 角色制權限解析（BaseApiController.HasPermission / RequirePermissionAttribute 共用），request 內快取
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddHostedService<LogTimedHostedService>();

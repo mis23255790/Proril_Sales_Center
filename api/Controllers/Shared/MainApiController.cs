@@ -16,21 +16,16 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 [Authorize]
 public partial class MainApiController : BaseApiController
 {
-    // M_Department 仍唯讀打 PRORIL_WEB（1.0 OrgApiController 還在寫，見 CLAUDE.md），
-    // BaseApiController 不再帶 ProrilWebDbContext，這支自己單獨注入一份，只給這個用途。
-    private readonly ProrilWebDbContext db;
     private readonly AesHelper _aes;
     private readonly string _ssoInternalSecret;
 
     public MainApiController(
-        ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         AesHelper aes,
         IConfiguration configuration,
-        ILogger<MainApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<MainApiController> logger) : base(scDb, jwtHelper, logger)
     {
-        this.db = db;
         _aes = aes;
         _ssoInternalSecret = configuration.GetValue<string>("Sso:InternalSecret") ?? "";
     }
@@ -193,13 +188,14 @@ public partial class MainApiController : BaseApiController
     ///
     /// 沿用 1.0 MainApiController_SystemSetting.GetMSystemWNo：ImagePath 在正式區/測試區
     /// 各自的 DB 存了不同圖檔路徑，靠資料本身區分環境，這支不判斷任何環境變數。
+    /// 只回 aStatus = 'Y' 的列（2.0 新增，1.0 沒有這欄）。
     /// </summary>
     [HttpGet]
     public CustomApiViewModel GetMSystemWNo(int systemNo)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
 
-        var msystemList = scDb.MSystems.Where(o => o.SystemNo == systemNo).ToList();
+        var msystemList = scDb.MSystems.Where(o => o.SystemNo == systemNo && o.AStatus == "Y").ToList();
         ca.Body = msystemList;
         ca.IsSuccess = true;
         return ca;

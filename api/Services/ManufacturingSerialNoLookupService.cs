@@ -8,8 +8,10 @@ namespace Proril.SalesIssue.Api.Services;
 ///
 /// 這是 API 空殼：Proril_Manufacturing_Center 那邊還沒有對應端點，
 /// <c>Services:ManufacturingCenter:BaseUrl</c> 也還沒填值，現在呼叫一定會丟例外。
+/// 所以目前預設走的是 <see cref="ViewSerialNoSource"/>（V_NPS_SerialNo 直連 View），
+/// 這支只有在 <c>Services:ManufacturingCenter:SerialNoSource = Api</c> 時才會被用到。
 /// 等對方端點確定後，把 <see cref="EndpointPath"/> 換成真正的路由、appsettings 填上
-/// 網址即可，呼叫端（ManufacturingApiController／SalesOrderUnFinishApiController）
+/// 網址、SerialNoSource 改成 Api 即可，呼叫端（只認 <see cref="ISerialNoSource"/>）
 /// 完全不用改——回傳形狀維持 <c>Dictionary&lt;OrderType-RTRIM(OrderNo)+OrderSno, SerialNosJson&gt;</c>，
 /// key 組法跟原本 SQL 比對邏輯一致。
 ///
@@ -22,6 +24,7 @@ namespace Proril.SalesIssue.Api.Services;
 /// 不同的語意，不該被當成「沒有序號」。
 /// </summary>
 public class ManufacturingSerialNoLookupService(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    : ISerialNoSource
 {
     // TODO: Proril_Manufacturing_Center 的端點路由確定後換成實際值。
     private const string EndpointPath = "/api/SerialNo/GetSerialNos";

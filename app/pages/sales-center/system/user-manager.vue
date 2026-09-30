@@ -2,7 +2,7 @@
 /**
  * 人員管理。對應 1.0 系統設定 / 人員管理（Views/System/UserManager.cshtml）。
  *
- * 左邊一進來就列出全部帳號（GetAllUserList，可用工號／姓名篩選），點一列在右邊編輯。
+ * 左邊一進來就列出全部帳號（GetAllUserList，可用工號／姓名篩選），點一列從右邊滑出編輯抽屜。
  * 新增：按「新增人員」開空白表單（自己填工號），工號已存在就擋下來。
  * 1.0 是先輸入工號查詢、查不到直接變新增模式，打錯工號很容易順手建出錯的帳號，2.0 拆開。
  *
@@ -63,7 +63,8 @@ watch([keyword, statusFilter], () => {
 const columns: TableColumn<UserListItem>[] = [
   { accessorKey: 'account', header: '工號' },
   { accessorKey: 'userName', header: '姓名' },
-  { id: 'status', header: '狀態' }
+  { id: 'roles', header: '角色' },
+  { id: 'status', header: '帳號狀態' }
 ]
 
 // ------------------------------------------------------------------ 編輯
@@ -270,6 +271,14 @@ const remove = async () => {
 }
 
 const isCurrentRow = (u: UserListItem) => mode.value === 'edit' && u.account.trim() === currentAccount.value
+
+/** 編輯抽屜：mode 不是 'none' 就開著；按 X／點遮罩／Esc 關掉等於回到 'none'。 */
+const drawerOpen = computed({
+  get: () => mode.value !== 'none',
+  set: (value: boolean) => {
+    if (!value) mode.value = 'none'
+  }
+})
 </script>
 
 <template>
@@ -297,97 +306,115 @@ const isCurrentRow = (u: UserListItem) => mode.value === 'edit' && u.account.tri
       class="mb-4"
     />
 
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-      <!-- 帳號列表 -->
-      <section>
-        <div class="mb-2 flex flex-wrap items-center gap-2">
-          <UInput
-            v-model="keyword"
-            icon="i-lucide-search"
-            placeholder="搜尋工號或姓名"
-            class="w-full sm:w-64"
-          />
-          <USelect
-            v-model="statusFilter"
-            :items="statusOptions"
-            value-key="value"
-            class="w-32"
-          />
-          <UButton icon="i-lucide-user-plus" class="ml-auto" :disabled="mode === 'new'" @click="startNew">
-            新增人員
-          </UButton>
-        </div>
+    <!-- 帳號列表 -->
+    <section
+      class="transition-opacity duration-150"
+      :class="{ 'pointer-events-none opacity-60': userLoading && mode === 'none' }"
+      :aria-busy="userLoading"
+    >
+      <div class="mb-2 flex flex-wrap items-center gap-2">
+        <UInput
+          v-model="keyword"
+          icon="i-lucide-search"
+          placeholder="搜尋工號或姓名"
+          class="w-full sm:w-64"
+        />
+        <USelect
+          v-model="statusFilter"
+          :items="statusOptions"
+          value-key="value"
+          class="w-32"
+        />
+        <UButton icon="i-lucide-user-plus" class="ml-auto" @click="startNew">
+          新增人員
+        </UButton>
+      </div>
 
-        <div class="overflow-hidden rounded-lg border border-default">
-          <UTable
-            ref="table"
-            v-model:pagination="pagination"
-            :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-            :data="visibleUsers"
-            :columns="columns"
-            :ui="{ tr: clickableRowTr }"
-            @select="(_e: Event, row: any) => openUser(row.original.account)"
-          >
-            <template #account-cell="{ row }">
-              <span class="font-mono" :class="{ 'font-semibold text-highlighted': isCurrentRow(row.original) }">
-                {{ row.original.account.trim() }}
-              </span>
-            </template>
-            <template #userName-cell="{ row }">
-              <span :class="{ 'font-semibold text-highlighted': isCurrentRow(row.original) }">
-                {{ row.original.userName || '(未命名)' }}
-              </span>
-            </template>
-            <template #status-cell="{ row }">
-              <div class="flex flex-wrap gap-1">
-                <UBadge v-if="!row.original.isEnable" color="neutral" variant="subtle" size="sm">
-                  停用
-                </UBadge>
-                <UBadge v-if="row.original.isLocked" color="error" variant="subtle" size="sm" icon="i-lucide-lock">
-                  鎖定
-                </UBadge>
-                <UBadge v-if="row.original.isAdmin" color="warning" variant="subtle" size="sm">
-                  系統管理員
-                </UBadge>
-              </div>
-            </template>
-            <template #empty>
-              <p class="py-6 text-center text-sm text-muted">
-                {{ users.length ? '沒有符合條件的帳號' : '沒有帳號資料' }}
-              </p>
-            </template>
-          </UTable>
+      <div class="overflow-hidden rounded-lg border border-default">
+        <UTable
+          ref="table"
+          v-model:pagination="pagination"
+          :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
+          :data="visibleUsers"
+          :columns="columns"
+          :ui="{ tr: clickableRowTr }"
+          @select="(_e: Event, row: any) => openUser(row.original.account)"
+        >
+          <template #account-cell="{ row }">
+            <span class="font-mono" :class="{ 'font-semibold text-highlighted': isCurrentRow(row.original) }">
+              {{ row.original.account.trim() }}
+            </span>
+          </template>
+          <template #userName-cell="{ row }">
+            <span :class="{ 'font-semibold text-highlighted': isCurrentRow(row.original) }">
+              {{ row.original.userName || '(未命名)' }}
+            </span>
+          </template>
+          <template #roles-cell="{ row }">
+            <div v-if="row.original.roleIds?.length" class="flex flex-wrap gap-1">
+              <UBadge
+                v-for="id in row.original.roleIds"
+                :key="id"
+                color="neutral"
+                variant="outline"
+                size="sm"
+              >
+                {{ roleNameOf(id) }}
+              </UBadge>
+            </div>
+            <span v-else class="text-muted">—</span>
+          </template>
+          <template #status-cell="{ row }">
+            <div class="flex flex-wrap gap-1">
+              <UBadge v-if="!row.original.isEnable" color="neutral" variant="subtle" size="sm">
+                停用
+              </UBadge>
+              <UBadge v-if="row.original.isLocked" color="error" variant="subtle" size="sm" icon="i-lucide-lock">
+                鎖定
+              </UBadge>
+              <UBadge v-if="row.original.isAdmin" color="warning" variant="subtle" size="sm">
+                系統管理員
+              </UBadge>
+            </div>
+          </template>
+          <template #empty>
+            <p class="py-6 text-center text-sm text-muted">
+              {{ users.length ? '沒有符合條件的帳號' : '沒有帳號資料' }}
+            </p>
+          </template>
+        </UTable>
 
-          <TablePaginationBar :table="table" />
-        </div>
-      </section>
+        <TablePaginationBar :table="table" />
+      </div>
+    </section>
 
-      <!-- 編輯區 -->
-      <section
-        class="transition-opacity duration-150"
-        :class="{ 'pointer-events-none opacity-60': userLoading }"
-        :aria-busy="userLoading"
-      >
-        <div v-if="mode === 'none'" class="rounded-lg border border-dashed border-default py-16 text-center text-sm text-muted">
-          從左邊選一個帳號編輯，或按「新增人員」。
-        </div>
+    <!-- 編輯抽屜 -->
+    <USlideover
+      v-model:open="drawerOpen"
+      :dismissible="!saving"
+      :ui="{ content: 'sm:max-w-lg' }"
+    >
+      <template #title>
+        <span class="flex flex-wrap items-center gap-2">
+          {{ mode === 'new' ? '新增人員' : `${form.userName || '(未命名)'} (${currentAccount})` }}
+          <UBadge v-if="locked" color="error" variant="subtle" icon="i-lucide-lock">
+            已鎖定
+          </UBadge>
+        </span>
+      </template>
 
-        <div v-else class="space-y-5">
-          <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-semibold text-highlighted">
-              {{ mode === 'new' ? '新增人員' : `${form.userName || '(未命名)'} (${currentAccount})` }}
-            </h2>
-            <UBadge v-if="locked" color="error" variant="subtle" icon="i-lucide-lock">
-              已鎖定
-            </UBadge>
-          </div>
-
+      <template #body>
+        <div
+          class="space-y-5 transition-opacity duration-150"
+          :class="{ 'pointer-events-none opacity-60': userLoading }"
+          :aria-busy="userLoading"
+        >
           <UFormField v-if="mode === 'new'" label="工號" required>
-            <UInput v-model="form.account" placeholder="輸入新帳號的工號" class="w-full sm:w-80" />
+            <UInput v-model="form.account" placeholder="輸入新帳號的工號" class="w-full" />
           </UFormField>
 
           <UFormField label="姓名">
-            <UInput v-model="form.userName" class="w-full sm:w-80" />
+            <UInput v-model="form.userName" class="w-full" />
           </UFormField>
 
           <USwitch v-model="form.isEnable" label="帳號啟用" />
@@ -399,7 +426,7 @@ const isCurrentRow = (u: UserListItem) => mode.value === 'edit' && u.account.tri
               value-key="value"
               multiple
               placeholder="選擇角色"
-              class="w-full sm:w-80"
+              class="w-full"
             />
             <div v-if="form.roleIds.length" class="mt-2 flex flex-wrap gap-2">
               <UBadge v-for="id in form.roleIds" :key="id" color="neutral" variant="outline">
@@ -407,47 +434,50 @@ const isCurrentRow = (u: UserListItem) => mode.value === 'edit' && u.account.tri
               </UBadge>
             </div>
           </UFormField>
-
-          <div class="flex flex-wrap gap-2">
-            <template v-if="mode === 'new'">
-              <UButton icon="i-lucide-plus" :loading="saving" @click="add">
-                新增帳號
-              </UButton>
-              <UButton color="neutral" variant="outline" :disabled="saving" @click="cancelNew">
-                取消
-              </UButton>
-            </template>
-
-            <template v-else>
-              <UButton icon="i-lucide-save" :loading="saving" @click="save">
-                儲存變更
-              </UButton>
-              <UButton icon="i-lucide-key-round" variant="outline" :loading="saving" @click="reset">
-                密碼重置
-              </UButton>
-              <UButton
-                v-if="locked"
-                icon="i-lucide-unlock"
-                color="warning"
-                variant="outline"
-                :loading="saving"
-                @click="unlock"
-              >
-                解除鎖定
-              </UButton>
-              <UButton
-                icon="i-lucide-trash-2"
-                color="error"
-                variant="outline"
-                :loading="saving"
-                @click="remove"
-              >
-                帳號刪除
-              </UButton>
-            </template>
-          </div>
         </div>
-      </section>
-    </div>
+      </template>
+
+      <template #footer>
+        <div class="flex w-full flex-wrap gap-2">
+          <template v-if="mode === 'new'">
+            <UButton icon="i-lucide-plus" :loading="saving" @click="add">
+              新增帳號
+            </UButton>
+            <UButton color="neutral" variant="outline" :disabled="saving" @click="cancelNew">
+              取消
+            </UButton>
+          </template>
+
+          <template v-else>
+            <UButton icon="i-lucide-save" :loading="saving" @click="save">
+              儲存變更
+            </UButton>
+            <UButton icon="i-lucide-key-round" variant="outline" :loading="saving" @click="reset">
+              密碼重置
+            </UButton>
+            <UButton
+              v-if="locked"
+              icon="i-lucide-unlock"
+              color="warning"
+              variant="outline"
+              :loading="saving"
+              @click="unlock"
+            >
+              解除鎖定
+            </UButton>
+            <UButton
+              icon="i-lucide-trash-2"
+              color="error"
+              variant="outline"
+              class="ml-auto"
+              :loading="saving"
+              @click="remove"
+            >
+              帳號刪除
+            </UButton>
+          </template>
+        </div>
+      </template>
+    </USlideover>
   </div>
 </template>

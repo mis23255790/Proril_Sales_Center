@@ -12,26 +12,23 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 ///
 /// 相對 1.0 的 BaseApiController 拿掉了：
 ///   - PRORILContext (dsWorkFlowContext)：另一個資料庫，業務議題用不到
-///   - LogHelper 自製檔案 log：改用 ILogger，交給 host 的 logging 設定
+///   - LogHelper 自製檔案 log：步驟 log 改用 ILogger；例外 log 另外寫
+///     LogHelper 的 exceptionLog 目錄（<see cref="WriteExceptionLog"/>）
 ///
-/// 兩個 DbContext 都在這裡注入，子類別直接用 <c>db</c>（PRORIL_WEB）與
-/// <c>scDb</c>（Proril_Sales_Center）。帳號與權限（M_User / RBAC_Role / RBAC_RoleUser /
+/// 只注入 <c>scDb</c>（Proril_Sales_Center）。2026-09-29 起 api/ 已不連 PRORIL_WEB，
+/// <c>ProrilWebDbContext</c> 已刪除。帳號與權限（M_User / RBAC_Role / RBAC_RoleUser /
 /// RBAC_RolePermission）都在 <c>scDb</c>，權限解析集中在 <see cref="PermissionService"/>。
 /// </summary>
 [ApiController]
 [Route("[controller]/[action]")]
 public abstract class BaseApiController : ControllerBase
 {
-    // protected readonly ProrilWebDbContext db;
     protected readonly SalesCenterDbContext scDb;
     protected readonly JwtHelper jwtHelper;
     private readonly ILogger _logger;
 
-    protected BaseApiController(
-        ProrilWebDbContext db, SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
-        // SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
+    protected BaseApiController(SalesCenterDbContext scDb, JwtHelper jwtHelper, ILogger logger)
     {
-        // this.db = db;
         this.scDb = scDb;
         this.jwtHelper = jwtHelper;
         _logger = logger;
@@ -113,6 +110,15 @@ public abstract class BaseApiController : ControllerBase
         => _logger.LogInformation("{User} --> {Controller}::{Method}:: {Message}",
             GetUserNameByToken(), GetType().Name, methodName, message);
 
+    /// <summary>
+    /// 手寫 try/catch 用（GetAccountByToken 等、UploadApiController.AddFileLog）。
+    /// 同時寫 ILogger 與 exceptionLog 目錄；LogHelper 從 RequestServices 取，
+    /// 不用改每支 Controller 的建構子。
+    /// </summary>
     protected void WriteExceptionLog(Exception ex)
-        => _logger.LogError(ex, "{Controller} 發生例外", GetType().Name);
+    {
+        _logger.LogError(ex, "{Controller} 發生例外", GetType().Name);
+        HttpContext?.RequestServices.GetService<LogHelper>()
+            ?.WriteExceptionLog($"{GetType().Name} 發生例外 {Request?.Method} {Request?.Path}", ex);
+    }
 }

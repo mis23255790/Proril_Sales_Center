@@ -18,18 +18,14 @@ namespace Proril.SalesIssue.Api.Controllers.Customer;
 [Authorize]
 public class CustomerApiController : BaseApiController
 {
-    // D_CustormerOrder / D_MailDetail 目前只有這支在用，還沒搬到 Proril_Sales_Center
-    // （沒有既有的 ObjectsMigration 腳本），BaseApiController 不再帶 ProrilWebDbContext，
-    // 這支自己單獨注入一份。VCopCustomer 已經搬過去了，打 scDb（見 GetCustomerList_2）。
-    private readonly ProrilWebDbContext db;
-
+    // M_Customer / D_CustormerOrder / D_MailDetail 的端點（下面註解掉的那些）還沒搬到
+    // Proril_Sales_Center（沒有既有的 ObjectsMigration 腳本）；ProrilWebDbContext 已刪除，
+    // 要恢復這些端點得先把表搬進新庫、改打 scDb。VCopCustomer 已經搬過去了（見 GetCustomerList_2）。
     public CustomerApiController(
-        ProrilWebDbContext db,
         SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
-        ILogger<CustomerApiController> logger) : base(db, scDb, jwtHelper, logger)
+        ILogger<CustomerApiController> logger) : base(scDb, jwtHelper, logger)
     {
-        this.db = db;
     }
 
     // ------------------------------------------------------------------ 客戶資料

@@ -1,14 +1,13 @@
 <script setup lang="ts">
 /**
- * SSO 登入頁。
+ * 登入頁。不做帳密表單，實際登入畫面在 PRORIL 通行證那邊。
  *
- * 只負責一件事：把使用者導去 PRORIL 通行證授權網址。實際登入畫面在通行證那邊，
- * 這裡不做帳密表單。換 token、寫入 proril-token 是 /auth/callback 的事。
- *
- * 現況：Manufacturing Center 已定案為 Proril2 家族唯一直接對統一入口網做 OAuth 的入口，
- * 正式流程走 /auth/handoff（見該檔案），使用者理論上不會再從這頁登入。
- * 這裡先保留當作本機開發／備用管道，之後如果確定不需要了再整批移除
- * （login.vue、auth/callback.vue、utils/ssoAuth.ts、server/api/auth/sso.post.ts 一起）。
+ * - 有設 NUXT_PUBLIC_OAUTH_CLIENT_ID（正式流程）：進來就自動導去通行證授權，
+ *   通行證有 session 的話會直接帶 code 回 /auth/callback，使用者幾乎看不到這頁。
+ *   `?logged_out=1`（登出後）不自動導，避免一登出又立刻被登回去——
+ *   通行證目前沒有 end_session 端點，登出只清得掉本站 token，通行證的 session 還在。
+ * - 沒設 Client ID（過渡期）：退回舊做法，請使用者從 Manufacturing Center 進入，
+ *   由那邊帶 handoff 票證過來（見 pages/auth/handoff.vue）。
  */
 definePageMeta({
   layout: false
@@ -16,15 +15,23 @@ definePageMeta({
 
 useSeoMeta({ title: '登入 - PRORIL 業務中心' })
 
+const route = useRoute()
 const config = useRuntimeConfig()
-const clientNotReady = computed(() => !config.public.oauthClientId)
+const oauthReady = computed(() => !!config.public.oauthClientId)
+const mfgCenterUrl = computed(() => config.public.mfgCenterUrl)
 
 const redirecting = ref(false)
 
 const goToSso = () => {
   redirecting.value = true
-  window.location.href = buildAuthorizeUrl()
+  window.location.href = buildAuthorizeUrl(route.query.redirect)
 }
+
+onMounted(() => {
+  if (oauthReady.value && route.query.logged_out !== '1') {
+    goToSso()
+  }
+})
 </script>
 
 <template>
@@ -41,20 +48,38 @@ const goToSso = () => {
             業務中心
           </h1>
 
-          <UButton
-            block
-            size="lg"
-            icon="i-lucide-circle-check"
-            class="rounded-full"
-            :loading="redirecting"
-            :disabled="clientNotReady"
-            @click="goToSso"
-          >
-            透過 PRORIL 通行證登入
-          </UButton>
+          <template v-if="oauthReady">
+            <UButton
+              block
+              size="lg"
+              icon="i-lucide-circle-check"
+              class="rounded-full"
+              :loading="redirecting"
+              @click="goToSso"
+            >
+              透過 PRORIL 通行證登入
+            </UButton>
 
-          <p v-if="clientNotReady" class="text-center text-xs text-red-600">
-            尚未設定 NUXT_PUBLIC_OAUTH_CLIENT_ID，SSO 尚未可用
+            <p v-if="route.query.logged_out === '1'" class="text-center text-xs text-navy-500">
+              已登出業務中心
+            </p>
+          </template>
+
+          <template v-else-if="mfgCenterUrl">
+            <UButton
+              block
+              size="lg"
+              icon="i-lucide-log-in"
+              class="rounded-full"
+              :to="mfgCenterUrl"
+              external
+            >
+              從製造中心進入
+            </UButton>
+          </template>
+
+          <p v-else class="text-center text-xs text-red-600">
+            尚未設定 NUXT_PUBLIC_OAUTH_CLIENT_ID 或 NUXT_PUBLIC_MFG_CENTER_URL，無法登入
           </p>
         </div>
       </div>

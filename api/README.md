@@ -10,7 +10,7 @@
 ```bash
 cd api
 cp appsettings.Development.json.example appsettings.Development.json
-# 填 ConnectionStrings:ProrilWeb（其餘的範例檔已帶好）
+# 填 ConnectionStrings:SalesCenter（其餘的範例檔已帶好）
 dotnet run
 ```
 
@@ -19,7 +19,8 @@ dotnet run
 
 | 設定 | 環境變數 | 說明 |
 |---|---|---|
-| `ConnectionStrings:ProrilWeb` | `ConnectionStrings__ProrilWeb` | PRORIL_WEB 連線字串 |
+| `ConnectionStrings:SalesCenter` | `ConnectionStrings__SalesCenter` | Proril_Sales_Center 連線字串（2026-09-29 起唯一的連線，已不連 PRORIL_WEB） |
+| `Services:ManufacturingCenter:SerialNoSource` | `Services__ManufacturingCenter__SerialNoSource` | 銘版序號來源：`View`（預設，V_NPS_SerialNo 直連 View）或 `Api` |
 | `JwtSettings:Issuer` / `SignKey` | `JwtSettings__SignKey` | **必須與 1.0 相同**，否則 token 不互通 |
 | `Security:AesKey` | `Security__AesKey` | **必須與 1.0 相同**，否則登入驗不過密碼 |
 | `Storage:ShareRoot` | `Storage__ShareRoot` | 附件共享根目錄，**必須與 1.0 指向同一處** |
@@ -48,7 +49,7 @@ dotnet run
 | `MainApi`（權限樹／側欄） | 2.0 新增 GetRBACPermission（`RBAC_Permission` 全部有效節點，權限樹、側欄、模組首頁共用）；GetMSystemWNo（topbar 環境圖示） |
 | `MainApi`（角色，2.0 新增） | GetRoleList / GetRole / SaveRole / DeleteRole / SetRoleMembers（取代 1.0 的逐人 SetPermissionTree 與部門範本 SaveDepFunction） |
 | `MixSalesShipApi` | GetSalesOrder / GetSalesOrder_1 / ExportXls / GetCustomerCredit / GetCustomerCreditCRM / GetSalesTotal / GetCustomerUnfinOrder |
-| `SalesOrderUnFinishApi` | GetUnfinOrder / QueryUnfinOrder_1 / ExportXls |
+| `SalesOrderUnFinishApi` | GetUnfinOrder / QueryUnfinOrder_1 / ExportXls / GetUnfinOrderPage（2.0 新增，後端分頁） |
 
 > 2026-09-23 改成角色制時移除：`SetPermissionKeys` / `SaveDepPermissionKeys` /
 > `GetPermissionLinkType` / `GetMPermissionLinkType` / `GetDepartmentList`，

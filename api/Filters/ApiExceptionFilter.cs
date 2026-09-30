@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
 
 namespace Proril.SalesIssue.Api.Filters;
@@ -13,13 +14,17 @@ namespace Proril.SalesIssue.Api.Filters;
 /// + Message 字串」的形狀，所以用 Action 實際宣告的回傳型別動態產生物件並塞 Message，
 /// 不要寫死成 CustomApiViewModel，否則登入例外時的回傳形狀會跟前端對不上。
 /// </summary>
-public class ApiExceptionFilter(ILogger<ApiExceptionFilter> logger) : IExceptionFilter
+public class ApiExceptionFilter(ILogger<ApiExceptionFilter> logger, LogHelper logHelper) : IExceptionFilter
 {
     public void OnException(ExceptionContext context)
     {
         var controllerName = context.ActionDescriptor.RouteValues.TryGetValue("controller", out var c)
             ? c : context.HttpContext.Request.Path.ToString();
         logger.LogError(context.Exception, "{Controller} 發生未處理例外", controllerName);
+        var request = context.HttpContext.Request;
+        logHelper.WriteExceptionLog(
+            $"{controllerName} 發生未處理例外 {request.Method} {request.Path}{request.QueryString}",
+            context.Exception);
 
         var message = context.Exception.InnerException?.Message ?? context.Exception.Message;
         var returnType = (context.ActionDescriptor as ControllerActionDescriptor)?.MethodInfo.ReturnType;

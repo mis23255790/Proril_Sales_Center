@@ -19,6 +19,8 @@
       CustomerViewObjectsMigration.sql     客戶查詢：1 View（V_COP_Customer），依賴 linked server，沒有表
       RbacObjectsMigration.sql             角色制權限：3 表（RBAC_Role / RBAC_RolePermission / RBAC_RoleUser）
       （會把 M_Permission 既有個人權限轉成角色；不需要 linked server，報「不存在」不影響它）
+      NpsSerialNoObjectsMigration.sql      銘版序號：1 View（V_NPS_SerialNo），跨庫讀 PRORIL_WEB.dbo.NPS_D_Order，沒有表
+      （不需要 linked server；執行帳號要有 PRORIL_WEB.dbo.NPS_D_Order 的 SELECT 權限）
 
     三支都是可重複執行的（CREATE TABLE 包 IF OBJECT_ID(...) IS NULL、
     CREATE OR ALTER PROCEDURE/VIEW/FUNCTION、資料複製區塊在表已有資料時自動跳過）。
@@ -56,7 +58,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('OrderCheckObjectsMigration.sql', 'SalesShippingObjectsMigration.sql', 'SalesOrderUnfinishObjectsMigration.sql', 'CustomerRelatedObjectsMigration.sql', 'CustomerViewObjectsMigration.sql', 'RbacObjectsMigration.sql')]
+    [ValidateSet('OrderCheckObjectsMigration.sql', 'SalesShippingObjectsMigration.sql', 'SalesOrderUnfinishObjectsMigration.sql', 'CustomerRelatedObjectsMigration.sql', 'CustomerViewObjectsMigration.sql', 'RbacObjectsMigration.sql', 'NpsSerialNoObjectsMigration.sql')]
     [string]$Script,
     [ValidateSet('snapshot', 'snapshot-prod')][string]$Environment = 'snapshot',
     [switch]$Execute
