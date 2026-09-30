@@ -60,7 +60,7 @@ services:
       dockerfile: Dockerfile
     user: "root"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=Production
     env_file:
       - /secrets/prod/web-server.env
     volumes:
