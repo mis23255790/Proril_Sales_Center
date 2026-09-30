@@ -1,4 +1,36 @@
 <details>
+  <summary>版號2026.09.30.1000</summary>
+
+##### feat: 未完成訂單檢索四個頁籤改後端分頁
+      原本四個頁籤是 GetUnfinOrder + QueryUnfinOrder_1 一次全撈、前端 getPaginationRowModel()
+      分頁。V_UnfinOrder 每次都直接打 ERP linked server，使用者選擇「後端分頁 + 查詢結果快取」：
+      按查詢才跑 SP，翻頁／切頁籤只從後端快取切那一頁。
+
+      新增:
+          api/Controllers/SalesSearch/SalesOrderUnFinishApiController.Paged.cs
+              GetUnfinOrderPage（tab / pageIndex / pageSize / refresh），兩支 SP 平行跑，
+              結果放 IMemoryCache 10 分鐘，key = 查詢條件 + 金額權限。
+          api/Models/ApiModels.cs  UnfinOrderPageSummary（body2：四個頁籤筆數、總金額）
+
+      異動:
+          api/Program.cs  AddMemoryCache()
+          api/Controllers/SalesSearch/SalesOrderUnFinishApiController.cs
+              CallQueryUnfinOrder(1) 加可選的 db 參數（平行跑要各自一個 DbContext）
+          app/pages/sales-center/sales-search/unfinished-orders.vue
+              四個 UTable 合成一個 manualPagination；lastQuery 條件快照給翻頁／明細 modal 用；
+              頁籤加筆數徽章；# 欄加上前頁筆數；統計兩個頁籤整列可點
+          app/composables/useSalesOrderUnfinishApi.ts  getUnfinOrderPage
+          app/types/salesOrderUnfinish.ts  UnfinOrderTab / UnfinOrderPageSummary
+          app/utils/salesOrderUnfinish.ts  刪除（頁籤篩選與總金額搬到後端）
+
+      GetUnfinOrder / QueryUnfinOrder_1 不變，明細 modal 與 1.0 相容性照用。
+
+      驗證：後端 dotnet build、前端 npm run typecheck 通過；瀏覽器實測尚未完成
+      （本機 SSO callback 固定導回 localhost:3001，驗證用的另一組 server 拿不到登入 cookie）。
+
+</details>
+
+<details>
   <summary>版號2026.09.15.1500</summary>
 
 ##### feat: prc_QueryUnfinOrder(_1) + V_UnfinOrder 搬進 Proril_Sales_Center

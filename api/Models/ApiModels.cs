@@ -111,6 +111,22 @@ public class OrderInfoVerifySummary
     public int CheckedCount { get; set; }
 }
 
+/// <summary>
+/// GetUnfinOrderPage 分頁後的統計，放在 <see cref="CustomApiViewModel.Body2"/>。
+/// 四個頁籤的筆數與 TotalAmount 都是「分頁前」的統計，不會因為切頁或切頁籤改變；
+/// TotalCount 才是目前頁籤的筆數，給前端分頁列算頁數用。
+/// </summary>
+public class UnfinOrderPageSummary
+{
+    public int TotalCount { get; set; }
+    public int ProductDetailCount { get; set; }
+    public int ProductGroupCount { get; set; }
+    public int SoDetailCount { get; set; }
+    public int SoGroupCount { get; set; }
+    /// <summary>頁面上方「總金額NT」：品號查詢結果中 FooterFlag != Y 的台幣金額加總（沒有金額權限時是 0）。</summary>
+    public decimal TotalAmount { get; set; }
+}
+
 /// <summary>進度明細 + 建立者／修改者姓名。</summary>
 public class DWorkProcessDetailViewModel : SC.DWorkProcessDetail
 {

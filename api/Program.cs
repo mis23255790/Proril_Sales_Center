@@ -34,6 +34,9 @@ builder.Services.AddSingleton<JwtHelper>();
 builder.Services.AddSingleton<AesHelper>();
 builder.Services.AddSingleton<StoragePaths>();
 builder.Services.AddSingleton<LogHelper>();
+// 未完成訂單檢索／銷貨檢索的後端分頁：SP 結果快取幾分鐘，翻頁／切頁籤不重跑 SP
+// （SalesOrderUnFinishApiController.Paged.cs、MixSalesShipApiController.Paged.cs）
+builder.Services.AddMemoryCache();
 
 // 銘版序號來源（見 Services/SerialNoSource.cs）：預設 View（V_NPS_SerialNo 直連 View），
 // Services:ManufacturingCenter:SerialNoSource = Api 時改呼叫 Proril_Manufacturing_Center。

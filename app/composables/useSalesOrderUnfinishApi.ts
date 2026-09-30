@@ -1,6 +1,6 @@
 import type { ApiResponse } from '~/types/api'
 import type { SalesShippingCustomer } from '~/types/salesShipping'
-import type { UnfinOrder } from '~/types/salesOrderUnfinish'
+import type { UnfinOrder, UnfinOrderPageSummary, UnfinOrderTab } from '~/types/salesOrderUnfinish'
 
 /**
  * 未完成訂單檢索共用的查詢條件。
@@ -78,6 +78,22 @@ export const useSalesOrderUnfinishApi = () => {
   const queryUnfinOrder1 = (query: UnfinOrderQuery) =>
     get<UnfinOrder[]>('/SalesOrderUnFinishApi/QueryUnfinOrder_1', toParams(query))
 
+  /**
+   * 四個頁籤共用的後端分頁（2.0 新增）。兩支 SP 的結果在後端快取 10 分鐘，
+   * refresh=true（按查詢）才重跑 SP，翻頁／切頁籤送 false 直接從快取切。
+   * 翻頁時 query 必須是「上次按查詢時」的條件，否則對不到快取、會重跑 SP。
+   * 四個頁籤筆數與總金額在 body2（UnfinOrderPageSummary）。pageSize <= 0 代表不分頁。
+   */
+  const getUnfinOrderPage = (
+    query: Omit<UnfinOrderQuery, 'groupName' | 'groupDesc'>,
+    page: { tab: UnfinOrderTab, pageIndex: number, pageSize: number, refresh: boolean }
+  ) => {
+    const { groupName: _g, groupDesc: _d, orderNo: _o, ...params } = toParams({ ...query, groupName: '' })
+    return apiFetch<ApiResponse<UnfinOrder[], UnfinOrderPageSummary>>('/SalesOrderUnFinishApi/GetUnfinOrderPage', {
+      params: { ...params, ...page }
+    })
+  }
+
   /** 匯出 Excel，body 回相對於 .NET 站台根目錄的路徑（要接 /ShareRoot/ 前綴）。 */
   const exportXls = (query: UnfinOrderQuery) =>
     get<string>('/SalesOrderUnFinishApi/ExportXls', toParams(query))
@@ -88,6 +104,7 @@ export const useSalesOrderUnfinishApi = () => {
   return {
     getUnfinOrder,
     queryUnfinOrder1,
+    getUnfinOrderPage,
     exportXls,
     getCustomers
   }

@@ -49,7 +49,7 @@ dotnet run
 | `MainApi`（權限樹／側欄） | 2.0 新增 GetRBACPermission（`RBAC_Permission` 全部有效節點，權限樹、側欄、模組首頁共用）；GetMSystemWNo（topbar 環境圖示） |
 | `MainApi`（角色，2.0 新增） | GetRoleList / GetRole / SaveRole / DeleteRole / SetRoleMembers（取代 1.0 的逐人 SetPermissionTree 與部門範本 SaveDepFunction） |
 | `MixSalesShipApi` | GetSalesOrder / GetSalesOrder_1 / ExportXls / GetCustomerCredit / GetCustomerCreditCRM / GetSalesTotal / GetCustomerUnfinOrder |
-| `SalesOrderUnFinishApi` | GetUnfinOrder / QueryUnfinOrder_1 / ExportXls |
+| `SalesOrderUnFinishApi` | GetUnfinOrder / QueryUnfinOrder_1 / ExportXls / GetUnfinOrderPage（2.0 新增，後端分頁） |
 
 > 2026-09-23 改成角色制時移除：`SetPermissionKeys` / `SaveDepPermissionKeys` /
 > `GetPermissionLinkType` / `GetMPermissionLinkType` / `GetDepartmentList`，

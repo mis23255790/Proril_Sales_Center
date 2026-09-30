@@ -19,7 +19,8 @@ export const UNFINISH_PRODUCT_TYPE = {
 /**
  * prc_QueryUnfinOrder(_1) 的 FooterFlag，語意與銷貨檢索的 prc_QuerySalesOrder(_1) 相同：
  * N = 逐筆明細列；Y = 群組小計；S = 群組筆數剛好 1 筆時明細升格成小計；T = 總計列。
- * 細項 tab 顯示非 Y（N+S+T），統計 tab 顯示非 N（S+Y+T）。
+ * 細項 tab 顯示非 Y（N+S+T），統計 tab 顯示非 N（S+Y+T）。四個頁籤的篩選在後端
+ * GetUnfinOrderPage 做，前端只剩明細 modal 用 isUnfinishDetailRow。
  */
 export const UNFINISH_FOOTER_FLAG = {
   LINE: 'N',
@@ -96,4 +97,18 @@ export interface UnfinOrder {
 /** 前端補上的顯示序號：同群組相鄰列共用同一個 index，斑馬紋交錯用。 */
 export interface UnfinOrderRow extends UnfinOrder {
   showIndex: number
+}
+
+/** 四個頁籤，也是 GetUnfinOrderPage 的 tab 參數值。 */
+export type UnfinOrderTab = 'productDetail' | 'productGroup' | 'soDetail' | 'soGroup'
+
+/** GetUnfinOrderPage 的 body2：四個頁籤筆數與總金額是分頁前的統計，totalCount 是目前頁籤的筆數。 */
+export interface UnfinOrderPageSummary {
+  totalCount: number
+  productDetailCount: number
+  productGroupCount: number
+  soDetailCount: number
+  soGroupCount: number
+  /** 品號查詢結果 FooterFlag != Y 的台幣金額加總（沒有金額權限時是 0）。 */
+  totalAmount: number
 }

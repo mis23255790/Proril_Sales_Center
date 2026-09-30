@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Proril.SalesIssue.Api.Controllers.Shared;
 using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Data;
@@ -19,7 +20,8 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 /// 只存在資料庫端（跟銷貨檢索的 prc_QuerySalesOrder(_1) 不同，不會順便匯入 ERP 資料，
 /// 純讀）。Controller 只負責把參數傳進去、把結果集原樣回傳。
 ///
-/// 只搬未完成訂單檢索這一頁會用到的三支端點（GetUnfinOrder / QueryUnfinOrder_1 / ExportXls）。
+/// 只搬未完成訂單檢索這一頁會用到的三支端點（GetUnfinOrder / QueryUnfinOrder_1 / ExportXls），
+/// 2.0 另外加了後端分頁用的 GetUnfinOrderPage（見 SalesOrderUnFinishApiController.Paged.cs）。
 ///
 /// <c>SerialNosJson</c>（銘版序號）原本是 SP 背後的 V_UnfinOrder 用跨庫 LEFT JOIN
 /// 即時查 PRORIL_WEB.dbo.NPS_D_Order，51002 執行帳號對 PRORIL_WEB 沒有 SELECT 權限會
@@ -35,14 +37,20 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
         JwtHelper jwtHelper,
         StoragePaths paths,
         ISerialNoSource serialNoLookup,
+        IMemoryCache cache,
+        DbContextOptions<Data.SalesCenter.SalesCenterDbContext> scDbOptions,
         ILogger<SalesOrderUnFinishApiController> logger) : base(scDb, jwtHelper, logger)
     {
         _paths = paths;
         _serialNoLookup = serialNoLookup;
+        _cache = cache;
+        _scDbOptions = scDbOptions;
     }
 
     private readonly StoragePaths _paths;
     private readonly ISerialNoSource _serialNoLookup;
+    private readonly IMemoryCache _cache;
+    private readonly DbContextOptions<Data.SalesCenter.SalesCenterDbContext> _scDbOptions;
 
     /// <summary>依品號（TD004）分群的查詢，餵給「品號細項」「品號統計」兩個頁籤。</summary>
     [HttpGet]
@@ -99,17 +107,21 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
     /// **與 1.0 的差異**：改用 <c>FromSqlInterpolated</c> 讓 EF 自己參數化，不再是拼字串
     /// 直接 <c>FromSql</c>（有 SQL injection 風險）。SP 內部仍會把值再組成動態 SQL，
     /// 那是 SP 自己的事，不改資料庫。
+    ///
+    /// <paramref name="db"/> 不傳就用 request 的 <c>scDb</c>；GetUnfinOrderPage 要兩支 SP 平行跑，
+    /// DbContext 不能跨執行緒共用，那邊會各自 new 一個傳進來。
     /// </summary>
     private List<UnfinOrder> CallQueryUnfinOrder(
         string? inCopSource, string? inCustomerNo, string? productType, string? productNo, string? productName,
         string? productSpec, string? startDate, string? endDate, string? deliveryStartDate, string? deliveryEndDate,
-        string? serialNo, string? poNo, string? inPlanNumber, string? groupName, string? groupDesc)
+        string? serialNo, string? poNo, string? inPlanNumber, string? groupName, string? groupDesc,
+        Data.SalesCenter.SalesCenterDbContext? db = null)
     {
         WriteStepLog(nameof(CallQueryUnfinOrder), BuildDebugSql("prc_QueryUnfinOrder",
             inCopSource, inCustomerNo, productType, productNo, productName, productSpec,
             startDate, endDate, deliveryStartDate, deliveryEndDate, serialNo, poNo, inPlanNumber, groupName, groupDesc));
 
-        return scDb.Set<UnfinOrder>()
+        return (db ?? scDb).Set<UnfinOrder>()
             .FromSqlInterpolated($@"EXEC prc_QueryUnfinOrder
                 {inCopSource ?? ""}, {inCustomerNo ?? ""}, {productType ?? ""}, {productNo ?? ""}, {productName ?? ""}, {productSpec ?? ""},
                 {startDate ?? ""}, {endDate ?? ""}, {deliveryStartDate ?? ""}, {deliveryEndDate ?? ""},
@@ -118,17 +130,18 @@ public partial class SalesOrderUnFinishApiController : BaseApiController
             .ToList();
     }
 
-    /// <summary><c>EXEC prc_QueryUnfinOrder_1</c>。</summary>
+    /// <summary><c>EXEC prc_QueryUnfinOrder_1</c>。<paramref name="db"/> 同上，見 <see cref="CallQueryUnfinOrder"/>。</summary>
     private List<UnfinOrder> CallQueryUnfinOrder1(
         string? inCopSource, string? inCustomerNo, string? productType, string? productNo, string? productName,
         string? productSpec, string? startDate, string? endDate, string? deliveryStartDate, string? deliveryEndDate,
-        string? serialNo, string? poNo, string? inPlanNumber, string? groupName, string? groupDesc)
+        string? serialNo, string? poNo, string? inPlanNumber, string? groupName, string? groupDesc,
+        Data.SalesCenter.SalesCenterDbContext? db = null)
     {
         WriteStepLog(nameof(CallQueryUnfinOrder1), BuildDebugSql("prc_QueryUnfinOrder_1",
             inCopSource, inCustomerNo, productType, productNo, productName, productSpec,
             startDate, endDate, deliveryStartDate, deliveryEndDate, serialNo, poNo, inPlanNumber, groupName, groupDesc));
 
-        return scDb.Set<UnfinOrder>()
+        return (db ?? scDb).Set<UnfinOrder>()
             .FromSqlInterpolated($@"EXEC prc_QueryUnfinOrder_1
                 {inCopSource ?? ""}, {inCustomerNo ?? ""}, {productType ?? ""}, {productNo ?? ""}, {productName ?? ""}, {productSpec ?? ""},
                 {startDate ?? ""}, {endDate ?? ""}, {deliveryStartDate ?? ""}, {deliveryEndDate ?? ""},
