@@ -396,8 +396,10 @@ const openIssue = (row: CustomerWorkProcessRow) => {
         </UButton>
       </div>
 
-      <div class="overflow-x-auto rounded-lg border border-default">
+      <div class="overflow-hidden rounded-lg border border-default">
         <UTable
+          sticky
+          class="max-h-[70vh]"
           :data="memos"
           :columns="memoColumns"
           :ui="{ tr: clickableRowTr }"
@@ -436,8 +438,14 @@ const openIssue = (row: CustomerWorkProcessRow) => {
         </p>
       </div>
 
-      <div class="overflow-x-auto rounded-lg border border-default">
-        <UTable :data="unfinOrders" :columns="orderColumns" :ui="{ td: 'whitespace-nowrap' }">
+      <div class="overflow-hidden rounded-lg border border-default">
+        <UTable
+          sticky
+          class="max-h-[70vh]"
+          :data="unfinOrders"
+          :columns="orderColumns"
+          :ui="{ td: 'whitespace-nowrap' }"
+        >
           <template #empty>
             <p class="py-12 text-center text-sm text-muted">
               這個客戶沒有未完成訂單
@@ -503,8 +511,14 @@ const openIssue = (row: CustomerWorkProcessRow) => {
         </p>
       </div>
 
-      <div class="overflow-x-auto rounded-lg border border-default">
-        <UTable :data="credits" :columns="creditColumns" :ui="{ td: 'whitespace-nowrap text-right' }">
+      <div class="overflow-hidden rounded-lg border border-default">
+        <UTable
+          sticky
+          class="max-h-[70vh]"
+          :data="credits"
+          :columns="creditColumns"
+          :ui="{ td: 'whitespace-nowrap text-right' }"
+        >
           <template #empty>
             <p class="py-12 text-center text-sm text-muted">
               查無信用額度資料
@@ -520,8 +534,10 @@ const openIssue = (row: CustomerWorkProcessRow) => {
         議題
       </h2>
 
-      <div class="overflow-x-auto rounded-lg border border-default">
+      <div class="overflow-hidden rounded-lg border border-default">
         <UTable
+          sticky
+          class="max-h-[70vh]"
           :data="workProcesses"
           :columns="issueColumns"
           :ui="{ tr: clickableRowTr }"

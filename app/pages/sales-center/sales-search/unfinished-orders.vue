@@ -613,10 +613,16 @@ const openGroupDetail = (row: UnfinOrderRow) =>
       </UButton>
     </div>
 
-    <!-- 統計兩個頁籤有明細 modal，整列可點；細項兩個頁籤沒有，不掛。 -->
-    <div class="overflow-x-auto rounded-lg border border-default">
+    <!--
+      統計兩個頁籤有明細 modal，整列可點；細項兩個頁籤沒有，不掛。
+      表頭 sticky：外層不能再包 overflow-x-auto（會變成另一個捲動容器讓 sticky 失效），
+      改由 UTable 自己的根節點（預設 overflow-auto）限高捲動。
+    -->
+    <div class="overflow-hidden rounded-lg border border-default">
       <UTable
         ref="table"
+        sticky
+        class="max-h-[70vh]"
         :pagination="pagination"
         :pagination-options="{ manualPagination: true, rowCount: summary.totalCount }"
         :data="pageRows"
