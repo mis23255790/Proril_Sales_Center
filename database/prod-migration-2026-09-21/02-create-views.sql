@@ -211,81 +211,131 @@ WHERE 1=1
 and TD.TD016 <> 'y'
 GO
 
--- 20250120 建立 - 訂單檢核查詢使用
+-- 20250120 建立
+-- 訂單檢核查詢使用
+-- 20260930 改用 OPENQUERY：整段丟到 192.168.1.200 執行，只把結果傳回來
+--   （原本四段式名稱的跨主機 JOIN 可能被拆成多個 Remote Scan 把資料拉回本機）。
+--   - 未確認／已確認兩段併成一段（TC027 = TD021 且為 N 或 Y），ConfirmFlag 由 TC027 推出。
+--   - 順帶修正：搬移時「國外訂單 未確認」的 ConfirmFlag 誤抄成 'Y'，1.0 PRORIL_WEB 原本是 'N'。
+--   - 中文別名與常值放在外層：OPENQUERY 的查詢字串不能加 N 前綴，中文放進去可能變問號。
+--   - OPENQUERY 字串內的單引號要寫兩個（''N''）。
+-- TC013  價格條件  V 40.0  價格條件 //950808 S00-9508031 C16->C40
+-- TC049  流程代號  V 2.0   流程代號(多角貿易)
+-- 不帶計劃批號(MOCTA.TA033)：同訂單有多個計劃批號，會造成資料重覆
 CREATE OR ALTER VIEW [dbo].[V_POList]
 AS
--- 國內訂單 未確認
-select DISTINCT '芳晟ERP' COP_Source,MQ.MQ002 單別名稱,TC001 單別,TC002 單號,TC003 訂單日期,TC013 價格條件,'' 預交日,
-TC004 客戶代號,ISNULL(MA.MA002,'') 客戶名稱,isnull(TC005,'') 部門代號,TC006 業務人員,ISNULL(MV.MV002,'') 業務名稱,TC010 送貨地址一,
-TC011 送貨地址二,TC014 付款條件,TC016 課稅別,TC019 運輸方式,TC008 幣別,TC009 匯率,TC029 訂單金額,TC031 總數量,TC038 PACKINGLIST備註,
-TC012 客戶單號,TC068 交易條件,ISNULL(NK.NK002,'') 交易條件名稱,TC020 起始港口,TC021 目的港口,TC018 連絡人,TC066 TEL_NO,TC067 FAX_NO,
-'' 附件檔案,case when TC014 like '%T/T%' or TC014 like '%TT%' then 'Y' else 'N' end 付款檢核,TC.TC049 流程代號,
-TD.TD016 FinFlag, 'N' ConfirmFlag
- FROM [192.168.1.200].PRORIL.dbo.COPTC TC
-INNER JOIN [192.168.1.200].PRORIL.dbo.COPTD TD ON TC.TC001 = TD.TD001 and TC.TC002 = TD.TD002
-INNER JOIN [192.168.1.200].PRORIL.dbo.CMSMQ MQ ON MQ.MQ001 = TC.TC001
-LEFT JOIN [192.168.1.200].PRORIL.dbo.COPMA MA ON MA.MA001 = TC.TC004
-LEFT JOIN [192.168.1.200].PRORIL.dbo.CMSMV MV ON MV.MV001 = TC.TC006
-LEFT JOIN [192.168.1.200].PRORIL.dbo.CMSNK NK ON NK.NK001 = TC.TC068
-WHERE 1=1
-and TC.TC027 = 'N' and TD.TD021 = 'N'
-and TD.TD016 <> 'y'
+-- 國內訂單（芳晟 PRORIL）
+SELECT DISTINCT
+    N'芳晟ERP'            COP_Source,
+    R.MQ002               單別名稱,
+    R.TC001               單別,
+    R.TC002               單號,
+    R.TC003               訂單日期,
+    R.TC013               價格條件,
+    ''                    預交日,
+    R.TC004               客戶代號,
+    ISNULL(R.MA002,'')    客戶名稱,
+    ISNULL(R.TC005,'')    部門代號,
+    R.TC006               業務人員,
+    ISNULL(R.MV002,'')    業務名稱,
+    R.TC010               送貨地址一,
+    R.TC011               送貨地址二,
+    R.TC014               付款條件,
+    R.TC016               課稅別,
+    R.TC019               運輸方式,
+    R.TC008               幣別,
+    R.TC009               匯率,
+    R.TC029               訂單金額,
+    R.TC031               總數量,
+    R.TC038               PACKINGLIST備註,
+    R.TC012               客戶單號,
+    R.TC068               交易條件,
+    ISNULL(R.NK002,'')    交易條件名稱,
+    R.TC020               起始港口,
+    R.TC021               目的港口,
+    R.TC018               連絡人,
+    R.TC066               TEL_NO,
+    R.TC067               FAX_NO,
+    ''                    附件檔案,
+    CASE WHEN R.TC014 LIKE '%T/T%' OR R.TC014 LIKE '%TT%' THEN 'Y' ELSE 'N' END 付款檢核,
+    R.TC049               流程代號,
+    R.TD016               FinFlag,
+    CASE WHEN R.TC027 = 'Y' THEN 'Y' ELSE 'N' END ConfirmFlag
+FROM OPENQUERY([192.168.1.200], '
+    SELECT DISTINCT
+        MQ.MQ002, TC.TC001, TC.TC002, TC.TC003, TC.TC013, TC.TC004, MA.MA002,
+        TC.TC005, TC.TC006, MV.MV002, TC.TC010, TC.TC011, TC.TC014, TC.TC016,
+        TC.TC019, TC.TC008, TC.TC009, TC.TC029, TC.TC031, TC.TC038, TC.TC012,
+        TC.TC068, NK.NK002, TC.TC020, TC.TC021, TC.TC018, TC.TC066, TC.TC067,
+        TC.TC049, TC.TC027, TD.TD016
+    FROM PRORIL.dbo.COPTC TC
+    INNER JOIN PRORIL.dbo.COPTD TD ON TC.TC001 = TD.TD001 AND TC.TC002 = TD.TD002
+    INNER JOIN PRORIL.dbo.CMSMQ MQ ON MQ.MQ001 = TC.TC001
+    LEFT JOIN  PRORIL.dbo.COPMA MA ON MA.MA001 = TC.TC004
+    LEFT JOIN  PRORIL.dbo.CMSMV MV ON MV.MV001 = TC.TC006
+    LEFT JOIN  PRORIL.dbo.CMSNK NK ON NK.NK001 = TC.TC068
+    WHERE TC.TC027 IN (''N'',''Y'')
+      AND TD.TD021 = TC.TC027
+      AND TD.TD016 <> ''y''
+') R
 
-UNION
--- 國內訂單 已確認
-select DISTINCT '芳晟ERP' COP_Source,MQ.MQ002 單別名稱,TC001 單別,TC002 單號,TC003 訂單日期,TC013 價格條件,'' 預交日,
-TC004 客戶代號,ISNULL(MA.MA002,'') 客戶名稱,isnull(TC005,'') 部門代號,TC006 業務人員,ISNULL(MV.MV002,'') 業務名稱,TC010 送貨地址一,
-TC011 送貨地址二,TC014 付款條件,TC016 課稅別,TC019 運輸方式,TC008 幣別,TC009 匯率,TC029 訂單金額,TC031 總數量,TC038 PACKINGLIST備註,
-TC012 客戶單號,TC068 交易條件,ISNULL(NK.NK002,'') 交易條件名稱,TC020 起始港口,TC021 目的港口,TC018 連絡人,TC066 TEL_NO,TC067 FAX_NO,
-'' 附件檔案,case when TC014 like '%T/T%' or TC014 like '%TT%' then 'Y' else 'N' end 付款檢核,TC.TC049 流程代號,
-TD.TD016 FinFlag, 'Y' ConfirmFlag
- FROM [192.168.1.200].PRORIL.dbo.COPTC TC
-INNER JOIN [192.168.1.200].PRORIL.dbo.COPTD TD ON TC.TC001 = TD.TD001 and TC.TC002 = TD.TD002
-INNER JOIN [192.168.1.200].PRORIL.dbo.CMSMQ MQ ON MQ.MQ001 = TC.TC001
-LEFT JOIN [192.168.1.200].PRORIL.dbo.COPMA MA ON MA.MA001 = TC.TC004
-LEFT JOIN [192.168.1.200].PRORIL.dbo.CMSMV MV ON MV.MV001 = TC.TC006
-LEFT JOIN [192.168.1.200].PRORIL.dbo.CMSNK NK ON NK.NK001 = TC.TC068
-WHERE 1=1
-and TC.TC027 = 'Y' and TD.TD021 = 'Y'
-and TD.TD016 <> 'y'
+-- COP_Source 不同，兩邊不會重複，用 UNION ALL 省掉整體去重
+UNION ALL
 
-UNION
-
--- 國外訂單 未確認
-select DISTINCT '浦瑞ERP' COP_Source,MQ.MQ002 ,TC001 ,TC002 ,TC003 ,TC013,'',
-TC004 ,ISNULL(MA.MA002,'') MA002,isnull(TC005,'') TC005 ,TC006 ,
-ISNULL(MV.MV002,'') MV002,TC010 ,TC011 ,TC014 ,TC016 ,TC019 ,TC008 ,TC009 ,TC029 ,TC031 ,TC038 ,
-TC012 ,TC068 ,ISNULL(NK.NK002,'') NK002, TC020 ,TC021,TC018,TC066,TC067,'',case when TC014 like '%T/T%' or TC014 like '%TT%' then 'Y' else 'N' end 付款檢核,
-TC.TC049 流程代號,
-TD.TD016,  'Y' ConfirmFlag
- FROM [192.168.1.200].TWPR.dbo.COPTC TC
-INNER JOIN [192.168.1.200].TWPR.dbo.COPTD TD ON TC.TC001 = TD.TD001 and TC.TC002 = TD.TD002
-INNER JOIN [192.168.1.200].TWPR.dbo.CMSMQ MQ ON MQ.MQ001 = TC.TC001
-LEFT JOIN [192.168.1.200].TWPR.dbo.COPMA MA ON MA.MA001 = TC.TC004
-LEFT JOIN [192.168.1.200].PRORIL.dbo.CMSMV MV ON MV.MV001 = TC.TC006
-LEFT JOIN [192.168.1.200].PRORIL.dbo.CMSNK NK ON NK.NK001 = TC.TC068
-WHERE 1=1
-and TC.TC027 = 'N' and TD.TD021 = 'N'
-and TD.TD016 <> 'y'
-
-UNION
-
--- 國外訂單 已確認
-select DISTINCT '浦瑞ERP' COP_Source,MQ.MQ002 ,TC001 ,TC002 ,TC003 ,TC013,'',
-TC004 ,ISNULL(MA.MA002,'') MA002,isnull(TC005,'') TC005 ,TC006 ,
-ISNULL(MV.MV002,'') MV002,TC010 ,TC011 ,TC014 ,TC016 ,TC019 ,TC008 ,TC009 ,TC029 ,TC031 ,TC038 ,
-TC012 ,TC068 ,ISNULL(NK.NK002,'') NK002, TC020 ,TC021,TC018,TC066,TC067,'',case when TC014 like '%T/T%' or TC014 like '%TT%' then 'Y' else 'N' end 付款檢核,
-TC.TC049 流程代號,
-TD.TD016,  'Y' ConfirmFlag
- FROM [192.168.1.200].TWPR.dbo.COPTC TC
-INNER JOIN [192.168.1.200].TWPR.dbo.COPTD TD ON TC.TC001 = TD.TD001 and TC.TC002 = TD.TD002
-INNER JOIN [192.168.1.200].TWPR.dbo.CMSMQ MQ ON MQ.MQ001 = TC.TC001
-LEFT JOIN [192.168.1.200].TWPR.dbo.COPMA MA ON MA.MA001 = TC.TC004
-LEFT JOIN [192.168.1.200].PRORIL.dbo.CMSMV MV ON MV.MV001 = TC.TC006
-LEFT JOIN [192.168.1.200].PRORIL.dbo.CMSNK NK ON NK.NK001 = TC.TC068
-WHERE 1=1
-and TC.TC027 = 'Y' and TD.TD021 = 'Y'
-and TD.TD016 <> 'y'
+-- 國外訂單（浦瑞 TWPR；業務、交易條件讀 PRORIL）
+SELECT DISTINCT
+    N'浦瑞ERP',
+    R.MQ002,
+    R.TC001,
+    R.TC002,
+    R.TC003,
+    R.TC013,
+    '',
+    R.TC004,
+    ISNULL(R.MA002,''),
+    ISNULL(R.TC005,''),
+    R.TC006,
+    ISNULL(R.MV002,''),
+    R.TC010,
+    R.TC011,
+    R.TC014,
+    R.TC016,
+    R.TC019,
+    R.TC008,
+    R.TC009,
+    R.TC029,
+    R.TC031,
+    R.TC038,
+    R.TC012,
+    R.TC068,
+    ISNULL(R.NK002,''),
+    R.TC020,
+    R.TC021,
+    R.TC018,
+    R.TC066,
+    R.TC067,
+    '',
+    CASE WHEN R.TC014 LIKE '%T/T%' OR R.TC014 LIKE '%TT%' THEN 'Y' ELSE 'N' END,
+    R.TC049,
+    R.TD016,
+    CASE WHEN R.TC027 = 'Y' THEN 'Y' ELSE 'N' END
+FROM OPENQUERY([192.168.1.200], '
+    SELECT DISTINCT
+        MQ.MQ002, TC.TC001, TC.TC002, TC.TC003, TC.TC013, TC.TC004, MA.MA002,
+        TC.TC005, TC.TC006, MV.MV002, TC.TC010, TC.TC011, TC.TC014, TC.TC016,
+        TC.TC019, TC.TC008, TC.TC009, TC.TC029, TC.TC031, TC.TC038, TC.TC012,
+        TC.TC068, NK.NK002, TC.TC020, TC.TC021, TC.TC018, TC.TC066, TC.TC067,
+        TC.TC049, TC.TC027, TD.TD016
+    FROM TWPR.dbo.COPTC TC
+    INNER JOIN TWPR.dbo.COPTD TD ON TC.TC001 = TD.TD001 AND TC.TC002 = TD.TD002
+    INNER JOIN TWPR.dbo.CMSMQ MQ ON MQ.MQ001 = TC.TC001
+    LEFT JOIN  TWPR.dbo.COPMA MA ON MA.MA001 = TC.TC004
+    LEFT JOIN  PRORIL.dbo.CMSMV MV ON MV.MV001 = TC.TC006
+    LEFT JOIN  PRORIL.dbo.CMSNK NK ON NK.NK001 = TC.TC068
+    WHERE TC.TC027 IN (''N'',''Y'')
+      AND TD.TD021 = TC.TC027
+      AND TD.TD016 <> ''y''
+') R
 GO
 
 /****** Author: Mars 20241112 ******/

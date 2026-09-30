@@ -1,4 +1,26 @@
 <details>
+  <summary>版號2026.09.30</summary>
+
+##### perf: V_POList 改用 OPENQUERY
+      原本四段式名稱 [192.168.1.200].PRORIL.dbo.xxx 的跨主機 JOIN，改成國內、國外各一個
+      OPENQUERY，整段在 ERP 主機執行後只傳回結果；未確認／已確認兩段併成一段
+      （TC027 = TD021 且為 N 或 Y），ConfirmFlag 改由 TC027 推出。
+      中文別名與常值放在外層（OPENQUERY 字串不能加 N 前綴）。
+      定義在 database/OrderCheckObjectsMigration.sql 與
+      database/prod-migration-2026-09-21/02-create-views.sql（兩份內容相同）。
+
+##### fix: 國外未確認訂單被歸到已確認
+      搬移 V_POList 時「國外訂單 未確認」那段的 ConfirmFlag 誤抄成 'Y'
+      （1.0 PRORIL_WEB 原本是 'N'），國外未確認訂單全部跑到已確認頁籤。
+      隨上面的改寫一起修正。
+
+      測試區（50002）比對新舊定義：總筆數一致（芳晟 2638、浦瑞 2365），
+      除 ConfirmFlag 外其餘欄位 EXCEPT 雙向 0 筆；差異只有浦瑞 9 張單 Y → N。
+      單次查詢 1134 ms → 440 ms。
+
+</details>
+
+<details>
   <summary>版號2026.09.29</summary>
 
 ##### fix: 已確認訂單頁（與匯出）整頁空白
