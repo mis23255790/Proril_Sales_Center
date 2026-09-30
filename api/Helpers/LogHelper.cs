@@ -13,21 +13,36 @@ public class LogHelper
     public static readonly string DefaultRootLogPath =
         RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "/app/Logs" : "C:\\Logs\\proril_log";
 
+    /// <summary>
+    /// Controller 例外專用目錄（{DefaultRootLogPath}/exceptionLog/yyyyMMdd.txt），
+    /// 在 DefaultRootLogPath 底下，所以 LogTimedHostedService 的 30 天清理一併涵蓋。
+    /// </summary>
+    public static readonly string ExceptionLogPath = Path.Combine(DefaultRootLogPath, "exceptionLog");
+
     public string LogPath { get; set; } = DefaultRootLogPath;
 
-    public void WriteLog(string logMsg)
+    public void WriteLog(string logMsg) => WriteLogTo(LogPath, logMsg);
+
+    /// <summary>
+    /// 寫進 exceptionLog 目錄。LogHelper 是 singleton，不能靠改 LogPath 切目錄
+    /// （會影響同時在寫的 RequestLoggingMiddleware），所以另開方法。
+    /// </summary>
+    public void WriteExceptionLog(string source, Exception ex)
+        => WriteLogTo(ExceptionLogPath, $"{source}\n{ex}");
+
+    private static void WriteLogTo(string logPath, string logMsg)
     {
         try
         {
             string logFileName = DateTime.Now.ToString("yyyyMMdd") + ".txt";
             string nowTime = DateTime.Now.ToString("HH:mm:ss.fff");
 
-            if (!Directory.Exists(LogPath))
+            if (!Directory.Exists(logPath))
             {
-                Directory.CreateDirectory(LogPath);
+                Directory.CreateDirectory(logPath);
             }
 
-            string fullPathName = Path.Combine(LogPath, logFileName);
+            string fullPathName = Path.Combine(logPath, logFileName);
 
             using var sw = File.AppendText(fullPathName);
             sw.WriteLine("--執行時間 " + nowTime + "--");

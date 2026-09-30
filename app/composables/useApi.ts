@@ -18,6 +18,8 @@ export const useApi = () => {
         })
         throw err
       }
+      // isSuccess:false 是正常回傳、不會進 catch；進來的是 HTTP 失敗或網路錯誤（403 權限不足除外）
+      reportException('useApi', err, `${opts.method || 'GET'} ${path} status=${err?.statusCode ?? err?.status ?? '-'}`)
       toast.add({
         title: '無法連接後端 API',
         description: err?.data?.message || err?.message || `${path} 請求失敗`,

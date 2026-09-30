@@ -12,7 +12,8 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 ///
 /// 相對 1.0 的 BaseApiController 拿掉了：
 ///   - PRORILContext (dsWorkFlowContext)：另一個資料庫，業務議題用不到
-///   - LogHelper 自製檔案 log：改用 ILogger，交給 host 的 logging 設定
+///   - LogHelper 自製檔案 log：步驟 log 改用 ILogger；例外 log 另外寫
+///     LogHelper 的 exceptionLog 目錄（<see cref="WriteExceptionLog"/>）
 ///
 /// 只注入 <c>scDb</c>（Proril_Sales_Center）。2026-09-29 起 api/ 已不連 PRORIL_WEB，
 /// <c>ProrilWebDbContext</c> 已刪除。帳號與權限（M_User / RBAC_Role / RBAC_RoleUser /
@@ -109,6 +110,15 @@ public abstract class BaseApiController : ControllerBase
         => _logger.LogInformation("{User} --> {Controller}::{Method}:: {Message}",
             GetUserNameByToken(), GetType().Name, methodName, message);
 
+    /// <summary>
+    /// 手寫 try/catch 用（GetAccountByToken 等、UploadApiController.AddFileLog）。
+    /// 同時寫 ILogger 與 exceptionLog 目錄；LogHelper 從 RequestServices 取，
+    /// 不用改每支 Controller 的建構子。
+    /// </summary>
     protected void WriteExceptionLog(Exception ex)
-        => _logger.LogError(ex, "{Controller} 發生例外", GetType().Name);
+    {
+        _logger.LogError(ex, "{Controller} 發生例外", GetType().Name);
+        HttpContext?.RequestServices.GetService<LogHelper>()
+            ?.WriteExceptionLog($"{GetType().Name} 發生例外 {Request?.Method} {Request?.Path}", ex);
+    }
 }
