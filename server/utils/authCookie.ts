@@ -83,10 +83,8 @@ export const assertSameSiteRequest = (event: H3Event) => {
 
   const origin = getRequestHeader(event, 'origin')
   if (!origin) return
-  let originHost = ''
-  try {
-    originHost = new URL(origin).host
-  } catch {
+  const originHost = URL.canParse(origin) ? new URL(origin).host : null
+  if (!originHost) {
     throw createError({ statusCode: 403, statusMessage: '不合法的 Origin' })
   }
   if (originHost !== getRequestHost(event, { xForwardedHost: true })) {
