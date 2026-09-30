@@ -1,5 +1,5 @@
 import type { ApiResponse } from '~/types/api'
-import type { CopSalesOrder, SalesShippingCustomer } from '~/types/salesShipping'
+import type { CopSalesOrder, SalesOrderPageSummary, SalesOrderTab, SalesShippingCustomer } from '~/types/salesShipping'
 
 /**
  * 銷貨檢索共用的查詢條件。
@@ -71,6 +71,22 @@ export const useSalesShippingApi = () => {
       orderNo: query.orderNo ?? ''
     })
 
+  /**
+   * 四個頁籤共用的後端分頁（2.0 新增）。兩支 SP 的結果在後端快取 10 分鐘，
+   * refresh=true（按查詢）才重跑 SP，翻頁／切頁籤送 false 直接從快取切。
+   * 翻頁時 query 必須是「上次按查詢時」的條件，否則對不到快取、會重跑 SP。
+   * 四個頁籤筆數與總金額在 body2（SalesOrderPageSummary）。pageSize <= 0 代表不分頁。
+   */
+  const getSalesOrderPage = (
+    query: Omit<SalesOrderQuery, 'groupName' | 'groupDesc' | 'orderType' | 'orderNo'>,
+    page: { tab: SalesOrderTab, pageIndex: number, pageSize: number, refresh: boolean }
+  ) => {
+    const { groupName: _g, groupDesc: _d, ...params } = toParams({ ...query, groupName: '' })
+    return apiFetch<ApiResponse<CopSalesOrder[], SalesOrderPageSummary>>('/MixSalesShipApi/GetSalesOrderPage', {
+      params: { ...params, ...page }
+    })
+  }
+
   /** 匯出 Excel，body 回相對於 .NET 站台根目錄的路徑（要接 /ShareRoot/ 前綴）。 */
   const exportXls = (query: SalesOrderQuery) =>
     get<string>('/MixSalesShipApi/ExportXls', {
@@ -85,6 +101,7 @@ export const useSalesShippingApi = () => {
   return {
     getSalesOrder,
     getSalesOrder1,
+    getSalesOrderPage,
     exportXls,
     getCustomers
   }

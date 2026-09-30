@@ -1,4 +1,28 @@
 <details>
+  <summary>版號2026.09.29.1500</summary>
+
+##### feat: 銷貨檢索改後端分頁（SP 結果快取，翻頁不重跑 SP）
+      新增 MixSalesShipApi/GetSalesOrderPage：按查詢時兩支 SP 平行跑一次，結果（已遮罩金額）
+      放 IMemoryCache 10 分鐘，翻頁／切頁籤／切每頁筆數只從快取切出那一頁，
+      解掉 2026.09.18 版不做後端分頁的顧慮（每次翻頁重跑 prc_ImportSalesOrder）。
+      FooterFlag 篩選與總金額搬到後端，body2 回四個頁籤筆數（頁籤上顯示 badge）。
+      前端四個頁籤共用一個 UTable（manualPagination），翻頁與明細 modal 用 lastQuery；
+      統計兩個頁籤整列可點開明細。GetSalesOrder / GetSalesOrder_1 / ExportXls 不變。
+
+      api/Controllers/SalesSearch/MixSalesShipApiController.cs
+      api/Controllers/SalesSearch/MixSalesShipApiController.Paged.cs
+      api/Models/ApiModels.cs（SalesOrderPageSummary）
+      api/Program.cs（AddMemoryCache 註解）
+      app/pages/sales-center/sales-search/shipping-inquiry.vue
+      app/composables/useSalesShippingApi.ts
+      app/types/salesShipping.ts
+      app/utils/salesShipping.ts（移除 toXxxRows / sumTotalAmount / assignShowIndex）
+
+      驗證：dotnet build、npm run typecheck 通過；未做瀏覽器實測（dev token 過期）。
+
+</details>
+
+<details>
   <summary>版號2026.09.18.1300</summary>
 
 ##### feat: 銷貨檢索四個頁籤改前端分頁

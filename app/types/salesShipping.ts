@@ -20,7 +20,8 @@ export const PRODUCT_TYPE = {
  * S = 群組筆數剛好 1 筆時，把那一筆明細直接升格成小計；T = 全部的總計列。
  *
  * 細項 tab 顯示「非 Y」（N + S + T），統計 tab 顯示「非 N」（S + Y + T） ——
- * 兩者都吃得到 T（總計列），這是舊系統的既有行為，照搬。
+ * 兩者都吃得到 T（總計列），這是舊系統的既有行為，照搬。四個頁籤的篩選在後端
+ * GetSalesOrderPage 做，前端只剩明細 modal 用 isDetailRow。
  */
 export const FOOTER_FLAG = {
   LINE: 'N',
@@ -110,6 +111,20 @@ export interface CopSalesOrder {
 /** 前端補上的顯示序號：同群組（品號 / 銷貨單別+單號）相鄰列共用同一個 index，斑馬紋交錯用。 */
 export interface CopSalesOrderRow extends CopSalesOrder {
   showIndex: number
+}
+
+/** 四個頁籤，也是 GetSalesOrderPage 的 tab 參數值。 */
+export type SalesOrderTab = 'productDetail' | 'productGroup' | 'soDetail' | 'soGroup'
+
+/** GetSalesOrderPage 的 body2：四個頁籤筆數與總金額是分頁前的統計，totalCount 是目前頁籤的筆數。 */
+export interface SalesOrderPageSummary {
+  totalCount: number
+  productDetailCount: number
+  productGroupCount: number
+  soDetailCount: number
+  soGroupCount: number
+  /** 品號查詢結果 FooterFlag != Y 的台幣未稅 + 台幣稅額加總（沒有金額權限時是 0）。 */
+  totalAmount: number
 }
 
 /** CustomerApi/GetCustomerList_2 的客戶下拉選項。 */

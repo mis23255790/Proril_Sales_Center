@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Proril.SalesIssue.Api.Controllers.Shared;
 using Proril.SalesIssue.Api.Filters;
 using Proril.SalesIssue.Api.Data;
@@ -24,6 +25,7 @@ namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 /// GetFinalQuotation / ExportCustomerPrice（報價）、GetSalesTotal / GetCustomerCredit /
 /// GetCustomerCreditCRM / GetCustomerOrderTotal / GetCustomerUnfinOrder（客戶相關頁籤），
 /// 那些屬於別的模組，2.0 前端目前也沒有呼叫，不在這次搬移範圍。
+/// 2.0 另外加了後端分頁用的 GetSalesOrderPage（見 MixSalesShipApiController.Paged.cs）。
 /// </summary>
 [Authorize]
 [RequirePermission(PermissionKeys.SalesSearch.MixSalesShipping)]
@@ -33,12 +35,18 @@ public partial class MixSalesShipApiController : BaseApiController
         Data.SalesCenter.SalesCenterDbContext scDb,
         JwtHelper jwtHelper,
         StoragePaths paths,
+        IMemoryCache cache,
+        DbContextOptions<Data.SalesCenter.SalesCenterDbContext> scDbOptions,
         ILogger<MixSalesShipApiController> logger) : base(scDb, jwtHelper, logger)
     {
         _paths = paths;
+        _cache = cache;
+        _scDbOptions = scDbOptions;
     }
 
     private readonly StoragePaths _paths;
+    private readonly IMemoryCache _cache;
+    private readonly DbContextOptions<Data.SalesCenter.SalesCenterDbContext> _scDbOptions;
 
     /// <summary>
     /// SP 內部會先跑 prc_ImportSalesOrder 從 ERP linked server 拉資料，30 秒的預設逾時不夠。
@@ -122,15 +130,19 @@ public partial class MixSalesShipApiController : BaseApiController
     /// 使用者輸入串進 SQL 字串再 <c>FromSql</c>，有 SQL injection 風險。
     /// SP 內部還是會把這些值再串成動態 SQL（那是 SP 自己的事，不改資料庫），
     /// 但至少 Controller 這一層不再是拼字串。
+    ///
+    /// <paramref name="db"/> 不傳就用 request 的 <c>scDb</c>；GetSalesOrderPage 要兩支 SP 平行跑，
+    /// DbContext 不能跨執行緒共用，那邊會各自 new 一個傳進來。
     /// </summary>
     private List<CopSalesOrder> QueryByProduct(
         string? customerNo, string? productType, string? productNo, string? productName, string? productSpec,
         string? startDate, string? endDate, string? serialNo, string? poNo, string? inPlanNumber,
-        string? groupName, string? groupDesc)
+        string? groupName, string? groupDesc, Data.SalesCenter.SalesCenterDbContext? db = null)
     {
-        scDb.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
+        db ??= scDb;
+        db.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
 
-        return scDb.CopSalesOrders
+        return db.CopSalesOrders
             .FromSqlInterpolated($@"EXEC prc_QuerySalesOrder
                 {customerNo ?? ""}, {productType ?? ""}, {productNo ?? ""}, {productName ?? ""}, {productSpec ?? ""},
                 {startDate ?? ""}, {endDate ?? ""},
@@ -139,16 +151,17 @@ public partial class MixSalesShipApiController : BaseApiController
             .ToList();
     }
 
-    /// <summary><c>EXEC prc_QuerySalesOrder_1</c>（依銷貨單分群）。</summary>
+    /// <summary><c>EXEC prc_QuerySalesOrder_1</c>（依銷貨單分群）。<paramref name="db"/> 同上，見 <see cref="QueryByProduct"/>。</summary>
     private List<CopSalesOrder> QueryBySalesOrder(
         string? customerNo, string? productType, string? productNo, string? productName, string? productSpec,
         string? startDate, string? endDate, string? serialNo, string? poNo,
         string? orderType, string? orderNo, string? inPlanNumber,
-        string? groupName, string? groupDesc)
+        string? groupName, string? groupDesc, Data.SalesCenter.SalesCenterDbContext? db = null)
     {
-        scDb.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
+        db ??= scDb;
+        db.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
 
-        return scDb.CopSalesOrders
+        return db.CopSalesOrders
             .FromSqlInterpolated($@"EXEC prc_QuerySalesOrder_1
                 {customerNo ?? ""}, {productType ?? ""}, {productNo ?? ""}, {productName ?? ""}, {productSpec ?? ""},
                 {startDate ?? ""}, {endDate ?? ""},

@@ -55,7 +55,8 @@ Nuxt 頁面 ──▶ useSalesShippingApi() ──▶ /api/proxy/... ──▶ s
 
 # 兩支查詢 API，同時打，餵給不同分頁
 
-`load()` 用 `Promise.all` 同時打兩支：
+兩支 SP（2026-09-29 起由後端 `GetSalesOrderPage` 平行呼叫，見下方「分頁」；
+兩支原端點仍保留給明細 modal）：
 
 | API | groupName | 分群鍵 | 餵給哪個頁籤 |
 |---|---|---|---|
@@ -80,7 +81,8 @@ Nuxt 頁面 ──▶ useSalesShippingApi() ──▶ /api/proxy/... ──▶ s
 | `S` | 單筆升格 | 群組剛好只有 1 筆時，那筆明細直接變成小計（不另外產生 Y 列） |
 | `T` | 總計 | 整批查詢結果的最後一列 |
 
-畫面顯示規則（`app/utils/salesShipping.ts` 的 `isDetailRow` / `isSummaryRow`）：
+畫面顯示規則（四個頁籤在後端 `GetSalesOrderPage` 篩，明細 modal 用前端
+`app/types/salesShipping.ts` 的 `isDetailRow`）：
 
 ```
 細項 tab = FooterFlag != 'Y'   (N + S + T)
@@ -89,8 +91,6 @@ Nuxt 頁面 ──▶ useSalesShippingApi() ──▶ /api/proxy/... ──▶ s
 
 **兩邊都吃得到 `T`（總計列）**，這是舊系統的既有行為，照搬，不是 bug。
 
-`showIndex`（斑馬紋交錯用）是前端自己補的：同一個群組鍵（品號 tab 用 `th004`，
-銷貨單 tab 用 `th001+th002`）相鄰列共用一個號碼，換群組才 +1（`assignShowIndex()`）。
 
 # 品號種類勾選框
 
@@ -131,19 +131,30 @@ Excel 匯出（`MixSalesShipApiController.Xls.cs`）用同一個 key 在後端�
 > 點進明細永遠看得到金額 —— 這是舊畫面的權限漏洞。2.0 統一用同一個 `showAmount`
 > 旗標控制外層四個頁籤與兩個 modal，明細 modal 也會照樣隱藏金額欄位。
 
-# 分頁（2026-09-18 起）：前端分頁，不是後端
+# 分頁（2026-09-29 起）：後端分頁 + SP 結果快取
 
-跟業務議題／訂單資料檢核不同，這裡**刻意不做後端分頁**：`prc_QuerySalesOrder(_1)`
-一開始就會執行 `prc_ImportSalesOrder` 從 ERP linked server 同步資料，是有副作用、
-逾時設 120 秒的重操作，不是單純的資料庫查詢。如果「切頁就打新的 API」，代表每次翻頁
-都要重新觸發一次 ERP 同步，成本跟前兩個模組的 EF 查詢完全不同量級。
+2026-09-18 版曾刻意只做前端分頁，理由是 `prc_QuerySalesOrder(_1)` 一開始就會執行
+`prc_ImportSalesOrder` 從 ERP 同步資料，「切頁就重跑 SP」代價太高。
+2026-09-29 改成後端分頁，但**翻頁不重跑 SP**，做法與未完成訂單檢索相同：
 
-所以維持現行架構：SP 只在使用者按「查詢／全部／重設」或在篩選欄位按 Enter 時打一次
-（`load()` 用 `Promise.all` 打 `GetSalesOrder` + `GetSalesOrder_1` 兩次，跟改動前一樣），
-四個頁籤改成**前端** `getPaginationRowModel()` 分頁（`useTablePagination` +
-`TablePaginationBar`，每頁 20/50/全部），切頁與切頁籤都不會發新的網路請求，
-不會重複觸發 SP。`app/utils/table.ts` 的 `ALL_PAGE_SIZE`／`PAGE_SIZE_OPTIONS`
-與業務議題／訂單資料檢核共用同一組。
+- 新端點 `MixSalesShipApi/GetSalesOrderPage`（`MixSalesShipApiController.Paged.cs`，1.0 沒有）：
+  參數 = 查詢條件 + `tab`（productDetail / productGroup / soDetail / soGroup）+
+  `pageIndex`（0 起算）+ `pageSize`（<= 0 不分頁）+ `refresh`。
+- `refresh=true`（查詢／全部／重設／篩選欄位按 Enter）：兩支 SP 平行跑
+  （各自 new 一個 `SalesCenterDbContext`，同改動前前端 `Promise.all` 的並行度），
+  套完金額遮罩後放進 `IMemoryCache` 10 分鐘。
+- `refresh=false`（翻頁、切頁籤、切每頁筆數）：有快取就直接切，過期才重跑 SP。
+  快取 key = 全部查詢條件 + 有無金額權限，所以前端翻頁送的是 `lastQuery`
+  （上次按查詢時的條件快照），不是畫面上改到一半的條件。兩個明細 modal 也用 `lastQuery`。
+- FooterFlag 篩選（細項 != Y、統計 != N）與「總金額NT」（品號結果 FooterFlag != Y 的
+  `Th037 + Th038`）搬到後端；`body2`（`SalesOrderPageSummary`）回四個頁籤筆數、
+  總金額、目前頁籤筆數 `totalCount`。頁籤按鈕上的筆數 badge 就是這組。
+- 前端四個頁籤共用一個 `UTable`（`manualPagination`），`#` 欄加上前面幾頁的 offset；
+  統計兩個頁籤整列可點開明細 modal。`showIndex`（`assignShowIndex()`）已隨前端篩選一起拿掉
+  （原本就沒有畫面在用）。
+- `GetSalesOrder` / `GetSalesOrder_1` 保留一次全撈（明細 modal、1.0 相容），`ExportXls` 不變。
+
+**多台 api/ 實體時快取不共用**：翻頁打到另一台會對不到快取而重跑 SP，結果仍正確，只是慢。
 
 # 查詢條件：哪些真的送到後端
 

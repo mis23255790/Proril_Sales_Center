@@ -127,6 +127,22 @@ public class UnfinOrderPageSummary
     public decimal TotalAmount { get; set; }
 }
 
+/// <summary>
+/// GetSalesOrderPage（銷貨檢索）分頁後的統計，放在 <see cref="CustomApiViewModel.Body2"/>，
+/// 語意同 <see cref="UnfinOrderPageSummary"/>：四個頁籤的筆數與 TotalAmount 是「分頁前」的統計，
+/// TotalCount 是目前頁籤的筆數。
+/// </summary>
+public class SalesOrderPageSummary
+{
+    public int TotalCount { get; set; }
+    public int ProductDetailCount { get; set; }
+    public int ProductGroupCount { get; set; }
+    public int SoDetailCount { get; set; }
+    public int SoGroupCount { get; set; }
+    /// <summary>頁面上方「總金額NT」：品號查詢結果中 FooterFlag != Y 的台幣未稅 + 台幣稅額加總（沒有金額權限時是 0）。</summary>
+    public decimal TotalAmount { get; set; }
+}
+
 /// <summary>進度明細 + 建立者／修改者姓名。</summary>
 public class DWorkProcessDetailViewModel : SC.DWorkProcessDetail
 {
