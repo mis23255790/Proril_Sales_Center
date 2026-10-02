@@ -69,12 +69,18 @@ const userNameOf = (account: string) =>
 const columns: TableColumn<RoleListItem>[] = [
   { accessorKey: 'roleName', header: '角色' },
   { accessorKey: 'permissionCount', header: '權限', meta: { class: { td: 'text-right tabular-nums', th: 'text-right' } } },
-  { accessorKey: 'memberCount', header: '成員', meta: { class: { td: 'text-right tabular-nums', th: 'text-right' } } }
+  { accessorKey: 'memberCount', header: '成員', meta: { class: { td: 'text-right tabular-nums', th: 'text-right' } } },
+  { id: 'actions', header: '', meta: { class: { td: 'w-px text-right', th: 'w-px' } } }
 ]
 
 const loadRoles = async () => {
   const res = await api.getRoleList()
-  roles.value = res?.isSuccess ? (res.body ?? []) : []
+  const list = res?.isSuccess ? (res.body ?? []) : []
+  // 系統角色（superAdmin／everyone）固定在最上面，其餘依 roleCode 排序；numeric 讓 role2 排在 role10 前面
+  roles.value = [...list].sort((a, b) =>
+    Number(b.isSystem) - Number(a.isSystem)
+    || a.roleCode.trim().localeCompare(b.roleCode.trim(), undefined, { numeric: true, sensitivity: 'base' })
+  )
 }
 
 const loadMasters = async () => {
@@ -228,11 +234,12 @@ const save = async () => {
 
 const confirmModal = overlay.create(ConfirmDialog)
 
-const remove = async () => {
-  if (!editingId.value || form.isSystem) return
+/** 抽屜內的「刪除」與清單每列最右邊的「刪除」共用。 */
+const remove = async (role: { id: number, roleName: string, isSystem: boolean }) => {
+  if (!role.id || role.isSystem) return
   const confirmed = await confirmModal.open({
     title: '刪除角色',
-    description: `確定要刪除角色「${form.roleName}」？這個角色的權限與成員指派會一起刪除，成員會失去這個角色給的權限，無法復原。`,
+    description: `確定要刪除角色「${role.roleName}」？這個角色的權限與成員指派會一起刪除，成員會失去這個角色給的權限，無法復原。`,
     confirmLabel: '刪除',
     confirmColor: 'error'
   }).result
@@ -240,13 +247,14 @@ const remove = async () => {
 
   saving.value = true
   try {
-    const res = await api.deleteRole(editingId.value)
+    const res = await api.deleteRole(role.id)
     if (!res?.isSuccess) {
       toast.add({ title: '角色刪除失敗', description: res?.message ?? undefined, color: 'error' })
       return
     }
     toast.add({ title: '角色已刪除', color: 'success' })
-    editingId.value = null
+    // 從清單刪的不一定是抽屜開著的那個，只有刪到同一個才關抽屜
+    if (editingId.value === role.id) editingId.value = null
     await loadRoles()
     await Promise.all([loadPermissions(true), loadUserFunctions(true)])
   } catch (err) {
@@ -332,6 +340,21 @@ const drawerOpen = computed({
         </template>
         <template #memberCount-cell="{ row }">
           {{ row.original.isDefault ? '全部' : row.original.memberCount }}
+        </template>
+        <template #actions-cell="{ row }">
+          <div @click.stop>
+            <UButton
+              v-if="!row.original.isSystem"
+              size="xs"
+              color="error"
+              variant="ghost"
+              icon="i-lucide-trash-2"
+              :disabled="saving"
+              @click="remove(row.original)"
+            >
+              刪除
+            </UButton>
+          </div>
         </template>
       </UTable>
     </section>
@@ -470,7 +493,7 @@ const drawerOpen = computed({
             variant="outline"
             class="ml-auto"
             :loading="saving"
-            @click="remove"
+            @click="remove({ id: editingId, roleName: form.roleName, isSystem: form.isSystem })"
           >
             刪除
           </UButton>
