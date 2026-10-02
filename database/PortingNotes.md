@@ -824,3 +824,18 @@ M_PermissionDef → RBAC_Permission
   同時補進 4b.4 的清單讓全新環境建得出來。
 - **跑完第 4b 段，2026-09-23 版的 `api/` 與前端就不能用了**（讀 `LinkType`、檢查 `xxx.view`），
   腳本跑完要緊接著部署新版。
+
+## 格式匯入：CMN_XlsFileFormat（2026-09-30，新庫專屬的表）
+
+`XlsFormatObjectsMigration.sql`：建新庫的 `CMN_XlsFileFormat` + 權限節點
+`system.grpSetting`（GROUP）/ `system.importXlsFormat`（PAGE）。
+
+- **跟 1.0 同名但不是同一張表**：key 從 `FunctionNo`(int) 改成 `PermissionKey`（頁面權限 key），
+  `Caption`／`WSName` 改 nvarchar、`XLSettings` 放大到 nvarchar(300)、多一欄 `StyleWrapText`。
+- **沒有從 `PRORIL_WEB` 複製資料**（刻意的）：key 對不起來，而且 1.0 的 `PUR_`／`CMN_XlsFileFormat`
+  還有很多沒搬的模組（供應鏈、BOM 成本、財務…）在用，兩邊各自維護。
+  2.0 要套版型就用格式匯入頁重新匯入範本；沒有版型時 2.0 的匯出用寫死的預設版面，不會失敗。
+- 比照 `RBAC_*`，**不放進 `Tables/` 與 `TABLES.txt`**：那邊對照的是 `PRORIL_WEB` 的 schema，
+  也是 `copy-snapshot-data.ps1` 的複製白名單，放進去會把 1.0 的 int key 資料灌進來。
+- 1.0 的 `PUR_XlsFileFormat` 不搬，2.0 只有 CMN 這一張。
+- 執行狀態：測試區（50002）、正式區（51002）都**還沒執行**。

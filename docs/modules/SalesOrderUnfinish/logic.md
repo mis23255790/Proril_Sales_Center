@@ -51,10 +51,11 @@ Nuxt 頁面 ──▶ useSalesOrderUnfinishApi() ──▶ /api/proxy/... ──
   （銷貨檢索是 `th0xx`/`tg0xx`，這裡是 `tc0xx`/`td0xx`），刻意不共用型別或常數
   （`app/types/salesOrderUnfinish.ts`、`api/Data/SalesOrderUnfinishEntities.cs` 自成一組），
   避免兩個模組互相牽動。
-- Excel 匯出欄位配置比照 `MixSalesShipApiController.Xls.cs` / `OrderInfoVerifyApiController.Xls.cs`
-  的做法，直接寫死在 C#（`SalesOrderUnFinishApiController.Xls.cs`），不再讀 1.0 的
-  `PUR_XlsFileFormat`（FunctionNo=420）。欄位順序與頁面上四個頁籤的表格逐欄對齊，
-  欄寬改成 `AdjustToContents()`，是與 1.0 已知的唯一外觀差異。
+- Excel 匯出版面：有版型套版型（新庫 `CMN_XlsFileFormat`，系統管理 / 格式匯入，
+  key `salesSearch.queryUnFinish`），沒有就用寫死在 C#（`SalesOrderUnFinishApiController.Xls.cs`）
+  的預設版面，規則見 `../SystemSetting/logic.md`「格式匯入」。1.0 讀的是
+  `PUR_XlsFileFormat`（FunctionNo=420），那份資料沒有搬。預設版面的欄位順序與頁面上
+  四個頁籤的表格逐欄對齊，欄寬用 `AdjustToContents()`。
 
 # 兩支查詢 API，同時打，餵給不同分頁
 

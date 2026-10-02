@@ -1,20 +1,23 @@
 using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Models;
+using Proril.SalesIssue.Api.Services.XlsFormat;
 
 namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 
 /*
  * Excel 匯出。
  *
- * 1.0 的匯出格式是讀 CMN_XlsFileFormat 資料表動態組欄寬/表頭/樣式（XlsFormatterApis_Cmn），
- * 那套通用格式引擎是給多個「還沒搬」的模組共用的排版基礎設施，只為這一個匯出去搬整套
- * DB 驅動格式系統不成比例。這裡改成直接在 C# 寫死欄位配置，輸出結果（分頁、欄位、
- * 上色規則）與 1.0 一致，只是格式設定不再走 DB。
+ * 版型：CMN_XlsFileFormat（系統管理 / 格式匯入）有這支的版型就套版型（表頭、欄寬、樣式、
+ * 凍結窗格），沒有就用下面寫死的表頭與 AdjustToContents()。資料欄位的位置一律由這裡的程式決定，
+ * 版型只管外觀，見 Services/XlsFormat/XlsFormatTemplate.cs。
+ * （2026-09-30 以前這裡只有寫死的版面，1.0 則是一定要有 CMN_XlsFileFormat 的版型，
+ * 沒有就回「沒有輸出格式!」匯出失敗。）
  */
 public partial class OrderInfoVerifyApiController
 {
-    private const string SheetOrderSummary = "訂單總表";
+    private const string SheetOrderSummary = XlsFormatTargets.OrderInfoVerifySummarySheet;
+    private const string SheetOrderDetail = XlsFormatTargets.OrderInfoVerifyDetailSheet;
 
     /// <summary>
     /// 匯出 Excel：「訂單總表」一列一張訂單 + 每張訂單一個「訂單細項」分頁。
@@ -38,9 +41,11 @@ public partial class OrderInfoVerifyApiController
         var account = GetAccountByToken();
         var showAmount = HasPermission(account, PermissionKeys.SalesSearch.OrderInfoVerifyViewAmount);
 
+        var template = XlsFormatTemplate.Load(scDb, PermissionKeys.SalesSearch.OrderInfoVerify, XlsFormatTargets.SubNoFor(showAmount));
+
         using var workbook = new XLWorkbook();
-        WriteOrderSummarySheet(workbook, orderInfo, showAmount);
-        WriteOrderDetailSheets(workbook, orderInfo, showAmount);
+        WriteOrderSummarySheet(workbook, orderInfo, showAmount, template);
+        WriteOrderDetailSheets(workbook, orderInfo, showAmount, template);
 
         var dir = _paths.ExportDir(account);
         Directory.CreateDirectory(dir);
@@ -93,14 +98,23 @@ public partial class OrderInfoVerifyApiController
         "起始港口", "目的港口", "運輸方式", "業務名稱", "業務人員", "附件檔案"
     ];
 
-    private void WriteOrderSummarySheet(XLWorkbook workbook, List<VPoListDetailViewModel> orderInfo, bool showAmount)
+    /// <summary>沒有版型時的表頭：一列、粗體。回傳表頭列數。</summary>
+    private static int WriteDefaultHeader(IXLWorksheet ws, string[] headers)
+    {
+        for (var i = 0; i < headers.Length; i++) ws.Cell(1, i + 1).Value = headers[i];
+        ws.Row(1).Style.Font.Bold = true;
+        return 1;
+    }
+
+    private void WriteOrderSummarySheet(XLWorkbook workbook, List<VPoListDetailViewModel> orderInfo, bool showAmount, XlsFormatTemplate template)
     {
         var ws = workbook.AddWorksheet(SheetOrderSummary);
         var headers = showAmount ? OrderSummaryHeadersWithAmount : OrderSummaryHeadersNoAmount;
-        for (var i = 0; i < headers.Length; i++) ws.Cell(1, i + 1).Value = headers[i];
-        ws.Row(1).Style.Font.Bold = true;
+        var headerRows = template.Apply(ws, SheetOrderSummary);
+        var templated = headerRows > 0;
+        if (!templated) headerRows = WriteDefaultHeader(ws, headers);
 
-        var y = 2;
+        var y = headerRows + 1;
         var sno = 1;
         string? curKey = null;
 
@@ -140,8 +154,8 @@ public partial class OrderInfoVerifyApiController
             y++;
         }
 
-        ws.Columns().AdjustToContents();
-        ws.SetAutoFilter();
+        if (!templated) ws.Columns().AdjustToContents();
+        ws.Range(headerRows, 1, Math.Max(y - 1, headerRows), headers.Length).SetAutoFilter();
     }
 
     private static readonly string[] OrderDetailHeadersWithAmount =
@@ -150,9 +164,13 @@ public partial class OrderInfoVerifyApiController
     private static readonly string[] OrderDetailHeadersNoAmount =
         ["序", "ERP來源", "單別名稱", "單別", "單號", "序號", "品號", "品名", "規格", "訂單數量", "單位", "預交日", "檢核結果"];
 
-    private void WriteOrderDetailSheets(XLWorkbook workbook, List<VPoListDetailViewModel> orderInfo, bool showAmount)
+    private void WriteOrderDetailSheets(XLWorkbook workbook, List<VPoListDetailViewModel> orderInfo, bool showAmount, XlsFormatTemplate template)
     {
         var headers = showAmount ? OrderDetailHeadersWithAmount : OrderDetailHeadersNoAmount;
+        // 每張訂單一個分頁（1、2、3…），全部套「訂單細項」這一份版型
+        var templated = template.Has(SheetOrderDetail);
+        var headerRows = 1;
+        var sheets = new List<(IXLWorksheet Ws, int LastRow)>();
         var orderSno = 1;
         string? curKey = null;
         IXLWorksheet? ws = null;
@@ -164,11 +182,11 @@ public partial class OrderInfoVerifyApiController
             var key = $"{detail.CopSource}-{detail.單別}-{detail.單號}";
             if (key != curKey)
             {
+                if (ws is not null) sheets.Add((ws, y - 1));
                 curKey = key;
                 ws = workbook.AddWorksheet($"{orderSno++}");
-                for (var i = 0; i < headers.Length; i++) ws.Cell(1, i + 1).Value = headers[i];
-                ws.Row(1).Style.Font.Bold = true;
-                y = 2;
+                headerRows = templated ? template.Apply(ws, SheetOrderDetail) : WriteDefaultHeader(ws, headers);
+                y = headerRows + 1;
                 lineSno = 1;
             }
 
@@ -201,11 +219,12 @@ public partial class OrderInfoVerifyApiController
             ApplyRowColor(ws.Row(y), detail.VPoDetail.FinFlag);
             y++;
         }
+        if (ws is not null) sheets.Add((ws, y - 1));
 
-        foreach (var sheet in workbook.Worksheets.Where(w => w.Name != SheetOrderSummary))
+        foreach (var (sheet, lastRow) in sheets)
         {
-            sheet.Columns().AdjustToContents();
-            sheet.SetAutoFilter();
+            if (!templated) sheet.Columns().AdjustToContents();
+            sheet.Range(headerRows, 1, Math.Max(lastRow, headerRows), headers.Length).SetAutoFilter();
         }
     }
 }

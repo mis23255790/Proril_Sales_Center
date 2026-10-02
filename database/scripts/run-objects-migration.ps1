@@ -21,6 +21,7 @@
       （會把 M_Permission 既有個人權限轉成角色；不需要 linked server，報「不存在」不影響它）
       NpsSerialNoObjectsMigration.sql      銘版序號：1 View（V_NPS_SerialNo），跨庫讀 PRORIL_WEB.dbo.NPS_D_Order，沒有表
       （不需要 linked server；執行帳號要有 PRORIL_WEB.dbo.NPS_D_Order 的 SELECT 權限）
+      XlsFormatObjectsMigration.sql        格式匯入：1 表（CMN_XlsFileFormat）+ 權限樹節點，不需要 linked server
 
     三支都是可重複執行的（CREATE TABLE 包 IF OBJECT_ID(...) IS NULL、
     CREATE OR ALTER PROCEDURE/VIEW/FUNCTION、資料複製區塊在表已有資料時自動跳過）。
@@ -58,7 +59,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('OrderCheckObjectsMigration.sql', 'SalesShippingObjectsMigration.sql', 'SalesOrderUnfinishObjectsMigration.sql', 'CustomerRelatedObjectsMigration.sql', 'CustomerViewObjectsMigration.sql', 'RbacObjectsMigration.sql', 'NpsSerialNoObjectsMigration.sql')]
+    [ValidateSet('OrderCheckObjectsMigration.sql', 'SalesShippingObjectsMigration.sql', 'SalesOrderUnfinishObjectsMigration.sql', 'CustomerRelatedObjectsMigration.sql', 'CustomerViewObjectsMigration.sql', 'RbacObjectsMigration.sql', 'NpsSerialNoObjectsMigration.sql', 'XlsFormatObjectsMigration.sql')]
     [string]$Script,
     [ValidateSet('snapshot', 'snapshot-prod')][string]$Environment = 'snapshot',
     [switch]$Execute

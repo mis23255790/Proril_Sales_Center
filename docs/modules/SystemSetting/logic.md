@@ -1,11 +1,12 @@
 # 系統管理 / 權限控管
 
-對應 1.0 的「系統設定」系統（`SystemId.Setting = 0`）底下的兩支畫面：
+對應 1.0 的「系統設定」系統（`SystemId.Setting = 0`）底下的畫面：
 
 | 2.0 | 1.0 | FunctionNo |
 |---|---|---|
 | `/sales-center/system/user-manager` | `Views/System/UserManager.cshtml` | `0000102`（舊 8） |
 | `/sales-center/system/permission-manager` | `Views/System/PermissionManager.cshtml` | `0000101`（舊 1） |
+| `/sales-center/system/import-xls-format` | `Views/System/ImportXlsFormat.cshtml` | （舊 101，2.0 只用權限 key `system.importXlsFormat`）見下方「格式匯入」 |
 | ~~`/sales-center/system/group-permission`~~ | （1.0 是權限管理頁裡的「群組預設功能編輯」彈窗） | ~~`0000103`~~ **2026-09-23 已移除** |
 
 > **2026-09-23 起權限改成角色制（RBAC）**：不再逐人勾權限，改成「角色綁一組 PermissionKey、
@@ -514,6 +515,7 @@ key（`module.function`）；列多個 key 時**任一個**有就放行；Action
 | `MainApi/CheckPermission(permissionKey)` | 單點檢查（裸 bool），保留 | 登入即可 |
 | `MainApi/GetUserSetting` / `AddUser` / `UpdateUser` / `DeleteUser` / `ResetPassword` / `UnlockUser` | 人員管理 | `userManager` |
 | `MainApi/GetAllUserList` | 全部帳號（含停用），工號與成員下拉 | 登入即可 |
+| `XlsFormatApi/GetXlsFormatTargets` / `GetXlsFormatList` / `ImportXlsFormat` / `DeleteXlsFormat` / `ExportXlsFormat` | 格式匯入，見「格式匯入」 | `importXlsFormat` |
 
 **已移除**：`SetPermissionKeys`、`SaveDepPermissionKeys`、`GetPermissionLinkType`、
 `GetMPermissionLinkType`、`GetDepartmentList`、`CommonApi/GetDepFunction`
@@ -522,6 +524,63 @@ key（`module.function`）；列多個 key 時**任一個**有就放行；Action
 （連同 `UserFunctionViewModel`）——權限樹與側欄都改讀 `GetRBACPermission` + `GetMyPermissions`。
 `GetMSystemWNo`（topbar 環境圖示）不受影響，仍讀 `M_System`。
 更早移除的 1.0 端點：`SetPermissionTree` / `SaveDepFunction` / `CheckUserPermissionLinkType`。
+
+## 格式匯入
+
+上傳 Excel 範本，設定匯出檔的表頭、欄寬、樣式、數字格式與凍結窗格。2026-09-30 從 1.0 搬過來。
+
+### 資料
+
+- 表：新庫的 `CMN_XlsFileFormat`（`database/XlsFormatObjectsMigration.sql`）。
+  **跟 1.0 同名但不同表**：key 是 `PermissionKey`（頁面權限 key）+ `FunctionSubNo`（版型別），
+  不是 1.0 的 `FunctionNo`(int)。新庫專屬，不在 `database/Tables/`／`TABLES.txt`，
+  **沒有從 `PRORIL_WEB` 複製任何版型**——1.0 那兩張表（`PUR_`／`CMN_XlsFileFormat`）
+  還有很多沒搬的模組在用，兩邊各自維護。1.0 的 `PUR_XlsFileFormat` 不搬。
+- 一列是四種之一，靠欄位組合分辨：`Height` 有值 = 列、`Width` 有值 = 欄、
+  `SplitRow`/`SplitColumn` 有值 = 分頁（凍結窗格）、其他 = 儲存格。跟 1.0 相同。
+- 版型別 `FunctionSubNo`：`0` = 有金額權限、`1` = 無金額權限（沿用 1.0 的慣例）。
+  無金額權限的匯出少了金額欄，欄位位置不同，所以是兩份版型。
+
+### 哪些匯出會讀版型
+
+只有 `api/Services/XlsFormat/XlsFormatTargets.cs` 列的三支，範本的分頁名稱要一致：
+
+| 功能 | 權限 key | 分頁 |
+|---|---|---|
+| 銷貨檢索 | `salesSearch.mixSalesShipping` | 品號細項／品號統計／銷貨單細項／銷貨單統計 |
+| 未完成訂單 | `salesSearch.queryUnFinish` | 品號細項／品號統計／訂單細項／訂單統計 |
+| 訂單資料檢核 | `salesSearch.orderInfoVerify` | 訂單總表／訂單細項（每張訂單一個明細分頁 1、2、3…，全部套「訂單細項」） |
+
+### 匯出怎麼套（`XlsFormatTemplate`）
+
+- **有版型就套版型，沒有就用程式寫死的預設版面**（寫死的表頭 + `AdjustToContents()`）。
+  以分頁為單位判斷：只匯入了其中兩個分頁，另外兩個分頁照預設版面。
+- **先套版型、再寫資料**（與 1.0 相同）：欄樣式與數字格式設在整欄，之後寫的資料格會沿用；
+  資料列底色（訂單資料檢核的檢核結果、銷貨檢索／未完成訂單的斑馬紋）是寫資料時才上，不會被蓋掉。
+- **版型只管外觀，每一欄放什麼資料是程式固定的**。範本改了欄位順序，資料不會跟著動
+  ——跟 1.0 一樣。做範本最簡單的方式是先匯出一次、刪掉資料列、留表頭改外觀。
+- 表頭可以有好幾列：資料從「最後一個有文字的版型列」的下一列開始寫，自動篩選也掛在那一列。
+- 有版型的分頁**不跑 `AdjustToContents()`**，欄寬照範本。
+- 不支援：合併儲存格、公式（範本的公式有存 `FormulaA1`，但不套用，1.0 也沒套）。
+
+### 匯入（`XlsFormatImporter`）
+
+- 同一個功能 + 版型別：整份刪掉再寫（與 1.0 相同），刪除與寫入在同一個交易。
+- 看得見的分頁才讀；分頁名稱對不上的**不寫進 DB**，結果標「已略過」；全部對不上直接擋下來並列出要的名稱。
+- 範圍從 A1 算到最後一個有內容的列／欄；上限 5000 格（誤傳整包資料的匯出檔會被擋），檔案 5 MB、只收 `.xlsx`。
+- 解析用 1.0 PUR 版的邏輯（數字照顯示格式讀成文字、欄的數字格式、隱藏欄），多存自動換行。
+
+### 與 1.0 的差異
+
+1. 功能下拉從「整份 `M_Function`」改成只列會讀版型的三支；`FunctionSubNo` 自由輸入改成兩個選項。
+2. 1.0 兩個按鈕（「匯入」寫 PUR、「匯入Cmn table」寫 CMN），2.0 只有一個、只寫 CMN。
+3. 上傳方式：1.0 先 `UploadApi` 存到 ShareRoot 再 GET 帶路徑；2.0 直接 multipart POST，只解析不落地。
+4. 1.0 畫面上的「Y起始值／Y結束值」從來沒送到後端，拿掉。
+5. 新增：目前版型清單、下載目前版型（把 DB 版型套到空白活頁簿）、刪除（退回預設版面）。
+6. 後端補權限檢查（1.0 這兩支連 `[Authorize]` 都沒掛）。
+7. 修掉 1.0 套用端的 bug：數字格式被 `;` 截斷只剩正數段、`=` 切錯、Theme 色 Tint 用 int 解析永遠是 0、
+   沒底色的欄存成 `00000000` 變透明黑（見 `XlsStyleCodec.cs`）。
+8. 1.0 匯出一定要有版型，沒有就「沒有輸出格式!」失敗；2.0 沒有版型用預設版面。
 
 ## 資料轉換（`RbacObjectsMigration.sql`）
 

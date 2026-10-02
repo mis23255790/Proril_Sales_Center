@@ -1,4 +1,27 @@
 <details>
+  <summary>版號2026.09.30</summary>
+
+##### feat: 格式匯入搬到 2.0
+      1.0 系統設定 / 格式匯入（CommonApiController.ImportXlsFormat / ImportCmnXlsFormat）
+      搬到 /sales-center/system/import-xls-format，權限 key system.importXlsFormat
+      （新 GROUP system.grpSetting「系統設定」底下）。
+
+      資料庫：database/XlsFormatObjectsMigration.sql 建新庫 CMN_XlsFileFormat
+        （key 改 PermissionKey + FunctionSubNo，不從 PRORIL_WEB 複製資料）+ 兩個權限節點；
+        RbacObjectsMigration.sql 第 4b.4 段清單同步補上。PUR_XlsFileFormat 不搬。
+      後端：Controllers/SystemSetting/XlsFormatApiController.cs（匯入／清單／刪除／下載目前版型），
+        解析與套用在 Services/XlsFormat/（Importer 用 1.0 PUR 版邏輯，StyleCodec 修掉 1.0 套用端的 bug）。
+      匯出：銷貨檢索、未完成訂單、訂單資料檢核三支改成「有版型套版型，沒有用寫死的預設版面」，
+        沒有版型時輸出跟之前完全一樣。
+      前端：pages/sales-center/system/import-xls-format.vue、composables/useXlsFormatApi.ts。
+      規則與和 1.0 的差異見 logic.md「格式匯入」。
+
+      上線步驟：run-objects-migration.ps1 -Script XlsFormatObjectsMigration.sql；
+        在權限管理把 system.importXlsFormat 勾進要用的角色（superAdmin 不用）。
+
+</details>
+
+<details>
   <summary>版號2026.09.29</summary>
 
 ##### feat(auth): 登入 token 改放 httpOnly cookie（BFF）

@@ -50,6 +50,7 @@ dotnet run
 | `MainApi`（角色，2.0 新增） | GetRoleList / GetRole / SaveRole / DeleteRole / SetRoleMembers（取代 1.0 的逐人 SetPermissionTree 與部門範本 SaveDepFunction） |
 | `MixSalesShipApi` | GetSalesOrder / GetSalesOrder_1 / ExportXls / GetCustomerCredit / GetCustomerCreditCRM / GetSalesTotal / GetCustomerUnfinOrder |
 | `SalesOrderUnFinishApi` | GetUnfinOrder / QueryUnfinOrder_1 / ExportXls / GetUnfinOrderPage（2.0 新增，後端分頁） |
+| `XlsFormatApi`（格式匯入） | ImportXlsFormat（取代 1.0 的 `CommonApi/ImportXlsFormat` 與 `ImportCmnXlsFormat`，簽章不同）；2.0 新增 GetXlsFormatTargets / GetXlsFormatList / DeleteXlsFormat / ExportXlsFormat |
 
 > 2026-09-23 改成角色制時移除：`SetPermissionKeys` / `SaveDepPermissionKeys` /
 > `GetPermissionLinkType` / `GetMPermissionLinkType` / `GetDepartmentList`，
@@ -174,10 +175,12 @@ dotnet run
    1.0 的 model 這裡宣告 `float`，但 SP 實際回傳的欄位是 SQL `decimal`/`numeric`，
    EF Core 8 對不上型別會直接丟 `InvalidCastException`（本機實測打
    `SP_GetCredit` 會直接 500；1.0 用的是舊版 EF Core，型別轉換比較寬鬆才沒事）。
-5. **Excel 匯出改寫死格式，不吃 `CMN_XlsFileFormat`**
-   1.0 用資料庫驅動的通用格式引擎（`XlsFormatterApis_Cmn`）決定欄寬/表頭/樣式，那套引擎
-   是給多個「還沒搬」的模組共用的排版基礎設施，這裡直接在 C# 寫死欄位配置，
-   輸出的分頁、欄位、上色規則與 1.0 一致。
+5. **Excel 匯出：有版型套版型，沒有就用寫死的預設版面**（2026-09-30 起）
+   版型存在新庫的 `CMN_XlsFileFormat`（key = 頁面權限 key + 版型別 0/1），由系統管理 /
+   格式匯入維護，見下方「格式匯入（`XlsFormatApi`）」。1.0 是一定要有版型，
+   沒有就回「沒有輸出格式!」匯出失敗；2.0 沒有版型時退回 C# 寫死的表頭與
+   `AdjustToContents()`，輸出的分頁、欄位、上色規則與 1.0 一致。
+   （2026-09-30 以前只有寫死版面，不讀任何版型表。）
 6. **匯出金額欄位權限統一用 `FunctionId.OrderInfoVerify`(425)**
    1.0 匯出時查的是 `FunctionId.MixSalesShipping`(410) 的權限，但查詢 Excel 格式用的
    卻是 425——兩個 FunctionId 對不上號，找不到明顯理由，這裡統一用 425。
@@ -198,9 +201,9 @@ dotnet run
    其餘小寫開頭。前端 query string 是照這個拼的，不要順手改成 camelCase。
 4. **SQL 改成參數化。** 1.0 是把使用者輸入串進 `EXEC` 字串，這裡用
    `FromSqlInterpolated`。SP 內部仍會把值再組成動態 SQL，那是 SP 自己的事（不改資料庫）。
-5. **匯出版面寫死在 C#。** 理由與訂單資料檢核那支相同（1.0 讀 `PUR_XlsFileFormat`
-   動態組）。表頭文字與數字格式是直接抄那張表 `FunctionNo=410` 的設定，
-   欄寬改成 `AdjustToContents()`——這是與 1.0 已知的唯一外觀差異。
+5. **匯出版面：有版型套版型，沒有就用寫死的預設版面。** 版型見「格式匯入（`XlsFormatApi`）」。
+   預設版面的表頭文字與數字格式是當初直接抄 1.0 `PUR_XlsFileFormat`（`FunctionNo=410`）的設定，
+   欄寬改成 `AdjustToContents()`。1.0 那份版型資料沒有搬，要照 1.0 的版面就重新匯入範本。
    金額欄位權限照 1.0 用 `(410, LinkType=100)`。
 6. **資料庫物件還在 `PRORIL_WEB`。** `CopSalesOrder` 對映在 `ProrilWebDbContext`，
    SP 也還在舊庫執行。搬到 `Proril_Sales_Center` 的腳本
@@ -259,9 +262,9 @@ dotnet run
    這點跟銷貨檢索的兩個明細 modal 不同，改邏輯時別套錯模式。
 3. **SQL 改成參數化。** 1.0 是把使用者輸入串進 `EXEC` 字串再 `FromSql`，這裡用
    `FromSqlInterpolated`。SP 內部仍會把值再組成動態 SQL，那是 SP 自己的事（不改資料庫）。
-4. **匯出版面寫死在 C#。** 理由與銷貨檢索、訂單資料檢核相同（1.0 讀 `PUR_XlsFileFormat`
-   動態組，那套引擎是給多個還沒搬的模組共用的基礎設施）。欄位順序跟頁面上四個頁籤的
-   表格逐欄對齊，欄寬改成 `AdjustToContents()`——這是與 1.0 已知的唯一外觀差異。
+4. **匯出版面：有版型套版型，沒有就用寫死的預設版面。** 版型見「格式匯入（`XlsFormatApi`）」
+   （1.0 讀 `PUR_XlsFileFormat` `FunctionNo=420`，那份資料沒有搬）。預設版面的欄位順序
+   跟頁面上四個頁籤的表格逐欄對齊，欄寬用 `AdjustToContents()`。
    金額欄位權限用 `(FunctionIds.QueryUnFinish=0320102, LinkType=100)`。
 5. **資料庫物件還在 `PRORIL_WEB`。** `UnfinOrder` 是 keyless 型別，只給
    `FromSqlInterpolated` 用，對映在 `ProrilWebDbContext`；SP 也還在舊庫執行，
@@ -269,6 +272,25 @@ dotnet run
 6. **`UnfinOrder.CopSource` 改名自 1.0 的 `COPSource`。** camelCase 化後前者是
    `copSource`（跟銷貨檢索的 `CopSalesOrder.CopSource` 一致），後者會是 `cOPSource`，
    跟前端 `app/types/salesOrderUnfinish.ts` 定的欄位名對不起來，故意改掉。
+
+## 格式匯入（`XlsFormatApi`）
+
+1.0 系統設定 / 格式匯入（`CommonApiController.ImportXlsFormat` / `ImportCmnXlsFormat`），
+2026-09-30 搬進 `Controllers/SystemSetting/XlsFormatApiController.cs`，
+整支掛 `[RequirePermission(system.importXlsFormat)]`。解析與套用在 `Services/XlsFormat/`。
+完整規則見 `../docs/modules/SystemSetting/logic.md`「格式匯入」。
+
+1. **端點簽章跟 1.0 不同，不能直接切 `NUXT_PUBLIC_API_BASE` 對 1.0。** 1.0 是先走
+   `UploadApi` 把檔案存到 ShareRoot，再 GET `ImportXlsFormat?uploadPath=...&funcNo=...`；
+   2.0 是 multipart POST（`file` + `permissionKey` + `functionSubNo`），只解析不落地、不寫 `H_FileLink`。
+2. **只有一張 `CMN_XlsFileFormat`**，而且是新庫專屬的表：key 從 `FunctionNo`(int) 改成
+   `PermissionKey`，不在 `database/Tables/` 與 `TABLES.txt`，也沒有從 `PRORIL_WEB` 複製資料
+   （`database/XlsFormatObjectsMigration.sql`）。1.0 的 `PUR_XlsFileFormat` 不搬。
+3. **解析用 1.0 PUR 版的邏輯**（數字帶格式、ARGB 底色、`NumberFormatId`、隱藏欄），
+   並修掉 1.0 套用端的幾個 bug（數字格式被 `;` 截斷、Theme 色 Tint 解析失敗、
+   沒底色的欄變透明黑），見 `Services/XlsFormat/XlsStyleCodec.cs` 開頭註解。
+4. **可以設定版型的匯出只有 `Services/XlsFormat/XlsFormatTargets.cs` 列的三支**，
+   分頁名稱對不上的不寫進 DB。新增一支會讀版型的匯出要在那裡登記。
 
 ## 與 1.0 並存
 

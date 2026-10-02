@@ -539,6 +539,7 @@ BEGIN
         ('salesSearch.grpSales',    'GROUP', 'salesSearch', N'銷貨',     NULL, NULL, NULL, NULL, 20),
         ('salesSearch.grpOrder',    'GROUP', 'salesSearch', N'訂單',     NULL, NULL, NULL, NULL, 30),
         ('system.grpAccess',        'GROUP', 'system',      N'權限控管', NULL, NULL, NULL, NULL, 10),
+        ('system.grpSetting',       'GROUP', 'system',      N'系統設定', NULL, NULL, NULL, NULL, 20),
         -- 頁面
         ('salesIssue.processMaintain',   'PAGE', 'salesIssue.grpIssue',     N'議題維護',     NULL, 'sales-issue/issues',             'i-lucide-clipboard-list', N'依客戶別追蹤議題進度、附件與結案狀態', 10),
         ('salesIssue.kindMaintain',      'PAGE', 'salesIssue.grpBasic',     N'類別維護',     NULL, 'sales-issue/kind-maintain',      'i-lucide-tags',           N'維護議題的類別與職能主題關鍵字', 10),
@@ -548,6 +549,7 @@ BEGIN
         ('salesSearch.orderInfoVerify',  'PAGE', 'salesSearch.grpOrder',    N'訂單資料檢核', NULL, 'sales-search/order-info-verify', 'i-lucide-shield-check',   N'對訂單金額、信用額度等項目執行檢核，支援特規覆核與 Excel 匯出', 20),
         ('system.userManager',           'PAGE', 'system.grpAccess',        N'人員管理',     NULL, 'system/user-manager',            'i-lucide-user-cog',       N'新增／停用帳號、指派角色、重置密碼與解除鎖定', 10),
         ('system.permissionManager',     'PAGE', 'system.grpAccess',        N'權限管理',     NULL, 'system/permission-manager',      'i-lucide-shield-check',   N'維護角色：每個角色可用的功能與細項權限，以及角色成員', 20),
+        ('system.importXlsFormat',       'PAGE', 'system.grpSetting',       N'格式匯入',     NULL, 'system/import-xls-format',       'i-lucide-file-spreadsheet', N'上傳 Excel 範本，設定各功能匯出檔的表頭、欄寬與樣式', 10),
         -- 細項
         ('salesIssue.processMaintain.createSop',   'ACTION', 'salesIssue.processMaintain',   N'SOP-新增',     NULL, NULL, NULL, NULL, 10),
         ('salesIssue.processMaintain.publishSop',  'ACTION', 'salesIssue.processMaintain',   N'SOP-公開',     NULL, NULL, NULL, NULL, 20),

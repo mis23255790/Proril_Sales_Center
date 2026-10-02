@@ -118,13 +118,17 @@ notChecked/checkedCount 是「篩選後、切頁籤前」算出來的，不會�
 `FunctionId.MixSalesShipping(410)` 的權限，但查詢 Excel 格式設定用的又是 425，兩個
 FunctionId 對不上號，找不到明顯理由，2.0 統一用 425。
 
-# Excel 匯出：改寫死格式，不吃 CMN_XlsFileFormat（刻意簡化）
+# Excel 匯出：有版型套版型，沒有就用寫死的預設版面
 
-1.0 用資料庫驅動的通用格式引擎（`CMN_XlsFileFormat` 資料表 + `XlsFormatterApis_Cmn`）
-決定欄寬/表頭/樣式，那套引擎是給多個「還沒搬」的模組共用的排版基礎設施，只為這一個匯出
-去搬整套 DB 驅動格式系統不成比例。2.0 直接在 C#（`OrderInfoVerifyApiController.Xls.cs`）
-寫死欄位配置，輸出結果（`訂單總表` + 每張訂單一個 `訂單細項` 分頁、依檢核結果上色）
-與 1.0 一致，只是格式設定不再走 DB。
+2026-09-30 起讀新庫的 `CMN_XlsFileFormat`（系統管理 / 格式匯入維護，key =
+`salesSearch.orderInfoVerify` + 版型別 0/1），規則見 `../SystemSetting/logic.md`「格式匯入」。
+分頁是 `訂單總表` + 每張訂單一個明細分頁（1、2、3…），明細分頁全部套 `訂單細項` 這份版型。
+沒有版型時用 C#（`OrderInfoVerifyApiController.Xls.cs`）寫死的表頭與 `AdjustToContents()`，
+輸出跟 2026-09-30 以前完全一樣。
+
+跟 1.0 的差異：1.0 一定要有版型，沒有就回「沒有輸出格式!」匯出失敗；1.0 那份 `FunctionNo=425`
+的版型資料沒有搬，要照 1.0 的版面就重新匯入範本。
+（2026-09-30 以前 2.0 只有寫死的版面，理由是那套引擎給多個還沒搬的模組共用、只為這支搬不成比例。）
 
 上色規則（`ApplyRowColor`）：Y=淡綠 `#FF98FF98` / P=淡黃 `#FFFFC40C` / N=淡紅 `#FFFDBCB4` /
 未檢核=灰 `#FFDCDCDC`，數值照抄 1.0。

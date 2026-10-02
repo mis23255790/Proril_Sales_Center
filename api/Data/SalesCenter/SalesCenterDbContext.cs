@@ -48,6 +48,8 @@ public partial class SalesCenterDbContext : DbContext
 
     public virtual DbSet<CopSalesOrder> CopSalesOrders { get; set; }
 
+    public virtual DbSet<CmnXlsFileFormat> CmnXlsFileFormats { get; set; }
+
     public virtual DbSet<CrmCustomer> CrmCustomers { get; set; }
 
     public virtual DbSet<CrmCustomerMemo> CrmCustomerMemos { get; set; }
@@ -699,6 +701,73 @@ public partial class SalesCenterDbContext : DbContext
                 .IsUnicode(false)
                 .HasDefaultValue("");
             entity.Property(e => e.ShortName).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<CmnXlsFileFormat>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_CMN_XlsFileFormat");
+
+            entity.ToTable("CMN_XlsFileFormat");
+
+            entity.HasIndex(e => new { e.PermissionKey, e.FunctionSubNo, e.Wsname }, "IX_CMN_XlsFileFormat_Key");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.PermissionKey)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.FunctionSubNo)
+                .HasMaxLength(40)
+                .IsUnicode(false);
+            entity.Property(e => e.Wsname)
+                .HasMaxLength(40)
+                .HasColumnName("WSName");
+            entity.Property(e => e.ColumnStartId)
+                .HasMaxLength(4)
+                .IsUnicode(false)
+                .HasColumnName("ColumnStartID");
+            entity.Property(e => e.ColumnEndId)
+                .HasMaxLength(4)
+                .IsUnicode(false)
+                .HasColumnName("ColumnEndID");
+            entity.Property(e => e.RowStartId).HasColumnName("RowStartID");
+            entity.Property(e => e.RowEndId).HasColumnName("RowEndID");
+            entity.Property(e => e.Caption).HasMaxLength(400);
+            entity.Property(e => e.FormulaA1).HasMaxLength(400);
+            entity.Property(e => e.StyleAlignmentH)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.StyleAlignmentV)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.StyleBorderLeft)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.StyleBorderTop)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.StyleBorderRight)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.StyleBorderBottom)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.StyleFillColor)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.StyleFontColor)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.Xlsettings)
+                .HasMaxLength(300)
+                .HasColumnName("XLSettings");
+            entity.Property(e => e.CreateTime).HasColumnType("datetime");
+            entity.Property(e => e.Creator)
+                .HasMaxLength(40)
+                .IsUnicode(false);
+            entity.Property(e => e.ModiTime).HasColumnType("datetime");
+            entity.Property(e => e.Modifier)
+                .HasMaxLength(40)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<CrmCustomerMemo>(entity =>

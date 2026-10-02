@@ -2,20 +2,22 @@ using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
 using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Models;
+using Proril.SalesIssue.Api.Services.XlsFormat;
 
 namespace Proril.SalesIssue.Api.Controllers.SalesSearch;
 
 /*
  * 未完成訂單檢索的 Excel 匯出。
  *
- * 1.0 的欄位配置（表頭文字、欄寬、數字格式、分頁名稱）是讀 PUR_XlsFileFormat 資料表
- * （FunctionNo=420）動態組出來的，那套通用格式引擎（XlsFormatterApis）是給多個還沒搬的
- * 模組共用的排版基礎設施，只為這一個匯出去搬整套 DB 驅動格式系統不成比例。這裡比照
- * MixSalesShipApiController.Xls.cs / OrderInfoVerifyApiController.Xls.cs 的作法，把欄位
- * 配置寫死在 C#——表頭文字、欄位順序與頁面上四個頁籤的表格逐欄對齊
+ * 版型：CMN_XlsFileFormat（系統管理 / 格式匯入）有這支的版型就套版型（表頭、欄寬、樣式、
+ * 數字格式、凍結窗格），沒有就用下面寫死的預設版面。資料欄位的位置一律由 ColSpec 決定，
+ * 版型只管外觀，見 Services/XlsFormat/XlsFormatTemplate.cs。
+ *
+ * 預設版面的表頭文字、欄位順序與頁面上四個頁籤的表格逐欄對齊
  * （app/pages/sales-center/sales-search/unfinished-orders.vue 的 DETAIL_COLS_BASE /
- * PRODUCT_GROUP_COLS / SO_GROUP_COLS），欄寬改成 AdjustToContents()，
- * 不再照抄 DB 裡那組固定欄寬，這是與 1.0 已知的唯一外觀差異。
+ * PRODUCT_GROUP_COLS / SO_GROUP_COLS），欄寬用 AdjustToContents()。
+ * 1.0 是讀 PUR_XlsFileFormat（FunctionNo=420），那份資料沒有搬（2026-09-30 決定），
+ * 要 1.0 那份版面就把範本重新匯入。
  */
 public partial class SalesOrderUnFinishApiController
 {
@@ -75,15 +77,17 @@ public partial class SalesOrderUnFinishApiController
         var account = GetAccountByToken();
         var showAmount = HasPermission(account, PermissionKeys.SalesSearch.QueryUnFinishViewAmount);
 
+        var template = XlsFormatTemplate.Load(scDb, PermissionKeys.SalesSearch.QueryUnFinish, XlsFormatTargets.SubNoFor(showAmount));
+
         using var workbook = new XLWorkbook();
         // 細項頁取「非 Y」（N + S + T），統計頁取「非 N」（S + Y + T），與畫面上的頁籤一致。
-        WriteSheet(workbook, "品號細項", DetailCols(showAmount, includeGiftQty: false),
+        WriteSheet(workbook, template, "品號細項", DetailCols(showAmount, includeGiftQty: false),
             productInfo.Where(r => r.FooterFlag != "Y"), GroupKeyByProduct);
-        WriteSheet(workbook, "品號統計", ProductGroupCols(showAmount),
+        WriteSheet(workbook, template, "品號統計", ProductGroupCols(showAmount),
             productInfo.Where(r => r.FooterFlag != "N"), GroupKeyByProduct);
-        WriteSheet(workbook, "訂單細項", DetailCols(showAmount, includeGiftQty: true),
+        WriteSheet(workbook, template, "訂單細項", DetailCols(showAmount, includeGiftQty: true),
             salesOrders.Where(r => r.FooterFlag != "Y"), GroupKeyBySalesOrder);
-        WriteSheet(workbook, "訂單統計", SoGroupCols(showAmount),
+        WriteSheet(workbook, template, "訂單統計", SoGroupCols(showAmount),
             salesOrders.Where(r => r.FooterFlag != "N"), GroupKeyBySalesOrder);
 
         var dir = _paths.ExportDir(account);
@@ -102,21 +106,28 @@ public partial class SalesOrderUnFinishApiController
     /// <summary>
     /// 寫一個分頁：A 欄是列序號，其餘照 <paramref name="cols"/>；同一群組的相鄰列共用一個
     /// 群組序號，偶數群組整列上斑馬紋底色。
+    /// 有版型時表頭、欄寬、數字格式都照版型，資料從版型表頭的下一列開始寫。
     /// </summary>
     private static void WriteSheet(
-        XLWorkbook workbook, string sheetName, IReadOnlyList<ColSpec> cols,
+        XLWorkbook workbook, XlsFormatTemplate template, string sheetName, IReadOnlyList<ColSpec> cols,
         IEnumerable<UnfinOrder> rows, Func<UnfinOrder, string> groupKey)
     {
         var ws = workbook.AddWorksheet(sheetName);
 
-        ws.Cell(1, 1).Value = "序號";
-        for (var i = 0; i < cols.Count; i++)
+        var headerRows = template.Apply(ws, sheetName);
+        var templated = headerRows > 0;
+        if (!templated)
         {
-            ws.Cell(1, i + 2).Value = cols[i].Header;
-            if (cols[i].Format is { } format) ws.Column(i + 2).Style.NumberFormat.Format = format;
+            ws.Cell(1, 1).Value = "序號";
+            for (var i = 0; i < cols.Count; i++)
+            {
+                ws.Cell(1, i + 2).Value = cols[i].Header;
+                if (cols[i].Format is { } format) ws.Column(i + 2).Style.NumberFormat.Format = format;
+            }
+            headerRows = 1;
         }
 
-        var y = 2;
+        var y = headerRows + 1;
         var sno = 1;
         var groupIndex = 0;
         string? curKey = null;
@@ -137,8 +148,8 @@ public partial class SalesOrderUnFinishApiController
             y++;
         }
 
-        ws.Columns().AdjustToContents();
-        ws.Range(1, 1, Math.Max(y - 1, 1), cols.Count + 1).SetAutoFilter();
+        if (!templated) ws.Columns().AdjustToContents();
+        ws.Range(headerRows, 1, Math.Max(y - 1, headerRows), cols.Count + 1).SetAutoFilter();
     }
 
     /// <summary>

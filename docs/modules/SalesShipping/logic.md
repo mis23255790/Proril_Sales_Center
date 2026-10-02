@@ -49,7 +49,7 @@ Nuxt 頁面 ──▶ useSalesShippingApi() ──▶ /api/proxy/... ──▶ s
 | 項目 | 1.0 | 2.0 |
 |---|---|---|
 | SQL 參數 | 把使用者輸入串進 `EXEC` 字串 | `FromSqlInterpolated` 交給 EF 參數化 |
-| 匯出版面 | 讀 `PUR_XlsFileFormat`（FunctionNo=410）動態組表頭/欄寬/數字格式 | 寫死在 C#（表頭與數字格式照抄那張表），欄寬改用 `AdjustToContents()` |
+| 匯出版面 | 讀 `PUR_XlsFileFormat`（FunctionNo=410）動態組表頭/欄寬/數字格式 | 讀新庫 `CMN_XlsFileFormat`（系統管理 / 格式匯入，key `salesSearch.mixSalesShipping`），沒有版型就用寫死在 C# 的預設版面（表頭與數字格式照抄 1.0 那張表，欄寬 `AdjustToContents()`）。1.0 的版型資料沒有搬，見 `../SystemSetting/logic.md`「格式匯入」 |
 | 匯出用的 EF 型別 | 另一個空殼型別 `CopMdlSalesOrder1`（對映 0 筆的 `COP_MDL_SalesOrder_1`） | 與查詢共用 `CopSalesOrder`，那張表不搬 |
 | try/catch | 每個 action 自己包 | 全域 `ApiExceptionFilter`，見 CLAUDE.md |
 

@@ -9,7 +9,8 @@
 export const PERMISSION_KEYS = {
   system: {
     permissionManager: 'system.permissionManager',
-    userManager: 'system.userManager'
+    userManager: 'system.userManager',
+    importXlsFormat: 'system.importXlsFormat'
     // system.groupPermission 已隨角色制停用（RBAC_Permission.aStatus = 'N'）
   },
   salesIssue: {
