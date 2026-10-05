@@ -13,6 +13,40 @@
 </details>
 
 <details>
+  <summary>版號2026.10.05</summary>
+
+##### perf: GetPOCheckView 查詢加速
+      實測瓶頸（測試區 50002）：
+        - V_PODetailList 是四段式名稱的跨 linked server 多表 JOIN，「編譯」查詢計畫就要
+          ~500 ms，執行只要 ~70 ms。原本用 EF.Constant 把單號翻成常值 IN (N'...')，
+          每一頁的 SQL 文字都不同，每次都重新編譯。
+        - V_UpFileData（replace 過的 KeyValues）與 V_Product_English_All（TOP ... ORDER BY）
+          的條件推不到 ERP 主機，加不加 IN 條件都是整份拉回來（約 0.2~0.3 s），而且是排在
+          V_POList、V_PODetailList 後面依序執行。
+        - 明細 modal（pageSize=0）原本 V_PODetailList 不加單號條件，只查一張訂單也整份讀（約 1 s）。
+
+      修正：
+        - V_PODetailList 改 FromSqlRaw + 固定個數的 nvarchar(20) 參數（1/20/50/100 四檔，
+          不足的重複填第一個單號），SQL 文字固定、計畫快取得到。依「本頁訂單數」決定，
+          不再看 pageSize，所以明細 modal 也走參數化；超過 100 張（「全部」、匯出）
+          維持只用 COP_Source 過濾整份讀。
+        - V_UpFileData／V_Product_English_All 改成不加條件整份讀，各自開一個 DbContext
+          跟 V_POList 同時開跑，join 照舊在記憶體做。
+        - GetPOCheckView、ExportXls 改 async。
+
+      新舊版同時起在本機、打同一組請求比對（回傳 JSON 逐字相同）：
+        未確認第 1 頁     1034 → 601 ms
+        已確認第 1/2/8 頁 1082~1180（沒看過的頁約 1.6~2.7 s）→ 617~702 ms
+        已確認 50 筆      1219 → 726 ms
+        明細 modal        1415~1587 → 415~461 ms
+        全部（18638 列）  4995 → 4498 ms（大部分是 JSON 序列化與傳輸）
+      剩下的固定成本主要是 V_POList（OPENQUERY，約 430 ms）。
+
+      api/Controllers/SalesSearch/OrderInfoVerifyApiController(.Xls).cs
+
+</details>
+
+<details>
   <summary>版號2026.09.30</summary>
 
 ##### perf: V_POList 改用 OPENQUERY

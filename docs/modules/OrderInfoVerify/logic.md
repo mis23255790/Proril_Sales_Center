@@ -78,6 +78,17 @@ notChecked/checkedCount 是「篩選後、切頁籤前」算出來的，不會�
 `totalCount` 才是目前頁籤篩選後的訂單數。跟業務議題一樣，只在回傳前做 Skip/Take，
 沒有把查詢改寫成 SQL 層級的分頁，資料庫負載沒有變小，只是網路傳輸量與瀏覽器記憶體用量變小。
 
+# 查詢效能：各個 View 怎麼查（2026-10-05）
+
+`GetOrderInfoListAsync` 的讀法是依各 View 的特性實測出來的，改之前先看這裡：
+
+| View | 讀法 | 原因 |
+|---|---|---|
+| `V_POList` | 依查詢條件讀全部訂單（約 430 ms） | OPENQUERY，條件本來就推不下去；分頁與頁籤筆數都要全部訂單 |
+| `V_PODetailList` | 本頁訂單 ≤ 100 張：`FromSqlRaw` + 固定 1/20/50/100 個 `nvarchar(20)` 參數比對單號；超過就只用 COP_Source 整份讀 | 跨 linked server 多表 JOIN，編譯計畫 ~500 ms、執行 ~70 ms，SQL 文字要固定才吃得到計畫快取。不要改回 `EF.Constant` 常值清單，也不要讓 EF 推成 `nchar(11)`（見 update.md 2026-09-29） |
+| `V_UpFileData`、`V_Product_English_All` | 不加條件整份讀，各自開 DbContext 跟 `V_POList` 並行 | `replace()`／`TOP ... ORDER BY` 讓條件推不到 ERP 主機，加條件反而更慢 |
+| `COP_*`（本地表） | `IN` 候選值過濾 | 本地表，幾 ms |
+
 # 檢核 modal 開啟時自己重新查詢
 
 `OrderCheckDetailModal` 不是被動吃父層傳進來的資料，而是在 `open`/`orderKey` 變動時

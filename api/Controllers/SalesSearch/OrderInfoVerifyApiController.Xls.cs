@@ -25,13 +25,13 @@ public partial class OrderInfoVerifyApiController
     /// 那兩個 FunctionId 對不上號查無明顯理由，這裡統一用 425。
     /// </summary>
     [HttpGet]
-    public CustomApiViewModel ExportXls(string? orderType, string? orderNo, string? customerNo, string? startDate, string? endDate, string? confirmFlag)
+    public async Task<CustomApiViewModel> ExportXls(string? orderType, string? orderNo, string? customerNo, string? startDate, string? endDate, string? confirmFlag)
     {
         var ca = new CustomApiViewModel { IsSuccess = false };
 
         WriteStepLog(nameof(ExportXls), $"orderType:{orderType}, customerNo:{customerNo}, confirmFlag:{confirmFlag}");
 
-        var orderInfo = GetOrderInfoList(null, orderType, orderNo, customerNo, startDate, endDate, confirmFlag);
+        var orderInfo = await GetOrderInfoListAsync(null, orderType, orderNo, customerNo, startDate, endDate, confirmFlag);
         if (orderInfo.Count == 0)
         {
             ca.Message = "查無資料可匯出!!!";

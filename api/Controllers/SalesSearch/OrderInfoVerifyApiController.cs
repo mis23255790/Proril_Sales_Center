@@ -24,13 +24,17 @@ public partial class OrderInfoVerifyApiController : BaseApiController
 {
     public OrderInfoVerifyApiController(
         SalesCenterDbContext scDb,
+        DbContextOptions<SalesCenterDbContext> scOptions,
         JwtHelper jwtHelper,
         StoragePaths paths,
         ILogger<OrderInfoVerifyApiController> logger) : base(scDb, jwtHelper, logger)
     {
+        _scOptions = scOptions;
         _paths = paths;
     }
 
+    /// <summary>並行查詢用：DbContext 不能同時跑兩個查詢，並行的那幾支各自開一個 context。</summary>
+    private readonly DbContextOptions<SalesCenterDbContext> _scOptions;
     private readonly StoragePaths _paths;
 
     /// <summary>
@@ -44,7 +48,7 @@ public partial class OrderInfoVerifyApiController : BaseApiController
     /// 前端 <c>$fetch</c> 拿到的就是陣列。
     ///
     /// 2026-09-18 起支援分頁，但**分頁的單位是「訂單」，不是攤平後的品號明細列**——
-    /// <paramref name="pageIndex"/>/<paramref name="pageSize"/> 是對 <see cref="GetFilteredOrders"/>
+    /// <paramref name="pageIndex"/>/<paramref name="pageSize"/> 是對 <see cref="GetFilteredOrdersAsync"/>
     /// 回傳的 <c>V_POList</c>（一列一張訂單）做 Skip/Take，取到本頁的訂單之後才 join 明細，
     /// 不然同一張訂單的品號會被切頁切散到不同頁。<paramref name="tab"/>（notChecked/checked）
     /// 對應畫面的兩個頁籤，換算成 <c>ConfirmFlag</c> 的 N/Y；不傳（明細 modal 的用法）就
@@ -52,7 +56,7 @@ public partial class OrderInfoVerifyApiController : BaseApiController
     /// 明細 modal 就是靠這個預設值拿到單一訂單的完整品號清單，不會被分頁截斷。
     /// </summary>
     [HttpGet]
-    public CustomApiViewModel GetPOCheckView(
+    public async Task<CustomApiViewModel> GetPOCheckView(
         string? copSource, string? orderType, string? orderNo, string? customerNo, string? startDate, string? endDate,
         string? tab = null, int pageIndex = 0, int pageSize = 0)
     {
@@ -62,7 +66,9 @@ public partial class OrderInfoVerifyApiController : BaseApiController
             $"copSource:{copSource}, orderType:{orderType}, orderNo:{orderNo}, customerNo:{customerNo}, "
             + $"tab:{tab}, pageIndex:{pageIndex}, pageSize:{pageSize}");
 
-        var allOrders = GetFilteredOrders(copSource, orderType, orderNo, customerNo, startDate, endDate);
+        // 跟 V_POList 同時開跑，見 StartLookupLoad。
+        var lookups = StartLookupLoad();
+        var allOrders = await GetFilteredOrdersAsync(copSource, orderType, orderNo, customerNo, startDate, endDate);
 
         var summary = new OrderInfoVerifySummary
         {
@@ -83,7 +89,7 @@ public partial class OrderInfoVerifyApiController : BaseApiController
             _ => allOrders.Count
         };
 
-        var list = GetOrderInfoList(copSource, orderType, orderNo, customerNo, startDate, endDate, confirmFlag, pageIndex, pageSize, allOrders);
+        var list = await GetOrderInfoListAsync(copSource, orderType, orderNo, customerNo, startDate, endDate, confirmFlag, pageIndex, pageSize, allOrders, lookups);
         MaskAmounts(list, HasPermission(PermissionKeys.SalesSearch.OrderInfoVerifyViewAmount));
 
         ca.IsSuccess = true;
@@ -230,7 +236,7 @@ public partial class OrderInfoVerifyApiController : BaseApiController
     /// 所以獨立出來，讓 <see cref="GetPOCheckView"/> 跟 <see cref="GetOrderInfoList"/>
     /// 共用同一份「篩選後、切頁籤前」的訂單清單，不用各自重撈一次。
     /// </summary>
-    private List<VPoList> GetFilteredOrders(
+    private async Task<List<VPoList>> GetFilteredOrdersAsync(
         string? copSource, string? orderType, string? orderNo, string? customerNo,
         string? startDate, string? endDate)
     {
@@ -269,9 +275,62 @@ public partial class OrderInfoVerifyApiController : BaseApiController
             vpoQuery = vpoQuery.Where(v => string.Compare(v.訂單日期, endCompact, StringComparison.Ordinal) < 0);
         }
 
-        var vpoList = vpoQuery.ToList();
+        return await vpoQuery.ToListAsync();
+    }
 
-        return vpoList;
+    /// <summary>
+    /// <c>V_UpFileData</c>／<c>V_Product_English_All</c> 整份讀回來，在記憶體裡 join。
+    ///
+    /// 這兩個 View 的條件推不到 ERP 主機：<c>V_UpFileData</c> 比對的是 <c>replace(KeyValues,'||','-')</c>
+    /// 後的值，<c>V_Product_English_All</c> 裡有 <c>TOP ... ORDER BY</c>——不管加不加
+    /// <c>IN</c> 條件，linked server 都是整份拉回來再過濾（實測加條件反而比較慢：
+    /// 282 ms vs 205 ms、340 ms vs 238 ms），所以乾脆不加條件，
+    /// 而且不用等本頁訂單算出來，可以跟 <c>V_POList</c>（約 430 ms）同時開跑，等於不佔時間。
+    /// 各自開一個 DbContext（同一個 context 不能並行查詢）。
+    /// </summary>
+    private OrderLookups StartLookupLoad() => new(
+        LoadOnOwnContextAsync(db => db.VUpFileData),
+        LoadOnOwnContextAsync(db => db.VProductEnglishAlls));
+
+    private sealed record OrderLookups(
+        Task<List<VUpFileData>> UpFiles,
+        Task<List<Proril.SalesIssue.Api.Data.VProductEnglishAll>> Products);
+
+    private async Task<List<T>> LoadOnOwnContextAsync<T>(Func<SalesCenterDbContext, IQueryable<T>> query) where T : class
+    {
+        await using var db = new SalesCenterDbContext(_scOptions);
+        return await query(db).AsNoTracking().ToListAsync();
+    }
+
+    /// <summary>
+    /// <c>V_PODetailList</c> 依單號查的參數個數，往上補到這幾檔之一（不足的重複填第一個單號）。
+    ///
+    /// 這個 View 是四段式名稱跨 linked server 的多表 JOIN，SQL Server 光是「編譯」查詢計畫
+    /// 就要 ~500 ms，執行本身只要 ~70 ms。原本用 <c>EF.Constant</c> 把單號翻成常值
+    /// <c>IN (N'...')</c>，每一頁的 SQL 文字都不一樣，每次都重新編譯；改成固定個數的參數
+    /// 之後 SQL 文字只有這幾種，計畫快取得到（實測同一檔換不同單號：574 → 70 ms）。
+    /// 超過最大一檔（「全部」與匯出）就不加單號條件，整份讀回來（約 1 s），交給最後的 join 對齊。
+    /// </summary>
+    private static readonly int[] DetailOrderNoBuckets = [1, 20, 50, 100];
+
+    private Task<List<VPoDetailList>> LoadDetailsAsync(List<string> orderNos, List<string> copSources)
+    {
+        var bucket = DetailOrderNoBuckets.FirstOrDefault(b => b >= orderNos.Count);
+        if (bucket == 0)
+        {
+            return scDb.VPoDetailLists.AsNoTracking().Where(d => copSources.Contains(d.CopSource)).ToListAsync();
+        }
+
+        // 參數一律 nvarchar(20)：單號在 EF 對映是 nchar(11)，讓 EF 自己推型別會變成 nchar(11)，
+        // 那種寫法對這個 View 曾經整批比對不到（見 update.md 2026-09-29）。
+        // 不用 Trim：nchar 欄位跟參數比較時 SQL Server 本來就忽略尾端空白，加了 Trim 反而推不下去。
+        var parameters = Enumerable.Range(0, bucket)
+            .Select(i => new SqlParameter($"@no{i}", SqlDbType.NVarChar, 20) { Value = orderNos[Math.Min(i, orderNos.Count - 1)] })
+            .ToArray();
+        var sql = $"SELECT * FROM V_PODetailList WHERE 單號 IN ({string.Join(",", parameters.Select(p => p.ParameterName))})";
+
+        // COP_Source 不放進 SQL（多一組參數就多一種 SQL 文字），國內外同單號多抓的列由最後的 join 對掉。
+        return scDb.VPoDetailLists.FromSqlRaw(sql, parameters).AsNoTracking().ToListAsync();
     }
 
     /// <summary>
@@ -283,25 +342,26 @@ public partial class OrderInfoVerifyApiController : BaseApiController
     /// 即使只查一張訂單也要下載全表，是這支 API 最主要的瓶頸。現在改成先用「本頁實際會用到
     /// 的訂單」（<paramref name="pageSize"/> 分頁後的 <c>vpoList</c>）算出 CopSource／
     /// PoNo（單別-單號）／部門代號 這幾組候選值，讓資料庫端先用 <c>IN</c> 過濾掉不相關的列，
-    /// 下面的 join 邏輯完全不變。這些過濾條件刻意只比對 <see cref="GetFilteredOrders"/> 篩出
+    /// 下面的 join 邏輯完全不變。這些過濾條件刻意只比對 <see cref="GetFilteredOrdersAsync"/> 篩出
     /// 的訂單有哪些，是「安全的超集合」而不是精確比對（例如 CopPoDetailCheck 不比對 Sno、
-    /// VPoDetailList 只比對單號不比對單別）——多抓幾筆沒關係，最後的 join 才是決定實際結果的
-    /// 依據，這裡只是減少要下載到記憶體的資料量。
+    /// VPoDetailList 只比對單號不比對單別與 COP_Source）——多抓幾筆沒關係，最後的 join 才是決定
+    /// 實際結果的依據，這裡只是減少要下載到記憶體的資料量。
+    /// 例外是 <c>V_UpFileData</c>／<c>V_Product_English_All</c>：條件推不到 ERP 主機，
+    /// 改成整份讀回、跟 <c>V_POList</c> 並行（見 <see cref="StartLookupLoad"/>）。
     ///
     /// <paramref name="preFilteredOrders"/> 有值就直接用（GetPOCheckView 已經先呼叫過
-    /// <see cref="GetFilteredOrders"/>，不用再撈一次 <c>V_POList</c>）；ExportXls 沒有這份
-    /// 資料，傳 null 讓這裡自己查。<paramref name="pageSize"/> &lt;= 0 代表不分頁
-    /// （ExportXls 用預設值，永遠拿全部——這種情況候選值集合會接近全表，跟優化前效能相近，
-    /// 是預期行為，匯出本來就要全部資料）。
+    /// <see cref="GetFilteredOrdersAsync"/>，不用再撈一次 <c>V_POList</c>）；ExportXls 沒有這份
+    /// 資料，傳 null 讓這裡自己查。<paramref name="lookups"/> 同理，沒傳就在這裡開跑。
+    /// <paramref name="pageSize"/> &lt;= 0 代表不分頁（明細 modal 與 ExportXls）。
     /// </summary>
-    private List<VPoListDetailViewModel> GetOrderInfoList(
+    private async Task<List<VPoListDetailViewModel>> GetOrderInfoListAsync(
         string? copSource, string? orderType, string? orderNo, string? customerNo,
         string? startDate, string? endDate, string? confirmFlag,
-        int pageIndex = 0, int pageSize = 0, List<VPoList>? preFilteredOrders = null)
+        int pageIndex = 0, int pageSize = 0, List<VPoList>? preFilteredOrders = null, OrderLookups? lookups = null)
     {
-        var checkRules = scDb.CopCheckRules.ToList();
+        lookups ??= StartLookupLoad();
 
-        var vpoList = preFilteredOrders ?? GetFilteredOrders(copSource, orderType, orderNo, customerNo, startDate, endDate);
+        var vpoList = preFilteredOrders ?? await GetFilteredOrdersAsync(copSource, orderType, orderNo, customerNo, startDate, endDate);
 
         if (!string.IsNullOrEmpty(confirmFlag))
         {
@@ -318,6 +378,8 @@ public partial class OrderInfoVerifyApiController : BaseApiController
 
         if (vpoList.Count == 0)
         {
+            // 並行中的查詢還是要收掉，不要丟著沒人 await。
+            await Task.WhenAll(lookups.UpFiles, lookups.Products);
             return [];
         }
 
@@ -326,54 +388,40 @@ public partial class OrderInfoVerifyApiController : BaseApiController
         var orderNos = vpoList.Select(v => v.單號.Trim()).Distinct().ToList();
         var depNos = vpoList.Select(v => v.部門代號).Distinct().ToList();
 
-        var copPoCheckList = scDb.CopPoChecks.AsNoTracking()
+        // 單號條件與參數化的寫法見 LoadDetailsAsync。
+        var vpoDetailList = await LoadDetailsAsync(orderNos, copSources);
+
+        var checkRules = await scDb.CopCheckRules.ToListAsync();
+
+        var copPoCheckList = (await scDb.CopPoChecks.AsNoTracking()
             .Where(c => c.CopSource != null && copSources.Contains(c.CopSource)
                 && c.PoNo != null && poNoKeys.Contains(c.PoNo.Trim()))
-            .ToList()
+            .ToListAsync())
             .Select(c => new CopPoCheckExRule(c, checkRules)).ToList();
 
-        var copPoDetailCheckRaw = scDb.CopPoDetailChecks.AsNoTracking()
+        var copPoDetailCheckRaw = await scDb.CopPoDetailChecks.AsNoTracking()
             .Where(c => c.CopSource != null && copSources.Contains(c.CopSource)
                 && c.PoNo != null && poNoKeys.Contains(c.PoNo.Trim()))
-            .ToList();
+            .ToListAsync();
         var copPoDetailCheckList = copPoDetailCheckRaw
             .Select(c => new CopPoDetailCheckExRule(c, checkRules)).ToList();
 
-        // 單號在 EF 對映是 nchar(11)（IsFixedLength），參數化的 Contains 會翻成
-        // OPENJSON(...) WITH ([value] nchar(11))，對 V_PODetailList（跨 linked server 的 View）
-        // 只要清單超過 1 個值就一筆都比對不到（1 個值剛好正常，所以只有一張單的「未確認」頁看不出來），
-        // 已確認頁與匯出因此整頁空白。改用 EF.Constant 讓它翻成 IN (N'...', ...) 常值；
-        // 不分頁（匯出）時候選單號接近全表、常值清單會太長，直接不加單號條件，最後的 join 一樣會對齊。
-        var vpoDetailQuery = scDb.VPoDetailLists.AsNoTracking().Where(d => copSources.Contains(d.CopSource));
-        if (pageSize > 0)
-        {
-            vpoDetailQuery = vpoDetailQuery.Where(d => EF.Constant(orderNos).Contains(d.單號.Trim()));
-        }
-        var vpoDetailList = vpoDetailQuery.ToList();
-
-        var productNos = vpoDetailList.Select(d => d.品號).Where(p => p != null).Distinct().ToList();
-        var productEnglishAlls = productNos.Count == 0
-            ? new List<Proril.SalesIssue.Api.Data.VProductEnglishAll>()
-            : scDb.VProductEnglishAlls.AsNoTracking()
-                .Where(p => p.ProductNo != null && productNos.Contains(p.ProductNo))
-                .ToList();
-
-        var depData = scDb.CopDepData.AsNoTracking()
+        var depData = await scDb.CopDepData.AsNoTracking()
             .Where(d => d.DepNo != null && depNos.Contains(d.DepNo))
-            .ToList();
+            .ToListAsync();
 
-        var upFileData = scDb.VUpFileData.AsNoTracking()
-            .Where(u => u.KeyValues != null && poNoKeys.Contains(u.KeyValues))
-            .ToList();
+        // 整份讀回來的兩個 View（見 StartLookupLoad），下面的 join 是 hash join，不用先過濾。
+        var productEnglishAlls = await lookups.Products;
+        var upFileData = await lookups.UpFiles;
 
         // 只用「本頁訂單檢核明細」牽到的 OrderChkNo 當候選值（超集合：不管 Sno，
         // 比原始 join 的 LastOrDefault() 寬鬆一點沒關係，join 邏輯本身沒動）。
         var orderChkNos = copPoDetailCheckRaw.Select(c => c.OrderChkNo).Where(o => o != null).Distinct().ToList();
         var passChecks = orderChkNos.Count == 0
             ? new List<Proril.SalesIssue.Api.Data.CopPassCheck>()
-            : scDb.CopPassChecks.AsNoTracking()
+            : await scDb.CopPassChecks.AsNoTracking()
                 .Where(p => p.OrderChkNo != null && orderChkNos.Contains(p.OrderChkNo))
-                .ToList();
+                .ToListAsync();
 
         var query = from tbl in vpoList
                     join poCheck in copPoCheckList
