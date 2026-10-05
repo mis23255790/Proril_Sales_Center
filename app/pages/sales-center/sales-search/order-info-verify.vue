@@ -17,6 +17,8 @@ const { pagination } = useTablePagination(20)
 const table = useTemplateRef('table')
 
 const loading = ref(false)
+// 不整頁遮罩，改用整頁 wait cursor 提示載入中。
+useWaitCursor(loading)
 const exporting = ref<'Y' | 'N' | null>(null)
 const showAmount = ref(false)
 const customers = ref<SalesShippingCustomer[]>([])
@@ -73,8 +75,15 @@ const EMPTY_SUMMARY: OrderInfoVerifySummary = { totalCount: 0, notCheckedCount: 
 /** 兩個頁籤各自的訂單數 + 目前頁籤篩選後的總筆數，後端算好放在 body2。 */
 const summary = ref<OrderInfoVerifySummary>({ ...EMPTY_SUMMARY })
 
+/**
+ * 每次 load 遞增；回來時不是最新一次就丟掉，避免慢的舊回應蓋掉新結果。
+ * 畫面不再整頁遮罩，等待中仍可切頁籤／翻頁／再按查詢，所以一定要擋。
+ */
+let loadSeq = 0
+
 /** 送出目前的篩選條件、頁籤、分頁狀態，實際打 API 的唯一入口。 */
 const load = async () => {
+  const seq = ++loadSeq
   loading.value = true
   try {
     const res = await api.getPOCheckView({
@@ -87,6 +96,7 @@ const load = async () => {
       // ALL_PAGE_SIZE 是前端「全部」選項的哨兵值，後端用 pageSize <= 0 代表不分頁
       pageSize: pagination.value.pageSize >= ALL_PAGE_SIZE ? 0 : pagination.value.pageSize
     })
+    if (seq !== loadSeq) return
     groups.value = res?.isSuccess ? groupOrderInfoVerifyRows(res.body ?? []) : []
     summary.value = res?.body2 ?? { ...EMPTY_SUMMARY }
     if (res && !res.isSuccess && res.message) {
@@ -94,11 +104,12 @@ const load = async () => {
     }
   } catch (err) {
     console.log('order-info-verify load failed -->', err)
+    if (seq !== loadSeq) return
     groups.value = []
     summary.value = { ...EMPTY_SUMMARY }
     toast.add({ title: '查詢失敗', color: 'error' })
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -271,8 +282,7 @@ const loadConditions = async () => {
 
 <template>
   <div>
-    <FullPageLoading :show="loading" />
-
+    <!-- 不用 FullPageLoading 整頁遮罩：查詢條件與頁籤一開始就可操作，下方表格等 API 回來才更新。 -->
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/order-info-verify'))" class="mb-4" />
 
     <div class="mb-5 flex items-start justify-between gap-2">

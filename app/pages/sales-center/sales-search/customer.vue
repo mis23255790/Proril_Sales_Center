@@ -11,7 +11,6 @@ const api = useCustomerApi()
 const toast = useToast()
 const { breadcrumbFor, appPath } = useAppNavigation()
 
-const loading = ref(false)
 const customers = ref<CustomerWithErp[]>([])
 const erpCustomers = ref<ErpCustomer[]>([])
 const userList = ref<{ account: string, userName: string }[]>([])
@@ -57,25 +56,58 @@ const erpCustomerNoSelectValue = computed({
 
 const salesOptions = computed(() => userList.value.map(u => ({ label: u.userName, value: u.account })))
 
-const load = async () => {
-  loading.value = true
-  try {
-    const [customerRes, erpRes] = await Promise.all([
-      api.getCustomers(filters.customerNo, filters.erpCustomerNo),
-      api.getErpCustomers(filters.erpCustomerNo)
-    ])
+/**
+ * 內網客戶／ERP 客戶兩支 API 各自載入、各自回來就更新各自的表格，
+ * 不再用 Promise.all 等兩支都回來。畫面不整頁遮罩，等待中仍可再按查詢，
+ * 所以各自帶序號，晚回來的舊回應直接丟掉。
+ */
+const loadingInternal = ref(false)
+const loadingErp = ref(false)
+const loading = computed(() => loadingInternal.value || loadingErp.value)
+// 不整頁遮罩，改用整頁 wait cursor 提示載入中。
+useWaitCursor(loading)
 
+let internalSeq = 0
+let erpSeq = 0
+
+const loadInternal = async () => {
+  const seq = ++internalSeq
+  loadingInternal.value = true
+  try {
+    const res = await api.getCustomers(filters.customerNo, filters.erpCustomerNo)
+    if (seq !== internalSeq) return
     // isSuccess: false 不一定是錯誤，查無資料時也是這樣回，當空清單處理。
-    customers.value = customerRes?.isSuccess ? (customerRes.body ?? []) : []
-    erpCustomers.value = erpRes?.isSuccess ? (erpRes.body ?? []) : []
+    customers.value = res?.isSuccess ? (res.body ?? []) : []
   } catch (err) {
-    console.log('customer load failed -->', err)
+    console.log('customer loadInternal failed -->', err)
+    if (seq !== internalSeq) return
     customers.value = []
-    erpCustomers.value = []
-    toast.add({ title: '查詢失敗', color: 'error' })
+    toast.add({ title: '內網客戶查詢失敗', color: 'error' })
   } finally {
-    loading.value = false
+    if (seq === internalSeq) loadingInternal.value = false
   }
+}
+
+const loadErp = async () => {
+  const seq = ++erpSeq
+  loadingErp.value = true
+  try {
+    const res = await api.getErpCustomers(filters.erpCustomerNo)
+    if (seq !== erpSeq) return
+    erpCustomers.value = res?.isSuccess ? (res.body ?? []) : []
+  } catch (err) {
+    console.log('customer loadErp failed -->', err)
+    if (seq !== erpSeq) return
+    erpCustomers.value = []
+    toast.add({ title: 'ERP 客戶查詢失敗', color: 'error' })
+  } finally {
+    if (seq === erpSeq) loadingErp.value = false
+  }
+}
+
+const load = () => {
+  loadInternal()
+  loadErp()
 }
 
 const loadUserList = async () => {
@@ -285,8 +317,7 @@ const onSave = async () => {
 
 <template>
   <div>
-    <FullPageLoading :show="loading" />
-
+    <!-- 不用 FullPageLoading 整頁遮罩：查詢條件與頁籤一開始就可操作，兩個表格各自等 API 回來才更新。 -->
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/customer'))" class="mb-4" />
 
     <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -361,7 +392,7 @@ const onSave = async () => {
         v-if="activeTab === 'internal'"
         :data="customers"
         :columns="internalColumns"
-        :loading="loading"
+        :loading="loadingInternal"
         :ui="{ tr: clickableRowTr, td: 'whitespace-nowrap' }"
         @select="(_e: Event, row: any) => openRelated(row.original.customerNo, row.original.erpcustomerNo)"
       >
@@ -389,7 +420,7 @@ const onSave = async () => {
         v-else
         :data="erpCustomers"
         :columns="erpColumns"
-        :loading="loading"
+        :loading="loadingErp"
         :ui="{ tr: clickableRowTr, td: 'whitespace-nowrap' }"
         @select="(_e: Event, row: any) => openRelated(row.original.customerNo, row.original.ma001)"
       >

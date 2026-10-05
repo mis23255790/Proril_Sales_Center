@@ -1,4 +1,18 @@
 <details>
+  <summary>版號2026.10.05.1600</summary>
+
+##### feat: 訂單資料檢核拿掉整頁遮罩，表格等 API 回來才更新
+      比照銷貨檢索：不再顯示 FullPageLoading，查詢條件與頁籤一開始就可操作；
+      表格只在 UTable 上顯示 loading，GetPOCheckView 回來才換資料。
+      load() 加序號，連按查詢／快速翻頁時晚回來的舊回應直接丟掉。
+
+      載入中整頁顯示 wait cursor（cursor: progress，仍可操作），共用 app/composables/useWaitCursor.ts，
+      樣式在 app/assets/css/main.css 的 html.is-waiting。
+
+      app/pages/sales-center/sales-search/order-info-verify.vue
+</details>
+
+<details>
   <summary>版號2026.09.30</summary>
 
 ##### perf: V_POList 改用 OPENQUERY

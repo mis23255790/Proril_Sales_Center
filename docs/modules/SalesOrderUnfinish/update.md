@@ -1,4 +1,19 @@
 <details>
+  <summary>版號2026.10.05.1600</summary>
+
+##### feat: 未完成訂單檢索拿掉整頁遮罩，表格等 API 回來才更新
+      比照銷貨檢索：不再顯示 FullPageLoading，查詢條件與頁籤一開始就可操作；
+      表格只在 UTable 上顯示 loading，舊資料保留到 GetUnfinOrderPage 回來才換。
+      欄位、列號、整列可點改依顯示中資料的頁籤 (shownTab/shownOffset)；
+      load() 加序號，晚回來的舊回應直接丟掉。
+
+      載入中整頁顯示 wait cursor（cursor: progress，仍可操作），共用 app/composables/useWaitCursor.ts，
+      樣式在 app/assets/css/main.css 的 html.is-waiting。
+
+      app/pages/sales-center/sales-search/unfinished-orders.vue
+</details>
+
+<details>
   <summary>版號2026.09.30.1000</summary>
 
 ##### feat: 未完成訂單檢索四個頁籤改後端分頁

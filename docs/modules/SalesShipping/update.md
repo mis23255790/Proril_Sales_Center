@@ -1,4 +1,20 @@
 <details>
+  <summary>版號2026.10.05.1600</summary>
+
+##### feat: 銷貨檢索拿掉整頁遮罩，表格等 API 回來才更新
+      進頁面／查詢／翻頁／切頁籤不再顯示 FullPageLoading，查詢條件與頁籤一開始就可操作；
+      下方表格只在 UTable 上顯示 loading，舊資料保留到 GetSalesOrderPage 回來才換。
+      表格欄位、列號、整列可點改依「顯示中資料的頁籤」(shownTab/shownOffset)，
+      不跟著已切換但還沒回來的 activeTab，避免舊資料套到新頁籤的欄位。
+      load() 加序號，連按查詢／快速翻頁時，晚回來的舊回應直接丟掉。
+
+      載入中整頁顯示 wait cursor（cursor: progress，仍可操作），共用 app/composables/useWaitCursor.ts，
+      樣式在 app/assets/css/main.css 的 html.is-waiting。
+
+      app/pages/sales-center/sales-search/shipping-inquiry.vue
+</details>
+
+<details>
   <summary>版號2026.10.05.1200</summary>
 
 ##### perf: 銷貨檢索查詢加速（ERP 匯入預檢查、只匯入一次）

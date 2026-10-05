@@ -1,4 +1,18 @@
 <details>
+  <summary>版號2026.10.05.1600</summary>
+
+##### feat: 客戶檢索拿掉整頁遮罩，兩個頁籤各自等 API 回來才更新
+      不再顯示 FullPageLoading；內網客戶 (CustomQueryApi/GetCustom) 與 ERP 客戶 (CustomQueryApi/GetERPCustom)
+      拆成兩支獨立載入，不再 Promise.all 等兩支都回來，哪支先回來就先更新該頁籤的表格，
+      各自有 loading 與序號（晚回來的舊回應丟掉），失敗時各自提示。
+
+      載入中整頁顯示 wait cursor（cursor: progress，仍可操作），共用 app/composables/useWaitCursor.ts，
+      樣式在 app/assets/css/main.css 的 html.is-waiting。
+
+      app/pages/sales-center/sales-search/customer.vue
+</details>
+
+<details>
   <summary>版號2026.09.16.1400</summary>
 
 ##### feat: 客戶相關資訊自 PRORIL 1.0 (Mix/CustomerRelated, FunctionNo 441) 搬到 2.0

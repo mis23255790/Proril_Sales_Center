@@ -28,6 +28,8 @@ const DEFAULT_DAYS = 90
 const dateDaysAgo = (days: number) => toDateString(new Date(Date.now() - days * 24 * 60 * 60 * 1000))
 
 const loading = ref(false)
+// 不整頁遮罩，改用整頁 wait cursor 提示載入中。
+useWaitCursor(loading)
 const exporting = ref(false)
 const showAmount = ref(false)
 const customers = ref<SalesShippingCustomer[]>([])
@@ -126,34 +128,54 @@ const baseQuery = (): Omit<UnfinOrderQuery, 'groupName'> => ({
 const lastQuery = ref<Omit<UnfinOrderQuery, 'groupName'>>(baseQuery())
 
 /**
+ * 表格目前「顯示中」資料所屬的頁籤與起始列號。
+ * 畫面不再整頁遮罩，切頁籤／翻頁時舊資料會留在表格上直到 API 回來，
+ * 欄位定義、列號、整列可點都要跟著顯示中的資料走，不能跟著已經切過去的 activeTab。
+ */
+const shownTab = ref<UnfinOrderTab>('productDetail')
+const shownOffset = ref(0)
+
+/** 每次 load 遞增；回來時不是最新一次就丟掉，避免慢的舊回應蓋掉新結果。 */
+let loadSeq = 0
+
+/**
  * 實際打 API 的唯一入口。refresh=true 會讓後端重跑兩支 SP（按查詢／重設），
  * false 是翻頁、切頁籤，後端直接從快取切那一頁。
  */
 const load = async (refresh: boolean) => {
+  const seq = ++loadSeq
+  const tab = activeTab.value
+  const offset = pagination.value.pageIndex * pagination.value.pageSize
   loading.value = true
   try {
     const res = await api.getUnfinOrderPage(lastQuery.value, {
-      tab: activeTab.value,
+      tab,
       pageIndex: pagination.value.pageIndex,
       // ALL_PAGE_SIZE 是前端「全部」選項的哨兵值，後端用 pageSize <= 0 代表不分頁
       pageSize: pagination.value.pageSize >= ALL_PAGE_SIZE ? 0 : pagination.value.pageSize,
       refresh
     })
+    if (seq !== loadSeq) return
 
     // 查無資料時後端回 isSuccess: false + 說明訊息，不是錯誤，當空清單處理。
     pageRows.value = res?.isSuccess ? ((res.body ?? []) as UnfinOrderRow[]) : []
     summary.value = res?.isSuccess ? (res.body2 ?? { ...EMPTY_SUMMARY }) : { ...EMPTY_SUMMARY }
+    shownTab.value = tab
+    shownOffset.value = offset
 
     if (res && !res.isSuccess && res.message) {
       toast.add({ title: '查詢無資料', description: res.message, color: 'warning' })
     }
   } catch (err) {
     console.log('unfinished-orders load failed -->', err)
+    if (seq !== loadSeq) return
     pageRows.value = []
     summary.value = { ...EMPTY_SUMMARY }
+    shownTab.value = tab
+    shownOffset.value = offset
     toast.add({ title: '查詢失敗', color: 'error' })
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -377,7 +399,7 @@ const buildColumns = (defs: ColDef[], amountAllowed: boolean, withAction?: strin
       id: 'no',
       header: '#',
       cell: ({ row }) => {
-        const offset = paged ? pagination.value.pageIndex * pagination.value.pageSize : 0
+        const offset = paged ? shownOffset.value : 0
         return h('span', { class: 'block text-right text-dimmed' }, String(offset + row.index + 1))
       }
     }
@@ -404,13 +426,13 @@ const productGroupColumns = computed(() => buildColumns(PRODUCT_GROUP_COLS, show
 const soDetailColumns = computed(() => buildColumns(SO_DETAIL_COLS, showAmount.value, undefined, true))
 const soGroupColumns = computed(() => buildColumns(SO_GROUP_COLS, showAmount.value, '內容', true))
 
-/** 四個頁籤共用一個 UTable，欄位依目前頁籤切換。 */
+/** 四個頁籤共用一個 UTable，欄位依顯示中資料的頁籤切換。 */
 const activeColumns = computed(() => ({
   productDetail: productDetailColumns.value,
   productGroup: productGroupColumns.value,
   soDetail: soDetailColumns.value,
   soGroup: soGroupColumns.value
-})[activeTab.value])
+})[shownTab.value])
 const productModalColumns = computed(() => buildColumns(PRODUCT_MODAL_COLS, showAmount.value))
 const soModalColumns = computed(() => buildColumns(SO_MODAL_COLS, showAmount.value))
 
@@ -481,16 +503,15 @@ const openSoDetail = async (row: UnfinOrderRow) => {
 }
 
 /** 品號統計／訂單統計有明細 modal，細項兩個頁籤沒有。 */
-const isGroupTab = computed(() => activeTab.value === 'productGroup' || activeTab.value === 'soGroup')
+const isGroupTab = computed(() => shownTab.value === 'productGroup' || shownTab.value === 'soGroup')
 
 const openGroupDetail = (row: UnfinOrderRow) =>
-  activeTab.value === 'productGroup' ? openProductDetail(row) : openSoDetail(row)
+  shownTab.value === 'productGroup' ? openProductDetail(row) : openSoDetail(row)
 </script>
 
 <template>
   <div>
-    <FullPageLoading :show="loading" />
-
+    <!-- 不用 FullPageLoading 整頁遮罩：查詢條件與頁籤一開始就可操作，下方表格等 API 回來才更新。 -->
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/unfinished-orders'))" class="mb-4" />
 
     <div class="mb-5">
@@ -641,7 +662,7 @@ const openGroupDetail = (row: UnfinOrderRow) =>
         </template>
         <template #empty>
           <p class="py-12 text-center text-sm text-muted">
-            {{ EMPTY_TEXT[activeTab] }}
+            {{ EMPTY_TEXT[shownTab] }}
           </p>
         </template>
       </UTable>

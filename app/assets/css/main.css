@@ -29,3 +29,13 @@
   --color-brand-800: #7a3313;
   --color-brand-900: #5c280f;
 }
+
+/*
+ * 載入中整頁 wait cursor（useWaitCursor 切換 html.is-waiting）。
+ * 用 progress 而不是 wait：表示背景在忙、畫面仍可操作。
+ * 子元素一律蓋過，否則按鈕／輸入框自己的 cursor-pointer / text 會露出來。
+ */
+html.is-waiting,
+html.is-waiting * {
+  cursor: progress !important;
+}
