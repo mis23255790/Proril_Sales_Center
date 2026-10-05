@@ -1,4 +1,24 @@
 <details>
+  <summary>版號2026.10.05.1200</summary>
+
+##### perf: 銷貨檢索查詢加速（ERP 匯入預檢查、只匯入一次）
+      測試區實測：prc_ImportSalesOrder 每次約 1056ms，即使 ERP 沒有新單也一樣；
+      兩支查詢 SP 本身各約 100ms。GetSalesOrderPage 的 1 秒多幾乎全花在匯入。
+      - prc_ImportSalesOrder：先 COUNT 比對有沒有未匯入的銷貨單（約 85ms），沒有就跳過
+        兩段 5 個 linked server JOIN 的 INSERT；有新單照原邏輯，結果不變。
+      - prc_QuerySalesOrder(_1)：加選用參數 @SkipImport bit = 0；SET NOCOUNT ON；
+        拿掉 cursor 內逐筆 print；#tmpCSO(_1) 補群組鍵索引（原本每筆 count(*) 是 O(n^2)）。
+      - GetSalesOrderPage 先匯入一次，兩支 SP 帶 @SkipImport = 1 平行跑；ExportXls 第二支也帶 1。
+      **部署順序：先跑 SalesShippingObjectsMigration.sql，再部署 api**
+      （新版 api 會傳 @SkipImport，舊版 SP 會報參數太多）。
+
+      database/SalesShippingObjectsMigration.sql
+      api/Controllers/SalesSearch/MixSalesShipApiController.cs
+      api/Controllers/SalesSearch/MixSalesShipApiController.Paged.cs
+      api/Controllers/SalesSearch/MixSalesShipApiController.Xls.cs
+</details>
+
+<details>
   <summary>版號2026.09.29.1500</summary>
 
 ##### feat: 銷貨檢索改後端分頁（SP 結果快取，翻頁不重跑 SP）

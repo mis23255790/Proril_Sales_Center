@@ -140,9 +140,12 @@ Excel 匯出（`MixSalesShipApiController.Xls.cs`）用同一個 key 在後端�
 - 新端點 `MixSalesShipApi/GetSalesOrderPage`（`MixSalesShipApiController.Paged.cs`，1.0 沒有）：
   參數 = 查詢條件 + `tab`（productDetail / productGroup / soDetail / soGroup）+
   `pageIndex`（0 起算）+ `pageSize`（<= 0 不分頁）+ `refresh`。
-- `refresh=true`（查詢／全部／重設／篩選欄位按 Enter）：兩支 SP 平行跑
-  （各自 new 一個 `SalesCenterDbContext`，同改動前前端 `Promise.all` 的並行度），
+- `refresh=true`（查詢／全部／重設／篩選欄位按 Enter）：先單獨跑一次 `prc_ImportSalesOrder`，
+  再讓兩支 SP 帶 `@SkipImport = 1` 平行跑（各自 new 一個 `SalesCenterDbContext`），
   套完金額遮罩後放進 `IMemoryCache` 10 分鐘。
+  （2026-10-05 起。之前兩支 SP 各匯入一次，還會在 `COP_SalesOrder` 的鎖上互等；
+  `prc_ImportSalesOrder` 也改成先檢查 ERP 有沒有新單，沒有就跳過那段很慢的 INSERT，
+  見 `update.md` 2026.10.05。）
 - `refresh=false`（翻頁、切頁籤、切每頁筆數）：有快取就直接切，過期才重跑 SP。
   快取 key = 全部查詢條件 + 有無金額權限，所以前端翻頁送的是 `lastQuery`
   （上次按查詢時的條件快照），不是畫面上改到一半的條件。兩個明細 modal 也用 `lastQuery`。

@@ -95,7 +95,8 @@ public partial class MixSalesShipApiController
     }
 
     /// <summary>
-    /// 兩支 SP 平行跑（改之前前端也是 Promise.all 同時打兩支，第一次查詢的等待時間不變）。
+    /// 先跑一次 ERP 匯入，再讓兩支 SP 帶 skipImport 平行跑。兩支 SP 本來各自會先匯入一次，
+    /// 同時跑時還會在 COP_SalesOrder 的鎖上互等（2026-10-05 改）。
     /// DbContext 不能跨執行緒共用，各自 new 一個。
     /// </summary>
     private async Task<SalesOrderQueryResult> QueryBoth(
@@ -105,10 +106,12 @@ public partial class MixSalesShipApiController
         await using var productDb = new SalesCenterDbContext(_scDbOptions);
         await using var soDb = new SalesCenterDbContext(_scDbOptions);
 
+        await ImportSalesOrderAsync(productDb);
+
         var productTask = Task.Run(() => QueryByProduct(customerNo, productType, productNo, productName, productSpec,
-            startDate, endDate, serialNo, poNo, inPlanNumber, "TH004", "", productDb));
+            startDate, endDate, serialNo, poNo, inPlanNumber, "TH004", "", productDb, skipImport: true));
         var soTask = Task.Run(() => QueryBySalesOrder(customerNo, productType, productNo, productName, productSpec,
-            startDate, endDate, serialNo, poNo, "", "", inPlanNumber, "TH001", "", soDb));
+            startDate, endDate, serialNo, poNo, "", "", inPlanNumber, "TH001", "", soDb, skipImport: true));
         await Task.WhenAll(productTask, soTask);
 
         return new SalesOrderQueryResult(

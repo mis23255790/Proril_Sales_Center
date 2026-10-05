@@ -133,11 +133,14 @@ public partial class MixSalesShipApiController : BaseApiController
     ///
     /// <paramref name="db"/> 不傳就用 request 的 <c>scDb</c>；GetSalesOrderPage 要兩支 SP 平行跑，
     /// DbContext 不能跨執行緒共用，那邊會各自 new 一個傳進來。
+    ///
+    /// <paramref name="skipImport"/> = true 時 SP 不跑 <c>prc_ImportSalesOrder</c>（<c>@SkipImport = 1</c>），
+    /// 呼叫端要自己先跑過 <see cref="ImportSalesOrderAsync"/>。
     /// </summary>
     private List<CopSalesOrder> QueryByProduct(
         string? customerNo, string? productType, string? productNo, string? productName, string? productSpec,
         string? startDate, string? endDate, string? serialNo, string? poNo, string? inPlanNumber,
-        string? groupName, string? groupDesc, Data.SalesCenter.SalesCenterDbContext? db = null)
+        string? groupName, string? groupDesc, Data.SalesCenter.SalesCenterDbContext? db = null, bool skipImport = false)
     {
         db ??= scDb;
         db.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
@@ -146,17 +149,18 @@ public partial class MixSalesShipApiController : BaseApiController
             .FromSqlInterpolated($@"EXEC prc_QuerySalesOrder
                 {customerNo ?? ""}, {productType ?? ""}, {productNo ?? ""}, {productName ?? ""}, {productSpec ?? ""},
                 {startDate ?? ""}, {endDate ?? ""},
-                {serialNo ?? ""}, {poNo ?? ""}, {inPlanNumber ?? ""}, {groupName ?? ""}, {groupDesc ?? ""}")
+                {serialNo ?? ""}, {poNo ?? ""}, {inPlanNumber ?? ""}, {groupName ?? ""}, {groupDesc ?? ""},
+                {skipImport}")
             .AsNoTracking()
             .ToList();
     }
 
-    /// <summary><c>EXEC prc_QuerySalesOrder_1</c>（依銷貨單分群）。<paramref name="db"/> 同上，見 <see cref="QueryByProduct"/>。</summary>
+    /// <summary><c>EXEC prc_QuerySalesOrder_1</c>（依銷貨單分群）。<paramref name="db"/>／<paramref name="skipImport"/> 同上，見 <see cref="QueryByProduct"/>。</summary>
     private List<CopSalesOrder> QueryBySalesOrder(
         string? customerNo, string? productType, string? productNo, string? productName, string? productSpec,
         string? startDate, string? endDate, string? serialNo, string? poNo,
         string? orderType, string? orderNo, string? inPlanNumber,
-        string? groupName, string? groupDesc, Data.SalesCenter.SalesCenterDbContext? db = null)
+        string? groupName, string? groupDesc, Data.SalesCenter.SalesCenterDbContext? db = null, bool skipImport = false)
     {
         db ??= scDb;
         db.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
@@ -166,8 +170,20 @@ public partial class MixSalesShipApiController : BaseApiController
                 {customerNo ?? ""}, {productType ?? ""}, {productNo ?? ""}, {productName ?? ""}, {productSpec ?? ""},
                 {startDate ?? ""}, {endDate ?? ""},
                 {serialNo ?? ""}, {poNo ?? ""}, {orderType ?? ""}, {orderNo ?? ""}, {inPlanNumber ?? ""},
-                {groupName ?? ""}, {groupDesc ?? ""}")
+                {groupName ?? ""}, {groupDesc ?? ""}, {skipImport}")
             .AsNoTracking()
             .ToList();
+    }
+
+    /// <summary>
+    /// 單獨跑一次 <c>prc_ImportSalesOrder</c>（從 ERP 增量補 <c>COP_SalesOrder</c>）。
+    /// 給要連跑兩支查詢 SP 的地方用：先匯入一次，兩支再帶 <c>skipImport: true</c>，
+    /// 不然兩支各匯入一次、還會在 <c>COP_SalesOrder</c> 的鎖上互等。
+    /// </summary>
+    private async Task ImportSalesOrderAsync(Data.SalesCenter.SalesCenterDbContext? db = null)
+    {
+        db ??= scDb;
+        db.Database.SetCommandTimeout(SpCommandTimeoutSeconds);
+        await db.Database.ExecuteSqlRawAsync("DECLARE @ret varchar(50); EXEC prc_ImportSalesOrder 'system', @ret OUTPUT;");
     }
 }

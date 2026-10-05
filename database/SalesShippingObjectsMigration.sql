@@ -49,6 +49,16 @@
  *   6. 欄位型別是直接查 PRORIL_WEB 當下的 sys.columns 得出的，不是照 1.0 的 EF scaffold 抄。
  *   7. CREATE PROCEDURE 全部改成 CREATE OR ALTER，可重複執行；CREATE TABLE 用
  *      IF OBJECT_ID(...) IS NULL 防呆；資料複製區塊在表已經有資料時自動跳過。
+ *   8. **2026-10-05 效能調整**（第 1、3 點之後唯一的邏輯外修改，輸出結果不變）：
+ *      - prc_ImportSalesOrder 先用一句 COUNT 比對 ERP 有沒有還沒匯入的銷貨單，
+ *        沒有就跳過那兩段 5 個 linked server JOIN 的 INSERT（測試區實測：1056ms → 約 90ms）。
+ *      - prc_QuerySalesOrder(_1) 加選用參數 @SkipImport bit = 0（不傳就照舊匯入）。
+ *        GetSalesOrderPage 先自己跑一次匯入，再帶 1 平行跑兩支查詢，
+ *        避免兩支各匯入一次、又在 COP_SalesOrder 的鎖上互等。
+ *      - 三支加 SET NOCOUNT ON；拿掉 cursor 迴圈裡逐筆的 print；
+ *        #tmpCSO(_1) 補索引（cursor 每筆都 count(*) 同群組筆數，原本是 O(n^2)）。
+ *      **部署順序：先跑這支腳本，再部署 api 專案**。新版 api 會多傳 @SkipImport，
+ *      SP 還是舊版的話會報「參數太多」。
  *
  * 怎麼執行：走 database/scripts/run-objects-migration.ps1，不要直接把檔案丟進 SSMS
  * 執行（檔案是 UTF-8 無 BOM，下面 prc_ImportSalesOrder 裡有 '浦瑞ERP'/'芳晟ERP' 這種
@@ -186,8 +196,12 @@ BEGIN
 DECLARE 
 
 @aStatus varchar(1),
-@Creator varchar(40), 
-@CreateTime datetime
+@Creator varchar(40),
+@CreateTime datetime,
+@NewForeignCnt int,
+@NewDomesticCnt int
+
+SET NOCOUNT ON
 
 SET @Creator = 'ImportSalesOrder'
 
@@ -201,7 +215,21 @@ SET @CreateTime = GETDATE()
   BEGIN TRANSACTION;
     BEGIN TRY
 
+        -- 2026-10-05 效能：先只比對「ERP 有沒有還沒匯入的銷貨單」（約 80ms），沒有就跳過
+        -- 下面那段 5 個 linked server JOIN 的 INSERT（不管有沒有新資料都要將近 1 秒）。
+        -- 條件與 INSERT 的 WHERE 一字不差（其餘都是 LEFT JOIN，不影響筆數），所以結果不變。
+        SELECT @NewForeignCnt = COUNT(*)
+        FROM [192.168.1.200].TWPR.dbo.COPTH TH
+        LEFT JOIN dbo.COP_SalesOrder CSO ON CSO.TH001 = TH.TH001 COLLATE DATABASE_DEFAULT and CSO.TH002 = TH.TH002 COLLATE DATABASE_DEFAULT and CSO.TH003 = TH.TH003 COLLATE DATABASE_DEFAULT
+        WHERE TH.TH020 = 'Y' AND TH.TH001 LIKE '28%' AND CSO.TH001 IS NULL
+
+        SELECT @NewDomesticCnt = COUNT(*)
+        FROM [192.168.1.200].PRORIL.dbo.COPTH TH
+        LEFT JOIN dbo.COP_SalesOrder CSO ON CSO.TH001 = TH.TH001 COLLATE DATABASE_DEFAULT and CSO.TH002 = TH.TH002 COLLATE DATABASE_DEFAULT and CSO.TH003 = TH.TH003 COLLATE DATABASE_DEFAULT
+        WHERE TH.TH020 = 'Y' AND TH.TH001 LIKE '23%' AND CSO.TH001 IS NULL
+
 	    -- 匯入國外銷貨單資料
+        IF (@NewForeignCnt > 0)
         insert into COP_SalesOrder (COP_Source,TG003,
 		TH001,TH002,TH003,TH004,TH005,
 		TH006,TH009,TH007,TH008,TH012,
@@ -240,6 +268,7 @@ SET @CreateTime = GETDATE()
 
 
 	    -- 匯入國內銷貨單資料
+        IF (@NewDomesticCnt > 0)
         insert into COP_SalesOrder (COP_Source,TG003,
 		TH001,TH002,TH003,TH004,TH005,
 		TH006,TH009,TH007,TH008,TH012,
@@ -340,12 +369,14 @@ CREATE OR ALTER PROCEDURE [dbo].[prc_QuerySalesOrder]
 @PoNo varchar(120), -- 訂單號
 @InPlanNumber varchar(120), -- 計劃批號
 @GroupType varchar(100), -- 統計群組類別
-@GroupDesc varchar(10) -- 統計群組排序
+@GroupDesc varchar(10), -- 統計群組排序
+@SkipImport bit = 0 -- 2026-10-05：1 = 呼叫端已經自己跑過 prc_ImportSalesOrder（GetSalesOrderPage），這裡不再跑
 
 
 AS
 BEGIN
-DECLARE 
+SET NOCOUNT ON
+DECLARE
 
 
 
@@ -423,7 +454,8 @@ DECLARE
 
 @ret VARCHAR(50)  --傳回結果
 
-  exec prc_ImportSalesOrder 'system',@ret
+  IF (ISNULL(@SkipImport, 0) = 0)
+    exec prc_ImportSalesOrder 'system',@ret
 
   BEGIN TRANSACTION;
   --開啟交易
@@ -587,6 +619,9 @@ DECLARE
 
 	   SELECT * into #tmpCSO FROM  [#SalesOrder]
 
+	   -- 2026-10-05 效能：下面 cursor 每一筆都要 count(*) 同品號筆數，沒索引會變 O(n^2)
+	   CREATE INDEX IX_tmpCSO_TH004 ON #tmpCSO (TH004)
+
 	   delete from [#SalesOrder]
 
 --	  select * from #tmpCSO
@@ -655,24 +690,15 @@ DECLARE
 
         	   SET @RecIdx = @RecIdx + 1
 
-			   print @TH004
-
 			   SELECT @RecCnt = count(*) FROM #tmpCSO
 				WHERE 1=1
 				AND TH004 = @TH004
-
-               print @RecCnt
-               print @RecIdx
 
 
 --			   if (@RecCnt > 1  AND @SumProductNo <> @TH004) 
 			   if (@RecCnt > 1  AND @RecIdx = @RecCnt) 
                begin
                    set @GroupFlag = 'Y'
-
-                   print '@SumProductNo : ' +  @SumProductNo
-
-                   print '@TH004 : ' +  @TH004
 
 					set @FooterFlag = 'Y'
 					set @FooterWrite = 'Y'
@@ -818,11 +844,13 @@ CREATE OR ALTER PROCEDURE [dbo].[prc_QuerySalesOrder_1]
 @OrderNo varchar(12), -- 銷貨單號
 @InPlanNumber varchar(120), -- 計劃批號
 @GroupType varchar(100), -- 統計群組類別
-@GroupDesc varchar(10) -- 統計群組排序
+@GroupDesc varchar(10), -- 統計群組排序
+@SkipImport bit = 0 -- 2026-10-05：同 prc_QuerySalesOrder，1 = 呼叫端已經跑過 prc_ImportSalesOrder
 
 AS
 BEGIN
-DECLARE 
+SET NOCOUNT ON
+DECLARE
 
 @ID int,
 @CreateTime datetime,
@@ -898,7 +926,8 @@ DECLARE
 
 @ret VARCHAR(50)  --傳回結果
 
-exec prc_ImportSalesOrder 'system',@ret
+IF (ISNULL(@SkipImport, 0) = 0)
+  exec prc_ImportSalesOrder 'system',@ret
 
   BEGIN TRANSACTION;
   --開啟交易
@@ -1055,6 +1084,9 @@ exec prc_ImportSalesOrder 'system',@ret
 
      SELECT * into #tmpCSO_1 FROM  [#SalesOrder_1]
 
+     -- 2026-10-05 效能：下面 cursor 每一筆都要 count(*) 同一張銷貨單的筆數，沒索引會變 O(n^2)
+     CREATE INDEX IX_tmpCSO_1_TH001_TH002 ON #tmpCSO_1 (TH001, TH002)
+
      delete from [#SalesOrder_1]
 
       DECLARE CRS CURSOR FOR 
@@ -1142,22 +1174,14 @@ exec prc_ImportSalesOrder 'system',@ret
 
         SET @RecIdx = @RecIdx + 1
 
-        print @TH004
-
         SELECT @RecCnt = count(*) FROM #tmpCSO_1
         WHERE 1=1
         AND TH001 = @TH001
         AND TH002 = @TH002
 
-        print @RecCnt
-        print @RecIdx
-
         if (@RecCnt > 1  AND @RecIdx = @RecCnt) 
         begin
           set @GroupFlag = 'Y'
-
-          print '@SumNo : ' +  @SumNo
-          print '@TH001 : ' +  @TH001 + ' ' + @TH002
 
           set @FooterFlag = 'Y'
           set @FooterWrite = 'Y'

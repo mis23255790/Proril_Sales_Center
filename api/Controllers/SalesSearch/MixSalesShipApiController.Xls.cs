@@ -56,7 +56,8 @@ public partial class MixSalesShipApiController
         var productInfo = QueryByProduct(customerNo, productType, productNo, productName, productSpec,
             startDate, endDate, serialNo, poNo, inPlanNumber, "TH004", groupDesc);
         var salesOrders = QueryBySalesOrder(customerNo, productType, productNo, productName, productSpec,
-            startDate, endDate, serialNo, poNo, orderType, orderNo, inPlanNumber, "TH001", groupDesc);
+            startDate, endDate, serialNo, poNo, orderType, orderNo, inPlanNumber, "TH001", groupDesc,
+            skipImport: true); // 上一支剛匯入過，不用再跑一次
 
         if (productInfo.Count == 0 && salesOrders.Count == 0)
         {
