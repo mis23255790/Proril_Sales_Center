@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
@@ -130,6 +131,31 @@ app.UseFileServer(new FileServerOptions
         // 附件什麼副檔名都有，不在白名單內的也要能下載
         ServeUnknownFileTypes = true,
         DefaultContentType = "application/octet-stream"
+    }
+});
+
+/*
+ * /log：瀏覽 LogHelper 寫的文字檔 log（Docker 是 /app/Logs，本機是 C:\Logs\proril_log，
+ * 含 exceptionLog/ 子目錄）。對外網址 https://sales-center(-dev).proril.com/log 進的是 Nuxt，
+ * 由 server/routes/log 轉發到這裡。
+ * 跟 /ShareRoot 一樣不需要登入、開目錄瀏覽；log 內有 request 路徑/查詢字串、帳號與例外堆疊，
+ * 是刻意開放的已知風險。放在 RequestLoggingMiddleware 之前，看 log 本身不會再寫進 log。
+ */
+Directory.CreateDirectory(LogHelper.DefaultRootLogPath);
+var logContentTypes = new FileExtensionContentTypeProvider();
+// .txt 預設是 text/plain 不帶 charset，瀏覽器會把中文當 Big5/Latin1 解成亂碼
+logContentTypes.Mappings[".txt"] = "text/plain; charset=utf-8";
+
+app.UseFileServer(new FileServerOptions
+{
+    FileProvider = new PhysicalFileProvider(Path.GetFullPath(LogHelper.DefaultRootLogPath)),
+    RequestPath = "/log",
+    EnableDirectoryBrowsing = true,
+    StaticFileOptions =
+    {
+        ContentTypeProvider = logContentTypes,
+        // 當天的檔案一直在 append，不要讓瀏覽器/代理快取舊內容
+        OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-store"
     }
 });
 
