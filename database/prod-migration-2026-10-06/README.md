@@ -31,3 +31,19 @@ cd database
 - 測試區（50002）未執行。
 - 1.0 訂單資料檢核只有「有金額」的「訂單細項」分頁：無金額權限的人，以及「訂單總表」分頁，
   匯出時仍用 2.0 預設版面。
+
+---
+
+# 未完成訂單 ERP 來源顯示 `??ERP`
+
+腳本：`fix-unfinorder-temp-collation.ps1`（預設 dry-run，`-Environment snapshot|snapshot-prod`，加 `-Execute` 才寫入）。
+
+- 原因：`prc_QueryUnfinOrder`／`prc_QueryUnfinOrder_1` 的 `#TmpDataSet.COP_Source` 是 `varchar(7)`、
+  沒指定定序，吃到 tempdb 的 `SQL_Latin1_General_CP1_CI_AS`，`'浦瑞ERP'` 寫進去變 `'??ERP'`。
+  畫面與匯出（品號細項、訂單細項、訂單統計三個有 ERP 欄的分頁）都受影響。
+- 修法：該欄補 `COLLATE DATABASE_DEFAULT`。腳本讀資料庫**現行**定義只替換那一行，
+  不重跑 `SalesOrderUnfinishObjectsMigration.sql`（那支會把 `V_UnfinOrder` 蓋回
+  `NpsSerialNoObjectsMigration.sql` 之前的版本）。原始腳本與 `prod-migration-2026-09-21/03-create-procedures.sql`
+  也已同步修正，之後建庫不會再出現。
+- 執行紀錄：測試區（50002）2026-10-06 已執行並驗證回傳 `浦瑞ERP`／`芳晟ERP`；正式區（51002）2026-10-06 已執行並驗證。
+- API 有查詢快取，修完要重新按「查詢」才會重跑 SP。

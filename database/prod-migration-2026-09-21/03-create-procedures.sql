@@ -3067,7 +3067,7 @@ DECLARE
     -- 建立匯出使用的資料集
 	CREATE TABLE [dbo].[#TmpDataSet](
 		[ID] [int] IDENTITY(1,1) NOT NULL,
-		[COP_Source] [varchar](7) NULL,
+		[COP_Source] [varchar](7) COLLATE DATABASE_DEFAULT NULL,  -- tempdb 是 Latin1，不指定中文會變 ??
 		[MQ002] [nvarchar](40) NULL,
 		[TC001] [nchar](4) NOT NULL,
 		[TC002] [nchar](11) NOT NULL,
@@ -3555,7 +3555,7 @@ DECLARE
     -- 建立匯出使用的資料集
 	CREATE TABLE [dbo].[#TmpDataSet_1](
 		[ID] [int] IDENTITY(1,1) NOT NULL,
-		[COP_Source] [varchar](7) NULL,
+		[COP_Source] [varchar](7) COLLATE DATABASE_DEFAULT NULL,  -- tempdb 是 Latin1，不指定中文會變 ??
 		[MQ002] [nvarchar](40) NULL,
 		[TC001] [nchar](4) NOT NULL,
 		[TC002] [nchar](11) NOT NULL,

@@ -32,6 +32,10 @@
  *      對不上。這裡完全沒有本地快取表，NPS_D_Order／ERP linked server 兩側欄位本來就都是
  *      Chinese_Taiwan_Stroke_BIN，跟 View 建在哪個資料庫無關；何況 Proril_Sales_Center
  *      現在定序也已經對齊同一個定序了（見 PortingNotes.md「定序已對齊」），連這層顧慮都不用有。
+ *      **例外是 #TmpDataSet.COP_Source**（2026-10-06 修）：#temp 欄位沒指定定序會用 tempdb 的
+ *      SQL_Latin1_General_CP1_CI_AS，varchar 存不下中文，'浦瑞ERP' 寫進去變 '??ERP'
+ *      （畫面與匯出的 ERP 欄都是 ??ERP）。已加 COLLATE DATABASE_DEFAULT；
+ *      其他字元欄位是 nvarchar／nchar，不受影響。
  *   3. **兩支 SP 完全不寫資料**：跟 prc_QuerySalesOrder(_1) 進來就先 EXEC
  *      prc_ImportSalesOrder 不同，這兩支單純查詢、無副作用。
  *   4. CREATE VIEW / CREATE PROCEDURE 全部改成 CREATE OR ALTER，可重複執行。
@@ -210,7 +214,7 @@ DECLARE
     -- 建立匯出使用的資料集
 	CREATE TABLE [dbo].[#TmpDataSet](
 		[ID] [int] IDENTITY(1,1) NOT NULL,
-		[COP_Source] [varchar](7) NULL,
+		[COP_Source] [varchar](7) COLLATE DATABASE_DEFAULT NULL,  -- tempdb 是 Latin1，不指定中文會變 ??
 		[MQ002] [nvarchar](40) NULL,
 		[TC001] [nchar](4) NOT NULL,
 		[TC002] [nchar](11) NOT NULL,
@@ -708,7 +712,7 @@ DECLARE
     -- 建立匯出使用的資料集
 	CREATE TABLE [dbo].[#TmpDataSet_1](
 		[ID] [int] IDENTITY(1,1) NOT NULL,
-		[COP_Source] [varchar](7) NULL,
+		[COP_Source] [varchar](7) COLLATE DATABASE_DEFAULT NULL,  -- tempdb 是 Latin1，不指定中文會變 ??
 		[MQ002] [nvarchar](40) NULL,
 		[TC001] [nchar](4) NOT NULL,
 		[TC002] [nchar](11) NOT NULL,
