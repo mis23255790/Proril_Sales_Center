@@ -27,6 +27,9 @@ const DEFAULT_DAYS = 90
 
 const dateDaysAgo = (days: number) => toDateString(new Date(Date.now() - days * 24 * 60 * 60 * 1000))
 
+/** 查詢條件區塊縮小高度：label 與輸入框間距收窄。 */
+const FIELD_UI = { container: 'mt-0.5' }
+
 const loading = ref(false)
 // 不整頁遮罩，改用整頁 wait cursor 提示載入中。
 useWaitCursor(loading)
@@ -518,15 +521,12 @@ const openGroupDetail = (row: UnfinOrderRow) =>
       <h1 class="text-2xl font-bold text-highlighted">
         未完成訂單檢索
       </h1>
-      <p class="mt-1 text-sm text-muted">
-        依客戶別、訂單日期、預交日期、品號等條件查詢尚未出貨的訂單，可依品號或訂單分別檢視細項與統計。
-      </p>
     </div>
 
     <!-- 查詢條件 -->
-    <div class="mb-4 rounded-lg border border-default bg-elevated/40 p-4">
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <UFormField label="客戶別" size="sm">
+    <div class="mb-4 rounded-lg border border-default bg-elevated/40 px-3 py-2.5">
+      <div class="grid grid-cols-1 gap-x-3 gap-y-1.5 md:grid-cols-2 xl:grid-cols-5">
+        <UFormField label="客戶別" size="xs" :ui="FIELD_UI">
           <USelectMenu
             v-model="customerNoSelectValue"
             :items="customerOptions"
@@ -537,61 +537,61 @@ const openGroupDetail = (row: UnfinOrderRow) =>
           />
         </UFormField>
 
-        <UFormField label="品號種類" size="sm">
+        <UFormField label="品號種類" size="xs" :ui="FIELD_UI">
           <div class="flex h-full items-center gap-4">
             <UCheckbox v-model="filters.show5x" label="成品(5開頭)" />
             <UCheckbox v-model="filters.showX" label="零件(x開頭)" />
           </div>
         </UFormField>
 
-        <UFormField label="品號" size="sm">
+        <UFormField label="品號" size="xs" :ui="FIELD_UI">
           <UInput v-model="filters.productNo" placeholder="品號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="品名" size="sm">
+        <UFormField label="品名" size="xs" :ui="FIELD_UI">
           <UInput v-model="filters.productName" placeholder="品名" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="規格" size="sm">
+        <UFormField label="規格" size="xs" :ui="FIELD_UI">
           <UInput v-model="filters.productSpec" placeholder="規格" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="序號" size="sm">
+        <UFormField label="序號" size="xs" :ui="FIELD_UI">
           <UInput v-model="filters.serialNo" placeholder="銘版序號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="訂單單別" size="sm">
+        <UFormField label="訂單單別" size="xs" :ui="FIELD_UI">
           <UInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="訂單單號" size="sm">
+        <UFormField label="訂單單號" size="xs" :ui="FIELD_UI">
           <UInput v-model="filters.orderNo" placeholder="訂單單號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="計畫批號" size="sm">
+        <UFormField label="計畫批號" size="xs" :ui="FIELD_UI">
           <UInput v-model="filters.planNum" placeholder="計畫批號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="訂單日期（起~迄）" size="sm" class="md:col-span-2">
+        <UFormField label="訂單日期（起~迄）" size="xs" :ui="FIELD_UI" class="md:col-span-2">
           <div class="flex items-center gap-2">
             <UInput v-model="filters.startDate" type="date" class="w-full" />
             <span class="text-sm text-muted">至</span>
             <UInput v-model="filters.endDate" type="date" class="w-full" />
-            <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" title="清除訂單日期" @click="onClickClearOrderDate" />
+            <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" title="清除訂單日期" @click="onClickClearOrderDate" />
           </div>
         </UFormField>
 
-        <UFormField label="預交日期（起~迄）" size="sm" class="md:col-span-2">
+        <UFormField label="預交日期（起~迄）" size="xs" :ui="FIELD_UI" class="md:col-span-2">
           <div class="flex items-center gap-2">
             <UInput v-model="filters.deliveryStartDate" type="date" class="w-full" />
             <span class="text-sm text-muted">至</span>
             <UInput v-model="filters.deliveryEndDate" type="date" class="w-full" />
-            <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" title="清除預交日期" @click="onClickClearDeliveryDate" />
+            <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" title="清除預交日期" @click="onClickClearDeliveryDate" />
           </div>
         </UFormField>
       </div>
 
-      <div class="mt-3 flex items-center justify-between gap-2">
+      <div class="mt-2 flex items-center justify-between gap-2">
         <p v-if="showAmount" class="text-sm">
           總金額 NT
           <span class="font-semibold text-highlighted">{{ formatAmount(summary.totalAmount) || '0' }}</span>

@@ -136,6 +136,18 @@ const items = computed<NavigationMenuItem[][]>(() => [
           目前沒有任何可用功能，請洽系統管理員開通權限。
         </p>
       </template>
+
+      <!-- 收合時寬度不夠，只留版本號 -->
+      <template #footer="{ collapsed: isCollapsed }">
+        <div class="w-full text-center text-xs leading-relaxed text-muted">
+          <template v-if="isCollapsed">
+            v{{ appVersion }}
+          </template>
+          <template v-else>
+            © {{ new Date().getFullYear() }} PRORIL 業務中心<br>v{{ appVersion }}
+          </template>
+        </div>
+      </template>
     </UDashboardSidebar>
 
     <UDashboardPanel :ui="{ body: 'bg-white dark:bg-white min-h-0 p-4 sm:p-4' }">
@@ -155,7 +167,7 @@ const items = computed<NavigationMenuItem[][]>(() => [
                 class="opacity-50"
                 alt=""
               >
-              <UColorModeButton />
+              <UColorModeButton v-if="false" />
               <UDropdownMenu v-if="userName || account" :items="userMenuItems">
                 <UButton
                   color="neutral"
@@ -173,12 +185,6 @@ const items = computed<NavigationMenuItem[][]>(() => [
 
       <template #body>
         <slot />
-      </template>
-
-      <template #footer>
-        <div class="flex h-8 shrink-0 items-center justify-center border-t border-default px-4 text-center text-xs text-muted">
-          © {{ new Date().getFullYear() }} PRORIL 業務中心 · v{{ appVersion }}
-        </div>
       </template>
     </UDashboardPanel>
   </UDashboardGroup>
