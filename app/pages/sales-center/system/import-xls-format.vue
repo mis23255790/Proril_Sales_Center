@@ -245,7 +245,7 @@ const isExpectedSheet = (row: XlsFormatListItem, wsName: string) =>
       <UCard class="lg:col-span-3">
         <template #header>
           <h2 class="font-semibold text-highlighted">
-            匯入範本
+            匯入輸出 Xls 範本
           </h2>
         </template>
 
