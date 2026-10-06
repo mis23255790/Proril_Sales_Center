@@ -849,5 +849,6 @@ M_PermissionDef → RBAC_Permission
 
 `AuditLogObjectsMigration.sql`：建 `SYS_AuditLog`（登入、人員管理、權限管理的稽核紀錄，保留一年）。
 比照 `RBAC_*`、`CMN_XlsFileFormat`，**不放進 `Tables/` 與 `TABLES.txt`**。
-執行狀態：測試區（50002）、正式區（51002）2026-10-06 都已執行。
+執行狀態：測試區（50002）、正式區（51002）2026-10-06 都已執行（建表）。
+同一支腳本第 2 段的權限節點 `system.auditLog`（稽核紀錄查詢頁）：測試區、正式區 2026-10-06 都已執行。
 （表不存在時寫入會失敗，只記 exceptionLog、不影響功能，但會漏記。）

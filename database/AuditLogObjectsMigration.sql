@@ -20,6 +20,10 @@
  *
  * 保留一年：api/Services/LogTimedHostedService.cs 每天凌晨刪 LogTime 超過一年的列。
  *
+ * 查詢頁面：系統管理 / 系統設定 / 稽核紀錄（PAGE system.auditLog，第 2 段新增節點；
+ * 同時已補進 RbacObjectsMigration.sql 第 4b.4 段的清單，全新環境建庫用）。
+ * 節點只補「不存在」的，已存在的不覆寫（名稱／位置之後直接在 DB 改）。
+ *
  * 跟 RBAC_*、CMN_XlsFileFormat 一樣是新庫專屬的表，**不放進 database/Tables/ 與 TABLES.txt**。
  *
  * 怎麼執行：走 database/scripts/run-objects-migration.ps1，不要直接丟進 SSMS。
@@ -50,5 +54,23 @@ BEGIN
     CREATE NONCLUSTERED INDEX [IX_SYS_AuditLog_Account] ON [dbo].[SYS_AuditLog] ([Account], [LogTime]);
     CREATE NONCLUSTERED INDEX [IX_SYS_AuditLog_Target] ON [dbo].[SYS_AuditLog] ([Target], [TargetId], [LogTime]);
     PRINT '已建立 dbo.SYS_AuditLog';
+END
+GO
+
+-- ============================================================
+-- 2. 權限樹節點：系統管理 / 系統設定 / 稽核紀錄
+--    父節點 system.grpSetting 由 XlsFormatObjectsMigration.sql 建立。
+-- ============================================================
+
+IF NOT EXISTS (SELECT 1 FROM dbo.RBAC_Permission WHERE PermissionKey = 'system.grpSetting')
+BEGIN
+    RAISERROR('RBAC_Permission 沒有 system.grpSetting 分組節點，請先跑 XlsFormatObjectsMigration.sql。', 16, 1);
+END
+ELSE IF NOT EXISTS (SELECT 1 FROM dbo.RBAC_Permission WHERE PermissionKey = 'system.auditLog')
+BEGIN
+    INSERT INTO dbo.RBAC_Permission (PermissionKey, NodeType, ParentKey, Label, LabelEn, Path, Icon, Description, Sort, aStatus, Creator, CreateTime)
+    VALUES ('system.auditLog', 'PAGE', 'system.grpSetting', N'稽核紀錄', NULL, 'system/audit-log',
+            'i-lucide-scroll-text', N'查詢登入、人員與權限異動等操作紀錄', 20, 'Y', 'migration', GETDATE());
+    PRINT '已新增權限節點 system.auditLog';
 END
 GO

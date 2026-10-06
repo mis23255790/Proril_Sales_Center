@@ -550,6 +550,7 @@ BEGIN
         ('system.userManager',           'PAGE', 'system.grpAccess',        N'人員管理',     NULL, 'system/user-manager',            'i-lucide-user-cog',       N'新增／停用帳號、指派角色、重置密碼與解除鎖定', 10),
         ('system.permissionManager',     'PAGE', 'system.grpAccess',        N'權限管理',     NULL, 'system/permission-manager',      'i-lucide-shield-check',   N'維護角色：每個角色可用的功能與細項權限，以及角色成員', 20),
         ('system.importXlsFormat',       'PAGE', 'system.grpSetting',       N'格式匯入',     NULL, 'system/import-xls-format',       'i-lucide-file-spreadsheet', N'上傳 Excel 範本，設定各功能匯出檔的表頭、欄寬與樣式', 10),
+        ('system.auditLog',              'PAGE', 'system.grpSetting',       N'稽核紀錄',     NULL, 'system/audit-log',               'i-lucide-scroll-text',    N'查詢登入、人員與權限異動等操作紀錄', 20),
         -- 細項
         ('salesIssue.processMaintain.createSop',   'ACTION', 'salesIssue.processMaintain',   N'SOP-新增',     NULL, NULL, NULL, NULL, 10),
         ('salesIssue.processMaintain.publishSop',  'ACTION', 'salesIssue.processMaintain',   N'SOP-公開',     NULL, NULL, NULL, NULL, 20),

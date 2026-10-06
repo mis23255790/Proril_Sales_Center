@@ -78,6 +78,7 @@ public static class PermissionKeys
         public const string PermissionManager = "system.permissionManager";
         public const string UserManager = "system.userManager";
         public const string ImportXlsFormat = "system.importXlsFormat";
+        public const string AuditLog = "system.auditLog";
         // system.groupPermission 已隨角色制停用（RBAC_Permission.aStatus = 'N'），key 保留不再使用。
     }
 

@@ -1,6 +1,15 @@
 <details>
   <summary>版號2026.10.06</summary>
 
+##### feat: 稽核紀錄查詢頁面
+      系統管理 / 系統設定 / 稽核紀錄（PAGE system.auditLog，/sales-center/system/audit-log）。
+      權限節點由 database/AuditLogObjectsMigration.sql 第 2 段新增（RbacObjectsMigration.sql 種子清單同步補上）；
+        測試區 50002、正式區 51002 都已執行。
+      後端：Controllers/SystemSetting/AuditLogApiController.cs（GetAuditLogs 後端分頁、GetAuditLogTargets），
+        時間與日期條件轉台灣時間。
+      前端：pages/sales-center/system/audit-log.vue、composables/useAuditLogApi.ts、
+        utils/auditLog.ts（動作名稱與 Detail 整理成文字）、types/auditLog.ts。
+
 ##### feat: 稽核紀錄 SYS_AuditLog（登入、人員管理、權限管理）
       資料庫：database/AuditLogObjectsMigration.sql 建新庫 SYS_AuditLog（LogTime 是 UTC，保留一年）。
         測試區 50002、正式區 51002 都已執行。

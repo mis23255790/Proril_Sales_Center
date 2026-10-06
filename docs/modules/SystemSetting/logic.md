@@ -664,3 +664,15 @@ key（`module.function`）；列多個 key 時**任一個**有就放行；Action
 - 保留一年，`LogTimedHostedService` 每天凌晨清。檔案 log（30 天）照舊，兩者分工見腳本開頭註解。
 - 新功能要加稽核：在 SaveChanges／Commit 之後呼叫 `WriteAudit(action, PermissionKeys.Xxx.Yyy, targetId, detail)`，
   `Detail` 不得放密碼、token、金鑰。
+
+### 查詢頁面：系統管理 / 系統設定 / 稽核紀錄
+
+PAGE `system.auditLog`（`/sales-center/system/audit-log`），後端 `Controllers/SystemSetting/AuditLogApiController.cs`
+（整支掛 `[RequirePermission]`，唯讀）。要看得到，得在權限管理把「稽核紀錄」勾進角色（superAdmin 全放行）。
+
+- 條件：日期起迄（台灣日期，預設最近 7 天）、帳號、動作、功能（稽核表裡出現過的 Target）、
+  關鍵字（比對 `TargetId` 與 `Detail` JSON）。後端分頁、新到舊。
+- 時間：後端把 UTC 轉成台灣時間字串再回傳，日期條件也是先換算成 UTC 範圍再查。
+- 「內容」欄與明細視窗把 `Detail` JSON 整理成文字（`app/utils/auditLog.ts` 的 `auditDetailLines`）：
+  改前→改後、增減清單（權限 key 轉成權限名稱）、登入方式與失敗原因；認不得的形狀退回原始 JSON。
+  新增稽核寫入點時，`Detail` 沿用 `before`／`after`／`{ added, removed }` 這幾種形狀就會自動顯示得好看。
