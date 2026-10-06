@@ -340,29 +340,29 @@ const loadConditions = async () => {
 </script>
 
 <template>
-  <div>
+  <!--
+    整頁撐滿右側面板（UDashboardPanel body 是 flex-col），表格吃掉剩下的高度、自己捲動，
+    面板外框不出現捲軸。畫面太矮時表格至少保留 16rem，才退回由面板捲動。
+  -->
+  <div class="flex min-h-0 flex-1 flex-col">
     <!-- 不用 FullPageLoading 整頁遮罩：查詢條件與頁籤一開始就可操作，下方表格等 API 回來才更新。 -->
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/order-info-verify'))" class="mb-4" />
 
-    <div class="mb-5 flex items-start justify-between gap-2">
-      <div>
-        <h1 class="text-2xl font-bold text-highlighted">
-          訂單資料檢核
-        </h1>
-        <p class="mt-1 text-sm text-muted">
-          依訂單單別、日期、客戶等條件查核訂單資料，含金額/信用額度檢核與特規Pass。
-        </p>
-      </div>
-      <UButton size="sm" color="neutral" variant="outline" @click="conditionModalOpen = true">
-        檢核條件
-      </UButton>
-    </div>
-
     <!-- 查詢條件 -->
     <div class="mb-4 rounded-lg border border-default bg-elevated/40 p-4">
+      <!-- 操作列放在查詢區塊最上方（欄位已排滿整列，沒有空位跟欄位同一行） -->
+      <div class="mb-3 flex items-center justify-end gap-2">
+        <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
+          重設
+        </UButton>
+        <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
+          查詢
+        </UButton>
+      </div>
+
       <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UFormField label="訂單單別" size="sm">
-          <UInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="search" />
+          <ClearInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="客戶別" size="sm">
@@ -383,15 +383,6 @@ const loadConditions = async () => {
             <UInput v-model="filters.endDate" type="date" class="w-full" />
           </div>
         </UFormField>
-      </div>
-
-      <div class="mt-3 flex items-center justify-end gap-2">
-        <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
-          重設
-        </UButton>
-        <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
-          查詢
-        </UButton>
       </div>
     </div>
 
@@ -434,13 +425,13 @@ const loadConditions = async () => {
 
     <!--
       表頭 sticky：外層不能再包 overflow-x-auto（會變成另一個捲動容器讓 sticky 失效），
-      改由 UTable 自己的根節點（預設 overflow-auto）限高捲動。
+      改由 UTable 自己的根節點（預設 overflow-auto）捲動；高度由 flex-1 撐滿剩餘空間，不用固定 max-h。
     -->
-    <div class="overflow-hidden rounded-lg border border-default">
+    <div class="flex min-h-64 flex-1 flex-col overflow-hidden rounded-lg border border-default">
       <UTable
         ref="table"
         sticky
-        class="max-h-[70vh]"
+        class="min-h-0 flex-1"
         :pagination="pagination"
         :pagination-options="{ manualPagination: true, rowCount: summary.totalCount }"
         :data="groups"
@@ -515,8 +506,11 @@ const loadConditions = async () => {
       <TablePaginationBar :table="table" :total="summary.totalCount" />
     </div>
 
-    <!-- 底色說明，對照舊版 footer-description：文字直接放在對應底色上 -->
+    <!-- 表格下方：最左邊檢核條件按鈕，接著底色說明（對照舊版 footer-description：文字直接放在對應底色上） -->
     <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+      <UButton size="xs" color="neutral" variant="outline" icon="i-lucide-list-checks" class="me-2" @click="conditionModalOpen = true">
+        檢核條件
+      </UButton>
       <span class="text-muted">底色說明：</span>
       <span
         v-for="(status, key) in ORDER_ROW_STATUS"

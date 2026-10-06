@@ -172,16 +172,8 @@ const save = async () => {
 
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-issue/kind-maintain'))" class="mb-4" />
 
-    <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-bold text-highlighted">
-          類別維護
-        </h1>
-        <p class="mt-1 text-sm text-muted">
-          維護議題可以掛的關鍵字。「流程類別」就是議題畫面上的「類別」下拉。
-        </p>
-      </div>
-
+    <!-- 頁面名稱顯示在頂部導覽列（layouts/default.vue），這裡只留操作按鈕 -->
+    <div class="mb-4 flex flex-wrap items-start justify-end gap-3">
       <UButton icon="i-lucide-plus" @click="openCreate">
         新增類別資料
       </UButton>
@@ -199,7 +191,7 @@ const save = async () => {
         {{ type.name }}
       </UButton>
 
-      <UInput
+      <ClearInput
         v-model="keyword"
         icon="i-lucide-search"
         placeholder="搜尋編號或名稱"
@@ -267,15 +259,15 @@ const save = async () => {
           </UFormField>
 
           <UFormField label="編號" required :hint="isNewPhrase ? '系統已帶入下一個可用編號' : '編號不可修改'">
-            <UInput v-model="form.phraseCode" class="w-full" :disabled="!isNewPhrase" />
+            <ClearInput v-model="form.phraseCode" class="w-full" :disabled="!isNewPhrase" />
           </UFormField>
 
           <UFormField label="名稱" required>
-            <UInput v-model="form.phraseName" placeholder="顯示在議題畫面上的名稱" class="w-full" />
+            <ClearInput v-model="form.phraseName" placeholder="顯示在議題畫面上的名稱" class="w-full" />
           </UFormField>
 
           <UFormField label="負責人員">
-            <UInput v-model="form.principal" placeholder="選填" class="w-full" />
+            <ClearInput v-model="form.principal" placeholder="選填" class="w-full" />
           </UFormField>
 
           <UCheckbox v-model="form.pubFlag" label="開放流程維護使用" description="關閉後不會出現在議題的類別下拉" />

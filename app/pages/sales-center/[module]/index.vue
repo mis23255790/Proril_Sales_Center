@@ -34,16 +34,6 @@ useSeoMeta({ title: () => `${mod.value?.label ?? ''} · PRORIL 業務中心` })
   <div v-if="mod">
     <UBreadcrumb v-if="false" :items="breadcrumbForModule(mod!)" class="mb-4" />
 
-    <div class="mb-6">
-      <h1 class="flex items-center gap-2 text-2xl font-bold text-highlighted">
-        <UIcon :name="mod.icon" class="size-6 text-primary" />
-        {{ mod.label }}
-      </h1>
-      <p class="mt-1 text-sm text-muted">
-        選擇要執行的作業。
-      </p>
-    </div>
-
     <div v-for="group in mod.groups" :key="group.groupName" class="mb-6">
       <h2 class="mb-3 text-sm font-semibold text-muted">
         {{ group.groupName }}

@@ -511,18 +511,38 @@ const openGroupDetail = (row: UnfinOrderRow) =>
 </script>
 
 <template>
-  <div>
+  <!--
+    整頁撐滿右側面板（UDashboardPanel body 是 flex-col），表格吃掉剩下的高度、自己捲動，
+    面板外框不出現捲軸。畫面太矮時表格至少保留 16rem，才退回由面板捲動。
+  -->
+  <div class="flex min-h-0 flex-1 flex-col">
     <!-- 不用 FullPageLoading 整頁遮罩：查詢條件與頁籤一開始就可操作，下方表格等 API 回來才更新。 -->
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/unfinished-orders'))" class="mb-4" />
 
-    <div class="mb-5">
-      <h1 class="text-2xl font-bold text-highlighted">
-        未完成訂單檢索
-      </h1>
-    </div>
-
     <!-- 查詢條件 -->
     <div class="mb-4 rounded-lg border border-default bg-elevated/40 px-3 py-2.5">
+      <!-- 操作列放在查詢區塊最上方（欄位已排滿整列，沒有空位跟欄位同一行） -->
+      <div class="mb-2 flex items-center justify-between gap-2">
+        <p v-if="showAmount" class="text-sm">
+          總金額 NT
+          <span class="font-semibold text-highlighted">{{ formatAmount(summary.totalAmount) || '0' }}</span>
+        </p>
+        <p v-else class="text-xs text-muted">
+          無金額欄位檢視權限
+        </p>
+        <div class="flex items-center gap-2">
+          <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
+            重設
+          </UButton>
+          <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
+            查詢
+          </UButton>
+          <UButton icon="i-lucide-file-spreadsheet" color="success" variant="outline" size="sm" :loading="exporting" @click="onExport">
+            輸出報表
+          </UButton>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 gap-x-3 gap-y-1.5 md:grid-cols-2 xl:grid-cols-5">
         <UFormField label="客戶別" size="xs" :ui="FIELD_UI">
           <USelectMenu
@@ -543,31 +563,31 @@ const openGroupDetail = (row: UnfinOrderRow) =>
         </UFormField>
 
         <UFormField label="品號" size="xs" :ui="FIELD_UI">
-          <UInput v-model="filters.productNo" placeholder="品號" class="w-full" @keyup.enter="search" />
+          <ClearInput v-model="filters.productNo" placeholder="品號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="品名" size="xs" :ui="FIELD_UI">
-          <UInput v-model="filters.productName" placeholder="品名" class="w-full" @keyup.enter="search" />
+          <ClearInput v-model="filters.productName" placeholder="品名" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="規格" size="xs" :ui="FIELD_UI">
-          <UInput v-model="filters.productSpec" placeholder="規格" class="w-full" @keyup.enter="search" />
+          <ClearInput v-model="filters.productSpec" placeholder="規格" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="序號" size="xs" :ui="FIELD_UI">
-          <UInput v-model="filters.serialNo" placeholder="銘版序號" class="w-full" @keyup.enter="search" />
+          <ClearInput v-model="filters.serialNo" placeholder="銘版序號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="訂單單別" size="xs" :ui="FIELD_UI">
-          <UInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="search" />
+          <ClearInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="訂單單號" size="xs" :ui="FIELD_UI">
-          <UInput v-model="filters.orderNo" placeholder="訂單單號" class="w-full" @keyup.enter="search" />
+          <ClearInput v-model="filters.orderNo" placeholder="訂單單號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="計畫批號" size="xs" :ui="FIELD_UI">
-          <UInput v-model="filters.planNum" placeholder="計畫批號" class="w-full" @keyup.enter="search" />
+          <ClearInput v-model="filters.planNum" placeholder="計畫批號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="訂單日期（起~迄）" size="xs" :ui="FIELD_UI" class="md:col-span-2">
@@ -587,27 +607,6 @@ const openGroupDetail = (row: UnfinOrderRow) =>
             <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" title="清除預交日期" @click="onClickClearDeliveryDate" />
           </div>
         </UFormField>
-      </div>
-
-      <div class="mt-2 flex items-center justify-between gap-2">
-        <p v-if="showAmount" class="text-sm">
-          總金額 NT
-          <span class="font-semibold text-highlighted">{{ formatAmount(summary.totalAmount) || '0' }}</span>
-        </p>
-        <p v-else class="text-xs text-muted">
-          無金額欄位檢視權限
-        </p>
-        <div class="flex items-center gap-2">
-          <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
-            重設
-          </UButton>
-          <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
-            查詢
-          </UButton>
-          <UButton icon="i-lucide-file-spreadsheet" color="success" variant="outline" size="sm" :loading="exporting" @click="onExport">
-            輸出報表
-          </UButton>
-        </div>
       </div>
     </div>
 
@@ -635,13 +634,13 @@ const openGroupDetail = (row: UnfinOrderRow) =>
     <!--
       統計兩個頁籤有明細 modal，整列可點；細項兩個頁籤沒有，不掛。
       表頭 sticky：外層不能再包 overflow-x-auto（會變成另一個捲動容器讓 sticky 失效），
-      改由 UTable 自己的根節點（預設 overflow-auto）限高捲動。
+      改由 UTable 自己的根節點（預設 overflow-auto）捲動；高度由 flex-1 撐滿剩餘空間，不用固定 max-h。
     -->
-    <div class="overflow-hidden rounded-lg border border-default">
+    <div class="flex min-h-64 flex-1 flex-col overflow-hidden rounded-lg border border-default">
       <UTable
         ref="table"
         sticky
-        class="max-h-[70vh]"
+        class="min-h-0 flex-1"
         :pagination="pagination"
         :pagination-options="{ manualPagination: true, rowCount: summary.totalCount }"
         :data="pageRows"

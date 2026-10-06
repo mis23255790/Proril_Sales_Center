@@ -53,11 +53,14 @@ const effectiveCustomerNo = computed(() =>
 const effectiveErpCustomerNo = computed(() =>
   (customer.value?.erpcustomerNo ?? '').trim() || queryErpCustomerNo.value)
 
+/** 頂部導覽列顯示客戶名稱，見下方 usePageHeading。 */
 const displayTitle = computed(() => {
   const name = customer.value?.shortName || erpCustomer.value?.ma002 || ''
   const no = effectiveCustomerNo.value || effectiveErpCustomerNo.value || '（未指定客戶）'
   return name ? `${no}\u3000${name}` : no
 })
+
+usePageHeading(displayTitle)
 
 const creditCurrency = computed(() => credits.value[0]?.幣別 ?? '')
 
@@ -307,15 +310,11 @@ const openIssue = (row: CustomerWorkProcessRow) => {
 
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/customer'), '客戶相關資訊')" class="mb-4" />
 
-    <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-bold text-highlighted">
-          {{ displayTitle }}
-        </h1>
-        <p class="mt-1 text-sm text-muted">
-          {{ customer?.longName || erpCustomer?.ma003 || '\u3000' }}
-        </p>
-      </div>
+    <!-- 客戶名稱顯示在頂部導覽列（usePageHeading），這裡留全名與返回按鈕 -->
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <p class="text-sm text-muted">
+        {{ customer?.longName || erpCustomer?.ma003 || '\u3000' }}
+      </p>
       <UButton
         icon="i-lucide-arrow-left"
         color="neutral"
@@ -557,7 +556,7 @@ const openIssue = (row: CustomerWorkProcessRow) => {
       <template #body>
         <div class="flex flex-col gap-4">
           <UFormField label="類別" size="sm">
-            <UInput v-model="memoForm.memoType" placeholder="輸入類別" class="w-full" />
+            <ClearInput v-model="memoForm.memoType" placeholder="輸入類別" class="w-full" />
           </UFormField>
           <UFormField label="內容" size="sm">
             <UTextarea v-model="memoForm.memoDesc" :rows="6" placeholder="輸入情報內容" class="w-full" />

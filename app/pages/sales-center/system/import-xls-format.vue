@@ -219,15 +219,6 @@ const isExpectedSheet = (row: XlsFormatListItem, wsName: string) =>
   <div>
     <FullPageLoading :show="loading" />
 
-    <div class="mb-5">
-      <h1 class="text-2xl font-bold text-highlighted">
-        格式匯入
-      </h1>
-      <p class="mt-1 text-sm text-muted">
-        上傳 Excel 範本，設定各功能匯出檔的表頭、欄寬、樣式與凍結窗格。沒有匯入版型的功能，匯出時使用預設版面。
-      </p>
-    </div>
-
     <UAlert
       v-if="!canAccess(PAGE_KEY)"
       icon="i-lucide-shield-alert"

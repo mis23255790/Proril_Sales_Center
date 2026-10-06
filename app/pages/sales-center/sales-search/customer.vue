@@ -316,27 +316,18 @@ const onSave = async () => {
 </script>
 
 <template>
-  <div>
+  <!--
+    整頁撐滿右側面板（UDashboardPanel body 是 flex-col），表格吃掉剩下的高度、自己捲動，
+    面板外框不出現捲軸。畫面太矮時表格至少保留 16rem，才退回由面板捲動。
+  -->
+  <div class="flex min-h-0 flex-1 flex-col">
     <!-- 不用 FullPageLoading 整頁遮罩：查詢條件與頁籤一開始就可操作，兩個表格各自等 API 回來才更新。 -->
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/customer'))" class="mb-4" />
 
-    <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-bold text-highlighted">
-          客戶檢索
-        </h1>
-        <p class="mt-1 text-sm text-muted">
-          查詢內網客戶與 ERP 客戶，並可新增或編輯內網客戶資料、設定 ERP 客戶代碼對應。
-        </p>
-      </div>
-      <UButton icon="i-lucide-user-plus" @click="openAddModal">
-        新增客戶
-      </UButton>
-    </div>
-
     <!-- 查詢條件 -->
-    <div class="mb-4 rounded-lg border border-default bg-elevated/40 p-4">
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <!-- 重設／查詢跟欄位同一行（靠右、對齊輸入框），不另外佔一列；畫面窄時才換行 -->
+    <div class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-default bg-elevated/40 p-4">
+      <div class="grid min-w-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UFormField label="內網客戶代碼" size="sm">
           <USelectMenu
             v-model="customerNoSelectValue"
@@ -362,7 +353,7 @@ const onSave = async () => {
         </UFormField>
       </div>
 
-      <div class="mt-3 flex items-center justify-end gap-2">
+      <div class="ms-auto flex items-center gap-2">
         <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
           重設
         </UButton>
@@ -372,24 +363,35 @@ const onSave = async () => {
       </div>
     </div>
 
-    <!-- 頁籤 -->
-    <div class="mb-3 flex flex-wrap gap-2">
-      <UButton
-        v-for="tab in tabItems"
-        :key="tab.value"
-        :icon="tab.icon"
-        :color="activeTab === tab.value ? 'primary' : 'neutral'"
-        :variant="activeTab === tab.value ? 'solid' : 'outline'"
-        size="sm"
-        @click="activeTab = tab.value"
-      >
-        {{ tab.label }}
+    <!-- 頁籤 + 新增客戶（頁面名稱在頂部導覽列，新增按鈕跟頁籤放同一行） -->
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div class="flex flex-wrap gap-2">
+        <UButton
+          v-for="tab in tabItems"
+          :key="tab.value"
+          :icon="tab.icon"
+          :color="activeTab === tab.value ? 'primary' : 'neutral'"
+          :variant="activeTab === tab.value ? 'solid' : 'outline'"
+          size="sm"
+          @click="activeTab = tab.value"
+        >
+          {{ tab.label }}
+        </UButton>
+      </div>
+      <UButton icon="i-lucide-user-plus" size="sm" @click="openAddModal">
+        新增客戶
       </UButton>
     </div>
 
-    <div class="overflow-x-auto rounded-lg border border-default">
+    <!--
+      表頭 sticky：外層不能再包 overflow-x-auto（會變成另一個捲動容器讓 sticky 失效），
+      改由 UTable 自己的根節點（預設 overflow-auto）捲動；高度由 flex-1 撐滿剩餘空間，不用固定 max-h。
+    -->
+    <div class="flex min-h-64 flex-1 flex-col overflow-hidden rounded-lg border border-default">
       <UTable
         v-if="activeTab === 'internal'"
+        sticky
+        class="min-h-0 flex-1"
         :data="customers"
         :columns="internalColumns"
         :loading="loadingInternal"
@@ -418,6 +420,8 @@ const onSave = async () => {
 
       <UTable
         v-else
+        sticky
+        class="min-h-0 flex-1"
         :data="erpCustomers"
         :columns="erpColumns"
         :loading="loadingErp"
@@ -489,25 +493,25 @@ const onSave = async () => {
 
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <UFormField label="客戶名稱" size="sm">
-              <UInput v-model="form.shortName" placeholder="輸入客戶名稱" class="w-full" />
+              <ClearInput v-model="form.shortName" placeholder="輸入客戶名稱" class="w-full" />
             </UFormField>
             <UFormField label="全名" size="sm">
-              <UInput v-model="form.longName" placeholder="輸入全名" class="w-full" />
+              <ClearInput v-model="form.longName" placeholder="輸入全名" class="w-full" />
             </UFormField>
             <UFormField label="聯絡人" size="sm">
-              <UInput v-model="form.contactName" placeholder="輸入聯絡人" class="w-full" />
+              <ClearInput v-model="form.contactName" placeholder="輸入聯絡人" class="w-full" />
             </UFormField>
             <UFormField label="EMail" size="sm">
-              <UInput v-model="form.contactEmail" type="email" placeholder="輸入EMail" class="w-full" />
+              <ClearInput v-model="form.contactEmail" type="email" placeholder="輸入EMail" class="w-full" />
             </UFormField>
             <UFormField label="聯絡電話-1" size="sm">
-              <UInput v-model="form.contactTel1" placeholder="輸入聯絡電話-1" class="w-full" />
+              <ClearInput v-model="form.contactTel1" placeholder="輸入聯絡電話-1" class="w-full" />
             </UFormField>
             <UFormField label="聯絡電話-2" size="sm">
-              <UInput v-model="form.contactTel2" placeholder="輸入聯絡電話-2" class="w-full" />
+              <ClearInput v-model="form.contactTel2" placeholder="輸入聯絡電話-2" class="w-full" />
             </UFormField>
             <UFormField label="傳真" size="sm">
-              <UInput v-model="form.contactFax" placeholder="輸入傳真" class="w-full" />
+              <ClearInput v-model="form.contactFax" placeholder="輸入傳真" class="w-full" />
             </UFormField>
             <UFormField label="業務負責人" size="sm">
               <USelectMenu
@@ -522,10 +526,10 @@ const onSave = async () => {
               />
             </UFormField>
             <UFormField label="地址-1" size="sm">
-              <UInput v-model="form.addr1" placeholder="輸入地址-1" class="w-full" />
+              <ClearInput v-model="form.addr1" placeholder="輸入地址-1" class="w-full" />
             </UFormField>
             <UFormField label="地址-2" size="sm">
-              <UInput v-model="form.addr2" placeholder="輸入地址-2" class="w-full" />
+              <ClearInput v-model="form.addr2" placeholder="輸入地址-2" class="w-full" />
             </UFormField>
           </div>
         </div>

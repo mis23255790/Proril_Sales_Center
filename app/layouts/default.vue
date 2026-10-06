@@ -3,7 +3,7 @@ import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
 const { public: { appVersion } } = useRuntimeConfig()
-const { sidebarModules, modulePath, itemPath, appBaseLabel, loadUserFunctions, isLoadingUserFunctions, hasNoAccessibleModule } = useAppNavigation()
+const { sidebarModules, modulePath, itemPath, appBaseLabel, loadUserFunctions, isLoadingUserFunctions, hasNoAccessibleModule, findItemByPath, findModuleBySlug } = useAppNavigation()
 const { account } = useAuthAccount()
 const { getCurrentUser } = useCurrentUser()
 const { getSystemByNo } = useSystemInfo()
@@ -66,10 +66,35 @@ onMounted(async () => {
 const activeModuleSlug = computed(() => route.path.split('/')[2] || '')
 
 /**
+ * defaultOpen 只在 UNavigationMenu 建立時套用一次；權限清單（sidebarModules）是之後才非同步載入的，
+ * 不重建的話後來才出現的模組會是收合的。用模組清單當 key，清單變了就重建。
+ */
+const menuKey = computed(() => sidebarModules.value.map(m => m.path).join('|'))
+
+/**
+ * 頂部導覽列顯示目前頁面名稱（各頁不再自己放大標題）：
+ * usePageHeading 覆寫 → definePageMeta 的 title → 權限樹對應的功能名稱 → 模組首頁的模組名稱 → 預設。
+ */
+const pageHeading = useState<string>('pageHeading', () => '')
+const navbarTitle = computed(() => {
+  if (pageHeading.value) return pageHeading.value
+  if (typeof route.meta.title === 'string' && route.meta.title) return route.meta.title
+  const found = findItemByPath(route.path)
+  if (found) return found.item.label
+  // 模組首頁：/sales-center/<模組>
+  if (route.path.split('/').filter(Boolean).length === 2) {
+    const mod = findModuleBySlug(activeModuleSlug.value)
+    if (mod) return mod.label
+  }
+  return 'PRORIL 業務中心'
+})
+
+/**
  * 側欄列出全部功能，沒權限的頁面 disable（不隱藏），讓使用者知道有這個功能、只是還沒開通。
  * 只 disable 頁面這一層：NavigationMenu 在 vertical 模式會把 disabled 的節點連同展開一起鎖住，
  * 模組／分組若 disable 就看不到底下的頁面了。模組底下一個能進的頁面都沒有時拿掉連結，
  * 點模組名稱只展開、不進模組首頁（那頁依權限過濾後會是空的）。
+ * 模組與分組一律預設展開（2026-10-06 起），不再只展開目前所在的模組。
  */
 const items = computed<NavigationMenuItem[][]>(() => [
   [
@@ -79,10 +104,10 @@ const items = computed<NavigationMenuItem[][]>(() => [
       icon: mod.icon,
       // 點模組名稱進模組首頁（跟首頁卡片同一個目的地），展開則看得到底下的功能
       to: mod.accessible ? modulePath(mod) : undefined,
-      defaultOpen: route.path.startsWith(modulePath(mod)),
+      defaultOpen: true,
       children: mod.groups.map(group => ({
         label: group.groupName,
-        defaultOpen: group.items.some(item => itemPath(item) === route.path),
+        defaultOpen: true,
         children: group.items.map(item => item.accessible
           ? { label: item.label, to: itemPath(item) }
           : { label: item.label, disabled: true, trailingIcon: 'i-lucide-lock' })
@@ -111,7 +136,7 @@ const items = computed<NavigationMenuItem[][]>(() => [
 
       <template #default="{ collapsed: isCollapsed }">
         <UNavigationMenu
-          :key="activeModuleSlug"
+          :key="menuKey"
           :collapsed="isCollapsed"
           :items="items"
           orientation="vertical"
@@ -152,7 +177,7 @@ const items = computed<NavigationMenuItem[][]>(() => [
 
     <UDashboardPanel :ui="{ body: 'bg-white dark:bg-white min-h-0 p-4 sm:p-4' }">
       <template #header>
-        <UDashboardNavbar title="PRORIL 業務中心" :ui="{ root: 'h-12 bg-white dark:bg-white' }">
+        <UDashboardNavbar :title="navbarTitle" :ui="{ root: 'h-12 bg-white dark:bg-white' }">
           <template #leading>
             <UDashboardSidebarCollapse />
           </template>

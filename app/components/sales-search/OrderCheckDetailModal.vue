@@ -261,7 +261,7 @@ const onApplyPass = async (passItem: 'CustSumAmtChk' | 'AvailableChk', memo: str
               {{ formatAmount(header.訂單金額) || '0' }}
             </span>
             <span class="text-sm text-muted after:ms-0.5 after:text-error after:content-['*']">客戶金額</span>
-            <UInput v-model="customAmt" type="number" placeholder="輸入客戶金額" size="sm" class="w-36" />
+            <ClearInput v-model="customAmt" type="number" placeholder="輸入客戶金額" size="sm" class="w-36" />
             <CheckLight v-if="copPoCheck?.custSumAmtChk" :chk="copPoCheck.custSumAmtChk" />
             <span v-if="copPoCheck?.custSumAmtChk === 'P' && passMemoAmt" class="max-w-48 truncate text-xs text-muted" :title="passMemoAmt">
               原因：{{ passMemoAmt }}
@@ -273,7 +273,7 @@ const onApplyPass = async (passItem: 'CustSumAmtChk' | 'AvailableChk', memo: str
               </UButton>
               <template #content>
                 <div class="flex w-80 items-center gap-2 p-3">
-                  <UInput v-model="passMemoAmt" placeholder="特規原因" size="sm" class="min-w-0 flex-1" />
+                  <ClearInput v-model="passMemoAmt" placeholder="特規原因" size="sm" class="min-w-0 flex-1" />
                   <UButton
                     size="sm" color="warning" :loading="applyingPass === 'CustSumAmtChk'"
                     @click="onApplyPass('CustSumAmtChk', passMemoAmt)"
@@ -309,7 +309,7 @@ const onApplyPass = async (passItem: 'CustSumAmtChk' | 'AvailableChk', memo: str
               <template #content>
                 <div class="flex w-80 flex-col gap-3 p-3">
                   <div class="flex items-center gap-2">
-                    <UInput v-model="passMemoCredit" placeholder="特規原因" size="sm" class="min-w-0 flex-1" />
+                    <ClearInput v-model="passMemoCredit" placeholder="特規原因" size="sm" class="min-w-0 flex-1" />
                     <UButton
                       size="sm" color="warning" :loading="applyingPass === 'AvailableChk'"
                       @click="onApplyPass('AvailableChk', passMemoCredit)"

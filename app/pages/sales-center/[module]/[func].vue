@@ -26,10 +26,6 @@ const breadcrumbItems = [
   <div>
     <UBreadcrumb v-if="false" :items="breadcrumbItems" class="mb-4" />
 
-    <h1 class="mb-6 text-2xl font-bold text-highlighted">
-      {{ item.label }}
-    </h1>
-
     <div class="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-default py-24 text-center">
       <UIcon name="i-lucide-hammer" class="size-8 text-muted" />
       <p class="font-medium text-highlighted">

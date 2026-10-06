@@ -10,15 +10,6 @@ useSeoMeta({ title: 'PRORIL 業務中心' })
 
 <template>
   <div>
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-highlighted">
-        業務中心
-      </h1>
-      <p class="mt-1 text-sm text-muted">
-        選擇要進入的系統。
-      </p>
-    </div>
-
     <UAlert
       v-if="hasNoAccessibleModule"
       icon="i-lucide-shield-alert"

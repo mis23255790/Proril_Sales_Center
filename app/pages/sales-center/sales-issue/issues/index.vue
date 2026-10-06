@@ -242,16 +242,8 @@ const removeIssue = async (row: SalesIssueRow) => {
 
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-issue/issues'))" class="mb-4" />
 
-    <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-bold text-highlighted">
-          議題維護
-        </h1>
-        <p class="mt-1 text-sm text-muted">
-          追蹤各客戶的業務議題、最新進度與相關附件。
-        </p>
-      </div>
-
+    <!-- 頁面名稱顯示在頂部導覽列（layouts/default.vue），這裡只留操作按鈕 -->
+    <div class="mb-4 flex flex-wrap items-start justify-end gap-3">
       <div class="flex items-center gap-2">
         <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" :loading="loading" @click="load">
           重新整理
@@ -264,6 +256,28 @@ const removeIssue = async (row: SalesIssueRow) => {
 
     <!-- 查詢條件 -->
     <div class="mb-4 rounded-lg border border-default bg-elevated/40 p-4">
+      <!-- 操作列放在查詢區塊最上方（欄位已排滿整列，沒有空位跟欄位同一行） -->
+      <div class="mb-3 flex items-center justify-between gap-2">
+        <p class="text-xs text-muted">
+          所有查詢條件都會重新向後端查詢；三個狀態頁籤的筆數也是後端算好的。
+        </p>
+        <div class="flex items-center gap-2">
+          <UButton
+            v-if="activeFilterCount > 0"
+            icon="i-lucide-x"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            @click="resetFilters"
+          >
+            清除條件 ({{ activeFilterCount }})
+          </UButton>
+          <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
+            查詢
+          </UButton>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UFormField label="類別" size="sm">
           <USelectMenu
@@ -290,11 +304,11 @@ const removeIssue = async (row: SalesIssueRow) => {
         </UFormField>
 
         <UFormField label="標題 / 大綱關鍵字" size="sm">
-          <UInput v-model="filters.caption" placeholder="議題主題或內容說明" class="w-full" @keyup.enter="search" />
+          <ClearInput v-model="filters.caption" placeholder="議題主題或內容說明" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="內文關鍵字" size="sm">
-          <UInput v-model="filters.content" placeholder="進度內文" class="w-full" @keyup.enter="search" />
+          <ClearInput v-model="filters.content" placeholder="進度內文" class="w-full" @keyup.enter="search" />
         </UFormField>
 
         <UFormField label="最後修改（起）" size="sm">
@@ -306,7 +320,7 @@ const removeIssue = async (row: SalesIssueRow) => {
         </UFormField>
 
         <UFormField label="快速搜尋" size="sm" class="xl:col-span-2">
-          <UInput
+          <ClearInput
             v-model="filters.keyword"
             icon="i-lucide-search"
             placeholder="搜尋編號 / 主題 / 進度 / 人員 / 類別 / 客戶別"
@@ -314,27 +328,6 @@ const removeIssue = async (row: SalesIssueRow) => {
             @keyup.enter="search"
           />
         </UFormField>
-      </div>
-
-      <div class="mt-3 flex items-center justify-between gap-2">
-        <p class="text-xs text-muted">
-          所有查詢條件都會重新向後端查詢；三個狀態頁籤的筆數也是後端算好的。
-        </p>
-        <div class="flex items-center gap-2">
-          <UButton
-            v-if="activeFilterCount > 0"
-            icon="i-lucide-x"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            @click="resetFilters"
-          >
-            清除條件 ({{ activeFilterCount }})
-          </UButton>
-          <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
-            查詢
-          </UButton>
-        </div>
       </div>
     </div>
 

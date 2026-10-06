@@ -352,7 +352,7 @@ const downloadAttachment = async (detail: SalesIssueDetail, name: string) => {
 
           <div class="mt-4 flex flex-col gap-4" :class="!basicInfoExpanded && 'xl:hidden'">
             <UFormField label="主題" required>
-              <UInput v-model="form.sopTitle" placeholder="議題主題" class="w-full" />
+              <ClearInput v-model="form.sopTitle" placeholder="議題主題" class="w-full" />
             </UFormField>
 
             <UFormField label="客戶別">

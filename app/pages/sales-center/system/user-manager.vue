@@ -282,19 +282,14 @@ const drawerOpen = computed({
 </script>
 
 <template>
-  <div>
+  <!--
+    整頁撐滿右側面板（UDashboardPanel body 是 flex-col），表格吃掉剩下的高度、自己捲動（表頭 sticky），
+    面板外框不出現捲軸。畫面太矮時表格至少保留 16rem，才退回由面板捲動。比照查詢畫面。
+  -->
+  <div class="flex min-h-0 flex-1 flex-col">
     <FullPageLoading :show="loading" />
 
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('system/user-manager'))" class="mb-4" />
-
-    <div class="mb-5">
-      <h1 class="text-2xl font-bold text-highlighted">
-        人員管理
-      </h1>
-      <p class="mt-1 text-sm text-muted">
-        新增／停用帳號、指派角色、重置密碼與解除鎖定。新帳號與重置後的初始密碼都等於帳號本身，並強制下次登入改密碼。
-      </p>
-    </div>
 
     <UAlert
       v-if="!canAccess(PAGE_KEY)"
@@ -308,12 +303,12 @@ const drawerOpen = computed({
 
     <!-- 帳號列表 -->
     <section
-      class="transition-opacity duration-150"
+      class="flex min-h-0 flex-1 flex-col transition-opacity duration-150"
       :class="{ 'pointer-events-none opacity-60': userLoading && mode === 'none' }"
       :aria-busy="userLoading"
     >
       <div class="mb-2 flex flex-wrap items-center gap-2">
-        <UInput
+        <ClearInput
           v-model="keyword"
           icon="i-lucide-search"
           placeholder="搜尋工號或姓名"
@@ -330,9 +325,12 @@ const drawerOpen = computed({
         </UButton>
       </div>
 
-      <div class="overflow-hidden rounded-lg border border-default">
+      <!-- 外層不能用 overflow-x-auto（會變成另一個捲動容器讓 sticky 失效），由 UTable 根節點捲動 -->
+      <div class="flex min-h-64 flex-1 flex-col overflow-hidden rounded-lg border border-default">
         <UTable
           ref="table"
+          sticky
+          class="min-h-0 flex-1"
           v-model:pagination="pagination"
           :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
           :data="visibleUsers"
@@ -410,11 +408,11 @@ const drawerOpen = computed({
           :aria-busy="userLoading"
         >
           <UFormField v-if="mode === 'new'" label="工號" required>
-            <UInput v-model="form.account" placeholder="輸入新帳號的工號" class="w-full" />
+            <ClearInput v-model="form.account" placeholder="輸入新帳號的工號" class="w-full" />
           </UFormField>
 
           <UFormField label="姓名">
-            <UInput v-model="form.userName" class="w-full" />
+            <ClearInput v-model="form.userName" class="w-full" />
           </UFormField>
 
           <USwitch v-model="form.isEnable" label="帳號啟用" />

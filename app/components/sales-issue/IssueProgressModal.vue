@@ -205,7 +205,7 @@ const save = async () => {
       <div class="flex flex-col gap-4">
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <UFormField label="標題" hint="慣例放這則進度的日期" class="sm:col-span-2">
-            <UInput v-model="caption" placeholder="例如 2026-09-02 客戶回覆" class="w-full" />
+            <ClearInput v-model="caption" placeholder="例如 2026-09-02 客戶回覆" class="w-full" />
           </UFormField>
           <UFormField label="快速帶入日期">
             <UInput type="date" class="w-full" @update:model-value="(v: unknown) => { if (v) caption = String(v) }" />

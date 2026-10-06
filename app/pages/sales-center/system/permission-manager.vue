@@ -274,20 +274,14 @@ const drawerOpen = computed({
 </script>
 
 <template>
-  <div>
+  <!--
+    整頁撐滿右側面板（UDashboardPanel body 是 flex-col），表格吃掉剩下的高度、自己捲動（表頭 sticky），
+    面板外框不出現捲軸。畫面太矮時表格至少保留 16rem，才退回由面板捲動。比照查詢畫面。
+  -->
+  <div class="flex min-h-0 flex-1 flex-col">
     <FullPageLoading :show="loading" />
 
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('system/permission-manager'))" class="mb-4" />
-
-    <div class="mb-5">
-      <h1 class="text-2xl font-bold text-highlighted">
-        權限管理
-      </h1>
-      <p class="mt-1 text-sm text-muted">
-        以角色管理權限：每個角色勾選可用的功能與細項，再指派成員。一個人的權限是他所有角色的聯集，
-        加上「全體使用者」角色。人員的角色也可以在人員管理指派。
-      </p>
-    </div>
 
     <UAlert
       v-if="!canAccess(PAGE_KEY)"
@@ -301,7 +295,7 @@ const drawerOpen = computed({
 
     <!-- 角色清單 -->
     <section
-      class="transition-opacity duration-150"
+      class="flex min-h-0 flex-1 flex-col transition-opacity duration-150"
       :class="{ 'pointer-events-none opacity-60': roleLoading && editingId === null }"
       :aria-busy="roleLoading"
     >
@@ -314,11 +308,13 @@ const drawerOpen = computed({
         </UButton>
       </div>
 
+      <!-- 表頭 sticky：由 UTable 根節點（預設 overflow-auto）捲動，外層不要再包捲動容器 -->
       <UTable
+        sticky
         :data="roles"
         :columns="columns"
         :ui="{ tr: clickableRowTr }"
-        class="rounded-lg border border-default"
+        class="min-h-64 flex-1 rounded-lg border border-default"
         @select="(_e: Event, row: any) => openRole(row.original.id)"
       >
         <template #roleName-cell="{ row }">
@@ -382,7 +378,7 @@ const drawerOpen = computed({
         >
           <div class="grid gap-4 sm:grid-cols-2">
             <UFormField label="角色代碼" hint="英文開頭，英數字、底線、連字號" required>
-              <UInput
+              <ClearInput
                 v-model="form.roleCode"
                 class="w-full font-mono"
                 :disabled="form.isSystem"
@@ -390,10 +386,10 @@ const drawerOpen = computed({
               />
             </UFormField>
             <UFormField label="角色名稱" required>
-              <UInput v-model="form.roleName" class="w-full" placeholder="例如 業務助理" />
+              <ClearInput v-model="form.roleName" class="w-full" placeholder="例如 業務助理" />
             </UFormField>
             <UFormField label="說明" class="sm:col-span-2">
-              <UInput v-model="form.description" class="w-full" />
+              <ClearInput v-model="form.description" class="w-full" />
             </UFormField>
           </div>
 
