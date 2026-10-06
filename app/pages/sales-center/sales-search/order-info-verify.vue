@@ -340,11 +340,11 @@ const loadConditions = async () => {
 </script>
 
 <template>
-  <!--
-    整頁撐滿右側面板（UDashboardPanel body 是 flex-col），表格吃掉剩下的高度、自己捲動，
-    面板外框不出現捲軸。畫面太矮時表格至少保留 16rem，才退回由面板捲動。
-  -->
   <div class="flex min-h-0 flex-1 flex-col">
+    <!--
+      整頁撐滿右側面板（UDashboardPanel body 是 flex-col），表格吃掉剩下的高度、自己捲動，
+      面板外框不出現捲軸。畫面太矮時表格至少保留 16rem，才退回由面板捲動。
+    -->
     <!-- 不用 FullPageLoading 整頁遮罩：查詢條件與頁籤一開始就可操作，下方表格等 API 回來才更新。 -->
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/order-info-verify'))" class="mb-4" />
 

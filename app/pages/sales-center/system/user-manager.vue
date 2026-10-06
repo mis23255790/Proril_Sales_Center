@@ -282,11 +282,11 @@ const drawerOpen = computed({
 </script>
 
 <template>
-  <!--
-    整頁撐滿右側面板（UDashboardPanel body 是 flex-col），表格吃掉剩下的高度、自己捲動（表頭 sticky），
-    面板外框不出現捲軸。畫面太矮時表格至少保留 16rem，才退回由面板捲動。比照查詢畫面。
-  -->
   <div class="flex min-h-0 flex-1 flex-col">
+    <!--
+      整頁撐滿右側面板（UDashboardPanel body 是 flex-col），表格吃掉剩下的高度、自己捲動（表頭 sticky），
+      面板外框不出現捲軸。畫面太矮時表格至少保留 16rem，才退回由面板捲動。比照查詢畫面。
+    -->
     <FullPageLoading :show="loading" />
 
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('system/user-manager'))" class="mb-4" />
