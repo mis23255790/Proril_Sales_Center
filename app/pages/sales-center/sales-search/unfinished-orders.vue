@@ -562,6 +562,18 @@ const openGroupDetail = (row: UnfinOrderRow) =>
           </div>
         </UFormField>
 
+        <UFormField label="計畫批號" size="xs" :ui="FIELD_UI">
+          <ClearInput v-model="filters.planNum" placeholder="計畫批號" class="w-full" @keyup.enter="search" />
+        </UFormField>
+
+        <UFormField label="訂單單別" size="xs" :ui="FIELD_UI">
+          <ClearInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="search" />
+        </UFormField>
+
+        <UFormField label="訂單單號" size="xs" :ui="FIELD_UI">
+          <ClearInput v-model="filters.orderNo" placeholder="訂單單號" class="w-full" @keyup.enter="search" />
+        </UFormField>
+
         <UFormField label="品號" size="xs" :ui="FIELD_UI">
           <ClearInput v-model="filters.productNo" placeholder="品號" class="w-full" @keyup.enter="search" />
         </UFormField>
@@ -578,19 +590,7 @@ const openGroupDetail = (row: UnfinOrderRow) =>
           <ClearInput v-model="filters.serialNo" placeholder="銘版序號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="訂單單別" size="xs" :ui="FIELD_UI">
-          <ClearInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="search" />
-        </UFormField>
-
-        <UFormField label="訂單單號" size="xs" :ui="FIELD_UI">
-          <ClearInput v-model="filters.orderNo" placeholder="訂單單號" class="w-full" @keyup.enter="search" />
-        </UFormField>
-
-        <UFormField label="計畫批號" size="xs" :ui="FIELD_UI">
-          <ClearInput v-model="filters.planNum" placeholder="計畫批號" class="w-full" @keyup.enter="search" />
-        </UFormField>
-
-        <UFormField label="訂單日期（起~迄）" size="xs" :ui="FIELD_UI" class="md:col-span-2">
+        <UFormField label="訂單日期（起~迄）" size="xs" :ui="FIELD_UI" class="md:col-span-2 xl:col-start-1">
           <div class="flex items-center gap-2">
             <UInput v-model="filters.startDate" type="date" class="w-full" />
             <span class="text-sm text-muted">至</span>
