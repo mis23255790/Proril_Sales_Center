@@ -17,7 +17,8 @@
 
 ###### 相關資料表 / 預存程序
      COP_SalesOrder（EF: CopSalesOrder）  ERP 銷貨單明細快取，也是兩支查詢 SP 的結果集形狀
-     prc_ImportSalesOrder     從鼎新 ERP（linked server [192.168.1.200]）增量補 COP_SalesOrder
+     prc_ImportSalesOrder     從鼎新 ERP（linked server [192.168.1.200]）增量補 COP_SalesOrder，
+                              並更新 ERP 最近 90 天有修改的既有列（2026-10-06 起，見下方「快取與 ERP 同步」）
                               兩支查詢 SP 進來第一行就叫它 → **查詢其實會寫資料**
      prc_QuerySalesOrder      依品號(TH004)分群，GetSalesOrder 呼叫
      prc_QuerySalesOrder_1    依銷貨單(TH001+TH002)分群，GetSalesOrder_1 呼叫
@@ -166,7 +167,7 @@ Excel 匯出（`MixSalesShipApiController.Xls.cs`）用同一個 key 在後端�
 | 客戶別／期間／品號種類／品號／品名／規格／序號／訂單單號(poNo)／計畫批號 | 後端（GetSalesOrder / GetSalesOrder_1） |
 | 期間格式 | 前端轉成 `YYYYMMDD`（`toCompactDate()`），對照舊版 `getDateStringCompact()` |
 
-預設期間是 90 天（對照舊版 `UI_InitQueryDate(..., 90)` 的行為）。
+預設期間是 365 天（對照舊版 sales-shipping.js 的 `_default_date = 365`；2026-10-06 以前誤寫成 90 天）。
 查無資料時後端回 `isSuccess: false` + 說明訊息，**不是錯誤**，當空清單處理。
 
 # 匯出 Excel
@@ -202,3 +203,16 @@ Excel 匯出（`MixSalesShipApiController.Xls.cs`）用同一個 key 在後端�
 - `業務檢索`系統底下其他功能（報價、應收帳款、未完工訂單等，`MixSalesShip` 目錄下
   其餘 controller），本次只搬「銷貨檢索」一項
 </details>
+
+# 快取與 ERP 同步（2026-10-06）
+
+`prc_ImportSalesOrder` 原本只 INSERT 快取裡還沒有的銷貨單，**已匯入的列永遠不更新**（1.0 同樣設計）。
+鼎新事後會調整本幣金額尾差（實測都是 ±1），快取就跟 ERP 對不起來，銷貨細項總金額跟 1.0 差 1 元就是這個原因
+（2.0 在 ERP 修改前匯入、1.0 剛好修改後才第一次匯入）。
+
+現在匯入時多一段 UPDATE：用 OPENQUERY 撈 ERP **最近 90 天有修改**（`COPTH.MODI_DATE`）的銷貨明細，
+跟快取逐欄比對（金額、數量、單價、幣別、匯率、品號品名規格、訂單、備註、客戶單號、客戶），有不同就更新，
+`Modifier`/`ModiTime` 記錄更新者。限定 90 天是效能考量（全撈多 0.6 秒，限定後匯入約 200 ms）。
+
+已知限制：只看單身 `COPTH.MODI_DATE`，只改單頭 `COPTG`（匯率、客戶）沒動單身的不會觸發；
+`PlanNumber`、`SerialNosJson` 不在更新範圍；ERP 作廢（`TH020` 不再是 Y）的列不會從快取刪除。

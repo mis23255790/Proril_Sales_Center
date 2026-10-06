@@ -40,7 +40,9 @@
  *
  *      以上 1、3 兩點是這支腳本對邏輯做的**全部**修改，其餘與來源一字不差。
  *   4. **這幾支 SP 會寫資料**：查詢端點看起來是唯讀，其實 prc_QuerySalesOrder(_1) 進來
- *      就先 EXEC prc_ImportSalesOrder，對 COP_SalesOrder 做 INSERT + 去重 DELETE。
+ *      就先 EXEC prc_ImportSalesOrder，對 COP_SalesOrder 做 INSERT + 去重 DELETE，
+ *      2026-10-06 起再加 UPDATE（ERP 最近 90 天有修改、且值不同的既有列，例如鼎新事後調本幣尾差 ±1）。
+ *      單獨套用這支 SP 用 prod-migration-2026-10-06/apply-import-sales-order.ps1。
  *      切連線之後，查詢寫進去的是新庫、1.0 那邊仍寫舊庫，兩邊的快取表從此各自成長
  *      （內容都是從同一份 ERP 拉的，不影響正確性，只是不會互相同步）。
  *   5. **COP_SalesOrder 在 PRORIL_WEB 還有一個讀者：`V_SalesTotal`**（1.0 的
@@ -199,7 +201,8 @@ DECLARE
 @Creator varchar(40),
 @CreateTime datetime,
 @NewForeignCnt int,
-@NewDomesticCnt int
+@NewDomesticCnt int,
+@UpdatedCnt int
 
 SET NOCOUNT ON
 
@@ -303,6 +306,73 @@ SET @CreateTime = GETDATE()
 		--AND TA.TA001 IS NULL -- 查無製令及訂單的浦瑞銷貨單
 		--AND TG.TG001 IS not NULL
 		order by TH.TH001,TH.TH002,TH.TH003
+
+        -- 2026-10-06：更新 ERP 已修改的既有資料。
+        -- 上面兩段只 INSERT「快取裡還沒有」的銷貨單，已匯入的列以前永遠不會更新；
+        -- 鼎新事後會調整本幣金額尾差（±1）等欄位，快取就跟 ERP 對不起來（1.0 也一樣）。
+        -- 這裡把 ERP 現值整批撈回 #ErpSales（OPENQUERY 讓 JOIN 在 ERP 端做），
+        -- 欄位值有任何不同就更新。
+        -- 效能：只撈 ERP 最近 90 天有修改（MODI_DATE，ERP 端的日期）的列，全撈約 1.1 萬筆要多 0.6 秒；
+        -- 快取每次查詢都會刷新，90 天內的修改一定追得到。比對本身用欄位值，不用時間戳（兩邊時區不一定一致）。
+        -- PlanNumber（MOCTA 製令）、SerialNosJson（另有排程補寫）不在更新範圍。
+        -- #temp 欄位一律 COLLATE DATABASE_DEFAULT：tempdb 是 Latin1，不指定中文會變 ??。
+        CREATE TABLE #ErpSales (
+            TH001 nvarchar(50) COLLATE DATABASE_DEFAULT NOT NULL,
+            TH002 nvarchar(50) COLLATE DATABASE_DEFAULT NOT NULL,
+            TH003 nvarchar(50) COLLATE DATABASE_DEFAULT NOT NULL,
+            TG003 nvarchar(50) COLLATE DATABASE_DEFAULT NULL,
+            TH004 nvarchar(40) COLLATE DATABASE_DEFAULT NULL,
+            TH005 nvarchar(120) COLLATE DATABASE_DEFAULT NULL,
+            TH006 nvarchar(120) COLLATE DATABASE_DEFAULT NULL,
+            TH009 nvarchar(6) COLLATE DATABASE_DEFAULT NULL,
+            TH007 nvarchar(10) COLLATE DATABASE_DEFAULT NULL,
+            TH008 numeric(16,3) NULL,
+            TH012 numeric(21,6) NULL,
+            TH013 numeric(21,6) NULL,
+            TG011 nvarchar(4) COLLATE DATABASE_DEFAULT NULL,
+            TG012 numeric(16,3) NULL,
+            TH037 numeric(21,6) NULL,
+            TH038 numeric(21,6) NULL,
+            TH024 numeric(16,3) NULL,
+            TH014 nvarchar(4) COLLATE DATABASE_DEFAULT NULL,
+            TH015 nvarchar(11) COLLATE DATABASE_DEFAULT NULL,
+            TH016 nvarchar(4) COLLATE DATABASE_DEFAULT NULL,
+            TH018 nvarchar(255) COLLATE DATABASE_DEFAULT NULL,
+            TC012 nvarchar(20) COLLATE DATABASE_DEFAULT NULL,
+            CustomerNo varchar(20) COLLATE DATABASE_DEFAULT NULL,
+            CustomerName nvarchar(80) COLLATE DATABASE_DEFAULT NULL
+        )
+
+        -- 國外（浦瑞 TWPR，28 開頭）
+        INSERT INTO #ErpSales
+        SELECT * FROM OPENQUERY([192.168.1.200], 'SELECT TH.TH001,TH.TH002,TH.TH003,TG.TG003,TH.TH004,TH.TH005,TH.TH006,TH.TH009,TH.TH007,TH.TH008,TH.TH012,TH.TH013,TG.TG011,TG.TG012,TH.TH037,TH.TH038,TH.TH024,TH.TH014,TH.TH015,TH.TH016,TH.TH018,TC.TC012,TG.TG004,MA.MA002 FROM TWPR.dbo.COPTH TH LEFT JOIN PRORIL.dbo.COPTC TC ON TC.TC001 = TH.TH014 AND TC.TC002 = TH.TH015 LEFT JOIN TWPR.dbo.COPTG TG ON TG.TG001 = TH.TH001 AND TG.TG002 = TH.TH002 LEFT JOIN TWPR.dbo.COPMA MA ON MA.MA001 = TG.TG004 WHERE TH.TH020 = ''Y'' AND TH.TH001 LIKE ''28%'' AND TH.MODI_DATE >= CONVERT(char(8), DATEADD(day, -90, GETDATE()), 112)')
+
+        -- 國內（芳晟 PRORIL，23 開頭）
+        INSERT INTO #ErpSales
+        SELECT * FROM OPENQUERY([192.168.1.200], 'SELECT TH.TH001,TH.TH002,TH.TH003,TG.TG003,TH.TH004,TH.TH005,TH.TH006,TH.TH009,TH.TH007,TH.TH008,TH.TH012,TH.TH013,TG.TG011,TG.TG012,TH.TH037,TH.TH038,TH.TH024,TH.TH014,TH.TH015,TH.TH016,TH.TH018,TC.TC012,TG.TG004,MA.MA002 FROM PRORIL.dbo.COPTH TH LEFT JOIN PRORIL.dbo.COPTC TC ON TC.TC001 = TH.TH014 AND TC.TC002 = TH.TH015 LEFT JOIN PRORIL.dbo.COPTG TG ON TG.TG001 = TH.TH001 AND TG.TG002 = TH.TH002 LEFT JOIN PRORIL.dbo.COPMA MA ON MA.MA001 = TG.TG004 WHERE TH.TH020 = ''Y'' AND TH.TH001 LIKE ''23%'' AND TH.MODI_DATE >= CONVERT(char(8), DATEADD(day, -90, GETDATE()), 112)')
+
+        UPDATE CSO SET
+            TG003 = E.TG003, TH004 = E.TH004, TH005 = E.TH005, TH006 = E.TH006, TH009 = E.TH009,
+            TH007 = E.TH007, TH008 = E.TH008, TH012 = E.TH012, TH013 = E.TH013, TG011 = E.TG011,
+            TG012 = E.TG012, TH037 = E.TH037, TH038 = E.TH038, TH024 = E.TH024, TH014 = E.TH014,
+            TH015 = E.TH015, TH016 = E.TH016, TH018 = E.TH018, TC012 = E.TC012,
+            CustomerNo = E.CustomerNo, CustomerName = E.CustomerName,
+            Modifier = @Creator, ModiTime = @CreateTime
+        FROM COP_SalesOrder CSO
+        INNER JOIN #ErpSales E ON E.TH001 = CSO.TH001 AND E.TH002 = CSO.TH002 AND E.TH003 = CSO.TH003
+        WHERE EXISTS (
+            SELECT CSO.TG003, CSO.TH004, CSO.TH005, CSO.TH006, CSO.TH009, CSO.TH007, CSO.TH008, CSO.TH012,
+                   CSO.TH013, CSO.TG011, CSO.TG012, CSO.TH037, CSO.TH038, CSO.TH024, CSO.TH014, CSO.TH015,
+                   CSO.TH016, CSO.TH018, CSO.TC012, CSO.CustomerNo, CSO.CustomerName
+            EXCEPT
+            SELECT E.TG003, E.TH004, E.TH005, E.TH006, E.TH009, E.TH007, E.TH008, E.TH012,
+                   E.TH013, E.TG011, E.TG012, E.TH037, E.TH038, E.TH024, E.TH014, E.TH015,
+                   E.TH016, E.TH018, E.TC012, E.CustomerNo, E.CustomerName)
+
+        SET @UpdatedCnt = @@ROWCOUNT
+        PRINT 'ERP 已修改、更新快取筆數：' + CAST(@UpdatedCnt AS varchar(10))
+
+        DROP TABLE #ErpSales
 
 		-- 刪除重覆資料
 		delete CSO

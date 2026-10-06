@@ -47,3 +47,16 @@ cd database
   也已同步修正，之後建庫不會再出現。
 - 執行紀錄：測試區（50002）2026-10-06 已執行並驗證回傳 `浦瑞ERP`／`芳晟ERP`；正式區（51002）2026-10-06 已執行並驗證。
 - API 有查詢快取，修完要重新按「查詢」才會重跑 SP。
+
+---
+
+# 銷貨檢索快取：匯入時也更新 ERP 已修改的既有資料
+
+腳本：`apply-import-sales-order.ps1`（預設 dry-run，`-Environment snapshot|snapshot-prod`，`-Execute` 才套用，`-Run` 套用後執行一次並計時）。
+
+- 只從 `SalesShippingObjectsMigration.sql` 抽出 `prc_ImportSalesOrder` 區塊套用，其他物件不動；
+  現行定義不是這支 SP 的已知版本就停止。
+- 背景與已知限制見 `docs/modules/SalesShipping/logic.md`「快取與 ERP 同步」。
+- 執行紀錄：測試區（50002）2026-10-06 已執行，更新 9 筆（7 筆本幣尾差 ±1、2 筆其他欄位），
+  之後快取金額與 ERP 0 筆差異；匯入時間約 110 ms → 200 ms。
+  正式區（51002）2026-10-06 已執行，更新 15 筆，之後快取金額與 ERP 0 筆差異，匯入約 180 ms。
