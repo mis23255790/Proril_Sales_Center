@@ -838,4 +838,9 @@ M_PermissionDef → RBAC_Permission
 - 比照 `RBAC_*`，**不放進 `Tables/` 與 `TABLES.txt`**：那邊對照的是 `PRORIL_WEB` 的 schema，
   也是 `copy-snapshot-data.ps1` 的複製白名單，放進去會把 1.0 的 int key 資料灌進來。
 - 1.0 的 `PUR_XlsFileFormat` 不搬，2.0 只有 CMN 這一張。
-- 執行狀態：測試區（50002）、正式區（51002）都**還沒執行**。
+- 執行狀態：測試區（50002）已執行（表為空）；正式區（51002）**2026-10-06 已執行**，
+  建表 + 兩個權限節點。範本原檔在 `docs/xls-templates/`。正式區要用格式匯入頁，
+  還要在權限管理把 `system.importXlsFormat` 勾進角色。
+- **2026-10-06 改變決定，正式區有從 1.0 搬資料**：銷貨檢索／未完成訂單／訂單資料檢核三支用到的版型
+  （1.0 `PUR_` 410/420 + `CMN_` 425，共 602 筆）以
+  `prod-migration-2026-10-06/copy-xls-format-from-1.0.ps1` 轉成 PermissionKey 寫入。測試區沒搬。
