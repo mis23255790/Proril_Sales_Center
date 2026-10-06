@@ -35,7 +35,8 @@ public class LogTimedHostedService(ILogger<LogTimedHostedService> logger) : IHos
 
     private static TimeSpan GetDelayToNextRun()
     {
-        DateTime now = DateTime.Now;
+        // log 檔名是台灣日期，清理時間點也照台灣時間算
+        DateTime now = TaiwanTime.Now;
         DateTime nextRun = now.Date.AddHours(CleanupHour);
         if (nextRun <= now)
         {
@@ -71,7 +72,7 @@ public class LogTimedHostedService(ILogger<LogTimedHostedService> logger) : IHos
     {
         try
         {
-            DateTime today = DateTime.Now.Date;
+            DateTime today = TaiwanTime.Now.Date;
 
             var txtFiles = Directory.EnumerateFiles(path, "*.txt", SearchOption.AllDirectories);
             foreach (string txtFile in txtFiles)

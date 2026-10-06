@@ -176,9 +176,7 @@ const download = async (row: XlsFormatListItem) => {
       toast.add({ title: '下載失敗', description: res?.message ?? '', color: 'error' })
       return
     }
-    const path = `/ShareRoot/${res.body}`
-    const name = res.body.split('/').pop() || 'format.xlsx'
-    window.open(`/api/download?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}`, '_blank')
+    openExportDownload(res.body, 'format.xlsx')
   } catch (err) {
     console.log('export xls format failed -->', err)
   } finally {

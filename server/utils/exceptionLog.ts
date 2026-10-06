@@ -23,10 +23,22 @@ const KEEP_DAYS = 30
 
 const pad = (n: number, len = 2) => String(n).padStart(len, '0')
 
-const formatDate = (d: Date) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`
+/**
+ * 容器是 UTC，log 一律用台灣時間（UTC+8，沒有日光節約）：把時間平移 8 小時後用 getUTC* 取值，
+ * 本機與容器結果一致。比照後端 api/Helpers/TaiwanTime.cs。
+ */
+const TAIWAN_OFFSET_MS = 8 * 60 * 60 * 1000
+const toTaiwan = (d: Date) => new Date(d.getTime() + TAIWAN_OFFSET_MS)
 
-const formatTime = (d: Date) =>
-  `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`
+const formatDate = (d: Date) => {
+  const t = toTaiwan(d)
+  return `${t.getUTCFullYear()}${pad(t.getUTCMonth() + 1)}${pad(t.getUTCDate())}`
+}
+
+const formatTime = (d: Date) => {
+  const t = toTaiwan(d)
+  return `${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}:${pad(t.getUTCSeconds())}.${pad(t.getUTCMilliseconds(), 3)}`
+}
 
 // 依序寫入，避免同時多筆 append 交錯
 let queue: Promise<void> = Promise.resolve()
@@ -74,13 +86,14 @@ export const formatError = (err: unknown) => {
 export const cleanupExceptionLogs = async () => {
   try {
     const files = await readdir(EXCEPTION_LOG_DIR).catch(() => [] as string[])
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    // 檔名是台灣日期，today 也用台灣日期；兩邊都用 Date.UTC 表示純日期，只比天數
+    const tw = toTaiwan(new Date())
+    const today = new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate()))
 
     for (const name of files) {
       const m = /^web_(\d{4})(\d{2})(\d{2})\.txt$/.exec(name)
       if (!m) continue
-      const fileDate = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      const fileDate = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
       const days = (today.getTime() - fileDate.getTime()) / 86_400_000
       if (days <= KEEP_DAYS) continue
       await unlink(join(EXCEPTION_LOG_DIR, name)).catch(err => console.log('cleanupExceptionLogs unlink failed -->', err))

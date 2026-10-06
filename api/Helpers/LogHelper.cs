@@ -34,8 +34,10 @@ public class LogHelper
     {
         try
         {
-            string logFileName = DateTime.Now.ToString("yyyyMMdd") + ".txt";
-            string nowTime = DateTime.Now.ToString("HH:mm:ss.fff");
+            // 容器是 UTC，log 一律用台灣時間（檔名的日期也是），見 TaiwanTime。
+            DateTime now = TaiwanTime.Now;
+            string logFileName = now.ToString("yyyyMMdd") + ".txt";
+            string nowTime = now.ToString("HH:mm:ss.fff");
 
             if (!Directory.Exists(logPath))
             {

@@ -242,9 +242,7 @@ const onExport = async () => {
       toast.add({ title: '匯出失敗', description: res?.message ?? '', color: 'error' })
       return
     }
-    const path = `/ShareRoot/${res.body}`
-    const name = res.body.split('/').pop() || 'export.xlsx'
-    window.open(`/api/download?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}`, '_blank')
+    openExportDownload(res.body)
   } catch (err) {
     console.log('unfinished-orders onExport failed -->', err)
     toast.add({ title: '匯出失敗', color: 'error' })
