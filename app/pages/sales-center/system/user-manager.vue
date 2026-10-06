@@ -102,6 +102,11 @@ const roleOptions = computed(() =>
     }))
 )
 const roleNameOf = (id: number) => roles.value.find(r => r.id === id)?.roleName ?? `#${id}`
+/** superAdmin 角色只有 superAdmin 能移除（跟下拉選單的 disabled 同一條規則）。 */
+const canRemoveRole = (id: number) => !roles.value.find(r => r.id === id)?.isSuperAdmin || isSuperAdmin.value
+const removeRole = (id: number) => {
+  form.roleIds = form.roleIds.filter(x => x !== id)
+}
 const sameIds = (a: number[], b: number[]) =>
   a.length === b.length && [...a].sort((x, y) => x - y).join(',') === [...b].sort((x, y) => x - y).join(',')
 
@@ -537,9 +542,27 @@ const drawerOpen = computed({
               placeholder="選擇角色"
               class="w-full"
             />
+            <!-- 角色標籤上直接按 x 移除，不用打開下拉；跟下拉取消勾選一樣，按「儲存變更」才寫入 -->
             <div v-if="form.roleIds.length" class="mt-2 flex flex-wrap gap-2">
-              <UBadge v-for="id in form.roleIds" :key="id" color="neutral" variant="outline">
+              <UBadge
+                v-for="id in form.roleIds"
+                :key="id"
+                color="neutral"
+                variant="outline"
+                class="gap-1"
+                :class="{ 'pe-0.5': canRemoveRole(id) }"
+              >
                 {{ roleNameOf(id) }}
+                <UButton
+                  v-if="canRemoveRole(id)"
+                  color="neutral"
+                  variant="link"
+                  size="xs"
+                  icon="i-lucide-x"
+                  class="p-0.5"
+                  :aria-label="`移除角色 ${roleNameOf(id)}`"
+                  @click="removeRole(id)"
+                />
               </UBadge>
             </div>
           </UFormField>
