@@ -528,7 +528,7 @@ const openGroupDetail = (row: CopSalesOrderRow) =>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
         <UFormField label="客戶別" size="sm">
           <USelectMenu
             v-model="customerNoSelectValue"
@@ -555,6 +555,10 @@ const openGroupDetail = (row: CopSalesOrderRow) =>
           </div>
         </UFormField>
 
+        <UFormField label="計畫批號" size="sm">
+          <ClearInput v-model="filters.planNum" placeholder="計畫批號" class="w-full" @keyup.enter="search" />
+        </UFormField>
+
         <UFormField label="品號" size="sm">
           <ClearInput v-model="filters.productNo" placeholder="品號" class="w-full" @keyup.enter="search" />
         </UFormField>
@@ -573,10 +577,6 @@ const openGroupDetail = (row: CopSalesOrderRow) =>
 
         <UFormField label="訂單單號" size="sm">
           <ClearInput v-model="filters.orderNo" placeholder="訂單單號" class="w-full" @keyup.enter="search" />
-        </UFormField>
-
-        <UFormField label="計畫批號" size="sm">
-          <ClearInput v-model="filters.planNum" placeholder="計畫批號" class="w-full" @keyup.enter="search" />
         </UFormField>
       </div>
     </div>
