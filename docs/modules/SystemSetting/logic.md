@@ -644,3 +644,23 @@ key（`module.function`）；列多個 key 時**任一個**有就放行；Action
 `M_User` 已切到 `Proril_Sales_Center`，**1.0 的人員管理／權限管理必須停用**，否則兩邊帳號狀態一定分岔。
 另外「登入失敗自動鎖定」還留在 1.0（要連 `H_Logins` 一起搬），
 所以 1.0 鎖的是舊庫、2.0 讀的是新庫，鎖定狀態不互通。
+
+## 稽核紀錄（2026-10-06）
+
+人員管理、權限管理的每個寫入動作，以及登入成功／失敗，都會寫一筆 `SYS_AuditLog`
+（`database/AuditLogObjectsMigration.sql`，寫入走 `api/Services/AuditLogService.cs`）。
+
+| 欄位 | 內容 |
+|---|---|
+| `LogTime` | UTC，顯示時轉台灣時間 |
+| `Account` | 操作者（登入事件是嘗試登入的帳號） |
+| `Action` | `LOGIN` / `LOGIN_FAIL` / `CREATE` / `UPDATE` / `DELETE` / `RESET_PASSWORD` / `UNLOCK` |
+| `Target` | 功能的頁面權限 key（`system.userManager`、`system.permissionManager`），登入是 `auth` |
+| `TargetId` | 被操作的帳號或角色代碼 |
+| `Detail` | JSON：改前／改後、增減清單、登入失敗原因 |
+| `ClientIp` | Nuxt 轉發層帶來的 `X-Forwarded-For` 第一段 |
+
+- 「儲存」一定會打 `UpdateUser`／`SaveRole`，沒有實際變動就不記。
+- 保留一年，`LogTimedHostedService` 每天凌晨清。檔案 log（30 天）照舊，兩者分工見腳本開頭註解。
+- 新功能要加稽核：在 SaveChanges／Commit 之後呼叫 `WriteAudit(action, PermissionKeys.Xxx.Yyy, targetId, detail)`，
+  `Detail` 不得放密碼、token、金鑰。

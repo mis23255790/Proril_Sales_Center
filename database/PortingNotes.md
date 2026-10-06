@@ -844,3 +844,10 @@ M_PermissionDef → RBAC_Permission
 - **2026-10-06 改變決定，正式區有從 1.0 搬資料**：銷貨檢索／未完成訂單／訂單資料檢核三支用到的版型
   （1.0 `PUR_` 410/420 + `CMN_` 425，共 602 筆）以
   `prod-migration-2026-10-06/copy-xls-format-from-1.0.ps1` 轉成 PermissionKey 寫入。測試區沒搬。
+
+## 稽核紀錄：SYS_AuditLog（2026-10-06，新庫專屬的表）
+
+`AuditLogObjectsMigration.sql`：建 `SYS_AuditLog`（登入、人員管理、權限管理的稽核紀錄，保留一年）。
+比照 `RBAC_*`、`CMN_XlsFileFormat`，**不放進 `Tables/` 與 `TABLES.txt`**。
+執行狀態：測試區（50002）、正式區（51002）2026-10-06 都已執行。
+（表不存在時寫入會失敗，只記 exceptionLog、不影響功能，但會漏記。）

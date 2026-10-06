@@ -16,7 +16,8 @@ export default defineEventHandler(async (event) => {
   const target = `${base}/${pathParam}${qs ? `?${qs}` : ''}`
 
   const token = getAuthCookieToken(event) || config.public.devToken
-  const headers: Record<string, string> = {}
+  // 帶使用者 IP，後端稽核紀錄（SYS_AuditLog）用；見 server/utils/clientIp.ts
+  const headers: Record<string, string> = { ...forwardedForHeader(event) }
   if (token) headers.Authorization = `Bearer ${token}`
 
   return proxyRequest(event, target, { headers })

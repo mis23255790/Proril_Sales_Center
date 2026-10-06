@@ -121,4 +121,26 @@ public abstract class BaseApiController : ControllerBase
         HttpContext?.RequestServices.GetService<LogHelper>()
             ?.WriteExceptionLog($"{GetType().Name} 發生例外 {Request?.Method} {Request?.Path}", ex);
     }
+
+    /// <summary>
+    /// 寫稽核紀錄（SYS_AuditLog，見 <see cref="AuditLogService"/>）。在自己的 SaveChanges／Commit 之後呼叫。
+    /// <paramref name="account"/> 不給就是目前登入者（token）；登入端點還沒有 token，要自己帶。
+    /// 寫入失敗只記檔案 log，不影響回傳。
+    /// </summary>
+    protected void WriteAudit(string action, string target, string? targetId, object? detail = null, string? account = null)
+        => HttpContext?.RequestServices.GetService<AuditLogService>()
+            ?.Write(account ?? GetAccountByToken(), action, target, targetId, detail, GetClientIp());
+
+    /// <summary>
+    /// 使用者端 IP。api/ 前面一定隔著 Nuxt 轉發層（server/api/proxy、server/api/auth/*），
+    /// 連線來源永遠是 Nuxt server，所以先看它帶來的 X-Forwarded-For 第一段，沒有才用連線來源。
+    /// 僅供稽核參考：api/ 只在內網，沒有防偽造。
+    /// </summary>
+    protected string? GetClientIp()
+    {
+        var forwarded = Request?.Headers["X-Forwarded-For"].ToString();
+        if (!string.IsNullOrWhiteSpace(forwarded))
+            return forwarded.Split(',')[0].Trim();
+        return HttpContext?.Connection.RemoteIpAddress?.ToString();
+    }
 }

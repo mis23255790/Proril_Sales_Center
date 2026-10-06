@@ -6,8 +6,11 @@ namespace Proril.SalesIssue.Api.Services;
 /// <summary>
 /// 從 1.0 PRORIL.Service.LogTimedHostedService 搬過來：
 /// 每天凌晨清理 LogHelper 寫出來的 log 檔案，保留 30 天。
+/// 2026-10-06 起同一個時間點也清稽核紀錄 SYS_AuditLog，保留一年（<see cref="AuditLogService.Retention"/>）。
 /// </summary>
-public class LogTimedHostedService(ILogger<LogTimedHostedService> logger) : IHostedService, IDisposable
+public class LogTimedHostedService(
+    ILogger<LogTimedHostedService> logger,
+    IServiceScopeFactory scopeFactory) : IHostedService, IDisposable
 {
     private Timer? _timer;
 
@@ -65,6 +68,23 @@ public class LogTimedHostedService(ILogger<LogTimedHostedService> logger) : IHos
         catch (Exception ex)
         {
             logger.LogError(ex, "LogTimedHostedService.DoWork failed.");
+        }
+
+        PurgeAuditLog();
+    }
+
+    /// <summary>刪除超過保留期間的稽核紀錄。失敗只記 log，不影響檔案清理。</summary>
+    private void PurgeAuditLog()
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var deleted = scope.ServiceProvider.GetRequiredService<AuditLogService>().Purge();
+            logger.LogInformation("已清理稽核紀錄 SYS_AuditLog：{Count} 筆", deleted);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "LogTimedHostedService.PurgeAuditLog failed.");
         }
     }
 

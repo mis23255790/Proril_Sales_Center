@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Models;
+using Proril.SalesIssue.Api.Services;
 
 namespace Proril.SalesIssue.Api.Controllers.Shared;
 
@@ -20,6 +21,9 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 /// 4. 「管理人員」不再是 M_User.IsAdmin 開關，改成指派 superAdmin 角色
 ///    （<see cref="SetUserRoles"/>），而且只有 superAdmin 自己能指派。
 ///    1.0 任何能進人員管理的人都能把自己或別人設成管理員。
+///
+/// 每個寫入動作成功後都記稽核紀錄（SYS_AuditLog，Target = system.userManager，TargetId = 帳號），
+/// 見 <see cref="AuditLogService"/>。
 ///
 /// M_User 已切到 <c>scDb</c>（Proril_Sales_Center）。**1.0 站台的人員管理必須停用**，
 /// 否則兩邊帳號狀態會分岔，見 database/PortingNotes.md「權限控管搬遷」。
@@ -94,6 +98,8 @@ public partial class MainApiController
         scDb.SaveChanges();
 
         WriteStepLog(nameof(AddUser), $"account:{trimmed}, isEnable:{isEnable}");
+        WriteAudit(AuditActions.Create, PermissionKeys.SystemSetting.UserManager, trimmed,
+            new { after = new { userName = name ?? "", isEnable } });
         return new CustomApiViewModel { IsSuccess = true };
     }
 
@@ -109,11 +115,16 @@ public partial class MainApiController
         if (user is null)
             return new CustomApiViewModel { IsSuccess = false, Message = $"查無帳號 {account}" };
 
+        var before = new { userName = user.UserName ?? "", isEnable = user.IsEnable };
         user.UserName = name ?? "";
         user.IsEnable = isEnable;
         scDb.SaveChanges();
 
         WriteStepLog(nameof(UpdateUser), $"account:{trimmed}, isEnable:{isEnable}");
+        // 畫面按儲存一定會打這支，沒有實際變動就不記，避免稽核紀錄被灌水
+        if (before.userName != user.UserName || before.isEnable != isEnable)
+            WriteAudit(AuditActions.Update, PermissionKeys.SystemSetting.UserManager, trimmed,
+                new { before, after = new { userName = user.UserName, isEnable } });
         return new CustomApiViewModel { IsSuccess = true };
     }
 
@@ -138,6 +149,15 @@ public partial class MainApiController
         if (IsAdmin(trimmed) && !IsAdmin(GetAccountByToken()))
             return new CustomApiViewModel { IsSuccess = false, Message = "只有系統管理員能刪除系統管理員帳號" };
 
+        // 刪掉之前先留下姓名與角色，稽核紀錄要看得出刪的是誰、原本有什麼權限
+        var snapshot = scDb.MUsers.Where(u => u.Account == trimmed)
+            .Select(u => new { userName = u.UserName, isEnable = u.IsEnable }).FirstOrDefault();
+        var roleNames = (from ur in scDb.RBACRoleUsers
+                         join r in scDb.RBACRoles on ur.RoleId equals r.Id
+                         where ur.Account == trimmed && ur.AStatus == ActiveStatus.Active
+                         orderby r.Sort
+                         select r.RoleName).ToList();
+
         using var tx = scDb.Database.BeginTransaction();
         var deleted = scDb.MUsers.Where(u => u.Account == trimmed).ExecuteDelete();
         if (deleted <= 0)
@@ -147,6 +167,8 @@ public partial class MainApiController
         tx.Commit();
 
         WriteStepLog(nameof(DeleteUser), $"account:{trimmed}");
+        WriteAudit(AuditActions.Delete, PermissionKeys.SystemSetting.UserManager, trimmed,
+            new { before = new { snapshot?.userName, snapshot?.isEnable, roles = roleNames } });
         return new CustomApiViewModel { IsSuccess = true };
     }
 
@@ -168,6 +190,7 @@ public partial class MainApiController
         scDb.SaveChanges();
 
         WriteStepLog(nameof(ResetPassword), $"account:{trimmed}");
+        WriteAudit(AuditActions.ResetPassword, PermissionKeys.SystemSetting.UserManager, trimmed);
         return new CustomApiViewModel { IsSuccess = true };
     }
 
@@ -191,6 +214,7 @@ public partial class MainApiController
         scDb.SaveChanges();
 
         WriteStepLog(nameof(UnlockUser), $"account:{trimmed}");
+        WriteAudit(AuditActions.Unlock, PermissionKeys.SystemSetting.UserManager, trimmed);
         return new CustomApiViewModel { IsSuccess = true };
     }
 

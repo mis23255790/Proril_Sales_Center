@@ -98,6 +98,8 @@ public partial class SalesCenterDbContext : DbContext
 
     public virtual DbSet<MWorkProcessType> MWorkProcessTypes { get; set; }
 
+    public virtual DbSet<SysAuditLog> SysAuditLogs { get; set; }
+
     public virtual DbSet<VCopmoq> VCopmoqs { get; set; }
 
     public virtual DbSet<VCopnoChk> VCopnoChks { get; set; }
@@ -1400,6 +1402,35 @@ public partial class SalesCenterDbContext : DbContext
                 .HasMaxLength(10)
                 .IsUnicode(false);
             entity.Property(e => e.TypeName).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<SysAuditLog>(entity =>
+        {
+            entity.ToTable("SYS_AuditLog");
+
+            entity.HasIndex(e => new { e.Account, e.LogTime }, "IX_SYS_AuditLog_Account");
+
+            entity.HasIndex(e => e.LogTime, "IX_SYS_AuditLog_LogTime");
+
+            entity.HasIndex(e => new { e.Target, e.TargetId, e.LogTime }, "IX_SYS_AuditLog_Target");
+
+            entity.Property(e => e.Id).HasColumnName("ID");
+            entity.Property(e => e.Account)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Action)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.ClientIp)
+                .HasMaxLength(45)
+                .IsUnicode(false);
+            entity.Property(e => e.LogTime)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.Target)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.TargetId).HasMaxLength(100);
         });
 
         modelBuilder.Entity<VCopmoq>(entity =>

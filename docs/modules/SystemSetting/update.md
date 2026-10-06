@@ -1,4 +1,26 @@
 <details>
+  <summary>版號2026.10.06</summary>
+
+##### feat: 稽核紀錄 SYS_AuditLog（登入、人員管理、權限管理）
+      資料庫：database/AuditLogObjectsMigration.sql 建新庫 SYS_AuditLog（LogTime 是 UTC，保留一年）。
+        測試區 50002、正式區 51002 都已執行。
+      後端：Services/AuditLogService.cs（AuditActions / AuditTargets），BaseApiController.WriteAudit／GetClientIp；
+        LogTimedHostedService 每天凌晨刪超過一年的列。寫入失敗只記 exceptionLog，不影響原本回傳。
+      記錄的事件：
+        - LoginSso／Login：LOGIN、LOGIN_FAIL（含原因：未授權來源、查無帳號、停用、鎖定）
+        - 人員管理：AddUser / UpdateUser（有變才記，改前／改後）/ DeleteUser（刪除前姓名與角色）/
+          ResetPassword / UnlockUser / SetUserRoles（角色增減）
+        - 權限管理：SaveRole（新增整份；修改記改前／改後與權限增減，沒變不記）/
+          DeleteRole（刪除前權限與成員）/ SetRoleMembers（成員增減）
+      不記進入頁面。Detail 不放密碼、token。
+      前端：server/utils/clientIp.ts，proxy 與 sso／handoff 登入把使用者 IP 放在 X-Forwarded-For 轉給後端。
+
+      database/AuditLogObjectsMigration.sql
+      api/Services/AuditLogService.cs、api/Data/SalesCenter/SysAuditLog.cs
+      api/Controllers/Shared/BaseApiController.cs、MainApiController*.cs
+</details>
+
+<details>
   <summary>版號2026.09.30</summary>
 
 ##### feat: 格式匯入搬到 2.0

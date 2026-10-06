@@ -89,7 +89,8 @@ export default defineEventHandler(async (event) => {
   try {
     result = await $fetch<LoginModel>(`${config.public.apiBase}/MainApi/LoginSso`, {
       method: 'POST',
-      headers: { 'X-Internal-Secret': config.ssoInternalSecret },
+      // 帶使用者 IP，登入稽核紀錄（SYS_AuditLog）用
+      headers: { 'X-Internal-Secret': config.ssoInternalSecret, ...forwardedForHeader(event) },
       body: { account }
     })
   } catch (err: any) {

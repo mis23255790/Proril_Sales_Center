@@ -208,6 +208,9 @@ public partial class MainApiController
 
         var operatorAccount = GetAccountByToken();
         RBACRole role;
+        // 稽核用：修改前的角色資料與權限（新增時是 null）
+        object? beforeInfo = null;
+        List<string> beforeKeys = [];
         if (roleId == 0)
         {
             if (!RoleCodePattern.IsMatch(code))
@@ -232,6 +235,9 @@ public partial class MainApiController
             var found = scDb.RBACRoles.FirstOrDefault(r => r.Id == roleId && r.AStatus == ActiveStatus.Active);
             if (found is null) return new CustomApiViewModel { IsSuccess = false, Message = "查無角色" };
             role = found;
+            beforeInfo = new { roleCode = role.RoleCode, roleName = role.RoleName, description = role.Description };
+            // superAdmin 全放行、權限清單不存，改前後都當空的，免得被誤記成「移除全部權限」
+            beforeKeys = role.IsSuperAdmin ? [] : ActiveRolePermissionKeys(role.Id);
 
             if (!role.IsSystem && code != role.RoleCode)
             {
@@ -289,6 +295,7 @@ public partial class MainApiController
         Permissions.Invalidate();
 
         WriteStepLog(nameof(SaveRole), $"roleId:{role.Id}, code:{role.RoleCode}, keys:{wanted.Count}");
+        AuditSaveRole(role, beforeInfo, beforeKeys);
         return new CustomApiViewModel { IsSuccess = true, Body = role.Id };
     }
 
@@ -303,6 +310,10 @@ public partial class MainApiController
         if (role is null) return new CustomApiViewModel { IsSuccess = false, Message = "查無角色" };
         if (role.IsSystem) return new CustomApiViewModel { IsSuccess = false, Message = "系統角色不能刪除" };
 
+        // 刪掉之前先留下權限與成員，稽核紀錄要看得出這個角色原本給了誰什麼
+        var permissionKeys = ActiveRolePermissionKeys(roleId);
+        var memberAccounts = ActiveRoleMembers(roleId);
+
         using var tx = scDb.Database.BeginTransaction();
         scDb.RBACRoleUsers.Where(ur => ur.RoleId == roleId).ExecuteDelete();
         scDb.RBACRolePermissions.Where(rp => rp.RoleId == roleId).ExecuteDelete();
@@ -311,6 +322,10 @@ public partial class MainApiController
         Permissions.Invalidate();
 
         WriteStepLog(nameof(DeleteRole), $"roleId:{roleId}, code:{role.RoleCode}");
+        WriteAudit(AuditActions.Delete, PermissionKeys.SystemSetting.PermissionManager, role.RoleCode, new
+        {
+            before = new { roleName = role.RoleName, description = role.Description, permissions = permissionKeys, members = memberAccounts }
+        });
         return new CustomApiViewModel { IsSuccess = true };
     }
 
@@ -352,6 +367,8 @@ public partial class MainApiController
             return new CustomApiViewModel { IsSuccess = false, Message = $"查無帳號：{string.Join(", ", unknown)}" };
 
         var existing = scDb.RBACRoleUsers.Where(ur => ur.RoleId == roleId).ToList();
+        var beforeMembers = existing.Where(ur => ur.AStatus == ActiveStatus.Active)
+            .Select(ur => ur.Account.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
         scDb.RBACRoleUsers.RemoveRange(existing.Where(ur =>
             ur.AStatus == ActiveStatus.Active && !wanted.Contains(ur.Account.Trim())));
         var byAccount = existing.ToDictionary(ur => ur.Account.Trim(), StringComparer.OrdinalIgnoreCase);
@@ -378,6 +395,11 @@ public partial class MainApiController
         Permissions.Invalidate();
 
         WriteStepLog(nameof(SetRoleMembers), $"roleId:{roleId}, members:{wanted.Count}");
+        var addedMembers = wanted.Where(a => !beforeMembers.Contains(a)).Order().ToList();
+        var removedMembers = beforeMembers.Where(a => !wanted.Contains(a)).Order().ToList();
+        if (addedMembers.Count > 0 || removedMembers.Count > 0)
+            WriteAudit(AuditActions.Update, PermissionKeys.SystemSetting.PermissionManager, role.RoleCode,
+                new { roleName = role.RoleName, members = new { added = addedMembers, removed = removedMembers } });
         return new CustomApiViewModel { IsSuccess = true };
     }
 
@@ -446,7 +468,55 @@ public partial class MainApiController
         Permissions.Invalidate();
 
         WriteStepLog(nameof(SetUserRoles), $"account:{trimmed}, roles:{string.Join(",", wanted)}");
+        var addedRoles = wanted.Where(id => !current.Contains(id)).Select(id => byId[id].RoleName).ToList();
+        var removedRoles = current.Where(id => !wanted.Contains(id))
+            .Select(id => byId.TryGetValue(id, out var r) ? r.RoleName : $"#{id}").ToList();
+        if (addedRoles.Count > 0 || removedRoles.Count > 0)
+            WriteAudit(AuditActions.Update, PermissionKeys.SystemSetting.UserManager, trimmed,
+                new { roles = new { added = addedRoles, removed = removedRoles } });
         return new CustomApiViewModel { IsSuccess = true };
+    }
+
+    /// <summary>角色目前有效的 PermissionKey（稽核比對用）。</summary>
+    private List<string> ActiveRolePermissionKeys(int roleId)
+        => scDb.RBACRolePermissions
+            .Where(rp => rp.RoleId == roleId && rp.AStatus == ActiveStatus.Active)
+            .Select(rp => rp.PermissionKey).OrderBy(k => k).ToList();
+
+    /// <summary>角色目前的成員帳號（稽核用）。</summary>
+    private List<string> ActiveRoleMembers(int roleId)
+        => scDb.RBACRoleUsers
+            .Where(ur => ur.RoleId == roleId && ur.AStatus == ActiveStatus.Active)
+            .Select(ur => ur.Account).ToList()
+            .Select(a => a.Trim()).Order().ToList();
+
+    /// <summary>
+    /// SaveRole 的稽核：新增記整份；修改記改前／改後與權限增減，什麼都沒變就不記
+    /// （畫面按儲存一定會打這支）。Target = system.permissionManager，TargetId = 角色代碼。
+    /// </summary>
+    private void AuditSaveRole(RBACRole role, object? beforeInfo, List<string> beforeKeys)
+    {
+        var afterInfo = new { roleCode = role.RoleCode, roleName = role.RoleName, description = role.Description };
+        var afterKeys = role.IsSuperAdmin ? [] : ActiveRolePermissionKeys(role.Id);
+
+        if (beforeInfo is null)
+        {
+            WriteAudit(AuditActions.Create, PermissionKeys.SystemSetting.PermissionManager, role.RoleCode,
+                new { after = new { afterInfo.roleName, afterInfo.description, permissions = afterKeys } });
+            return;
+        }
+
+        var added = afterKeys.Except(beforeKeys).ToList();
+        var removed = beforeKeys.Except(afterKeys).ToList();
+        var infoChanged = JsonConvert.SerializeObject(beforeInfo) != JsonConvert.SerializeObject(afterInfo);
+        if (!infoChanged && added.Count == 0 && removed.Count == 0) return;
+
+        WriteAudit(AuditActions.Update, PermissionKeys.SystemSetting.PermissionManager, role.RoleCode, new
+        {
+            before = infoChanged ? beforeInfo : null,
+            after = infoChanged ? afterInfo : null,
+            permissions = added.Count > 0 || removed.Count > 0 ? new { added, removed } : null
+        });
     }
 
     private static RoleListItemViewModel ToListItem(RBACRole r, int permissionCount, int memberCount) => new()

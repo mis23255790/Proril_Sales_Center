@@ -54,6 +54,8 @@ else
 }
 // 角色制權限解析（BaseApiController.HasPermission / RequirePermissionAttribute 共用），request 內快取
 builder.Services.AddScoped<PermissionService>();
+// 稽核紀錄 SYS_AuditLog（BaseApiController.WriteAudit），保留一年由 LogTimedHostedService 清
+builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddHostedService<LogTimedHostedService>();
 builder.Services.AddHostedService<SerialNoSyncHostedService>();
 builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());

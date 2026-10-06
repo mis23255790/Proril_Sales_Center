@@ -4,6 +4,7 @@ using Proril.SalesIssue.Api.Data;
 using Proril.SalesIssue.Api.Data.SalesCenter;
 using Proril.SalesIssue.Api.Helpers;
 using Proril.SalesIssue.Api.Models;
+using Proril.SalesIssue.Api.Services;
 
 namespace Proril.SalesIssue.Api.Controllers.Shared;
 
@@ -58,22 +59,30 @@ public partial class MainApiController : BaseApiController
 
         if (user is null)
         {
-            // 不區分「帳號不存在」與「密碼錯誤」，避免被用來列舉帳號
+            // 不區分「帳號不存在」與「密碼錯誤」，避免被用來列舉帳號（稽核紀錄也不區分）
             result.Message = "帳號或密碼錯誤";
+            AuditLogin(false, account, "password", result.Message);
             return result;
         }
 
         if (!user.IsEnable || user.IsLocked)
         {
             result.Message = "此帳號已停用或已鎖定，請洽系統管理員";
+            AuditLogin(false, account, "password", user.IsLocked ? "帳號已鎖定" : "帳號已停用");
             return result;
         }
 
         result.Status = true;
         result.Token = jwtHelper.GenerateToken(account);
         result.Username = user.UserName ?? "";
+        AuditLogin(true, account, "password", null);
         return result;
     }
+
+    /// <summary>登入稽核（SYS_AuditLog）。登入端點還沒有 token，帳號要自己帶。</summary>
+    private void AuditLogin(bool success, string account, string method, string? reason)
+        => WriteAudit(success ? AuditActions.Login : AuditActions.LoginFail, AuditTargets.Auth,
+            account, new { method, reason }, account);
 
     /// <summary>
     /// SSO 登入。
@@ -92,16 +101,20 @@ public partial class MainApiController : BaseApiController
         var result = new LoginModel { Status = false };
 
         var providedSecret = Request?.Headers["X-Internal-Secret"].ToString() ?? "";
+        var account = (model?.Account ?? "").Trim();
+
         if (string.IsNullOrWhiteSpace(_ssoInternalSecret) || providedSecret != _ssoInternalSecret)
         {
             result.Message = "未授權的呼叫來源";
+            // 有人繞過 Nuxt 直接打這支，稽核要看得到
+            AuditLogin(false, account, "sso", result.Message);
             return result;
         }
 
-        var account = (model?.Account ?? "").Trim();
         if (string.IsNullOrWhiteSpace(account))
         {
             result.Message = "SSO 回傳的帳號為空";
+            AuditLogin(false, account, "sso", result.Message);
             return result;
         }
 
@@ -109,18 +122,21 @@ public partial class MainApiController : BaseApiController
         if (user is null)
         {
             result.Message = $"查無帳號 {account}，請洽系統管理員確認 PRORIL 通行證帳號是否已建立對應資料";
+            AuditLogin(false, account, "sso", "查無帳號");
             return result;
         }
 
         if (!user.IsEnable || user.IsLocked)
         {
             result.Message = "此帳號已停用或已鎖定，請洽系統管理員";
+            AuditLogin(false, account, "sso", user.IsLocked ? "帳號已鎖定" : "帳號已停用");
             return result;
         }
 
         result.Status = true;
         result.Token = jwtHelper.GenerateToken(account);
         result.Username = user.UserName ?? "";
+        AuditLogin(true, account, "sso", null);
         return result;
     }
 
