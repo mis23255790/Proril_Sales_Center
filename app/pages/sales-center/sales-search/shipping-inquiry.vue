@@ -22,8 +22,8 @@ const { breadcrumbFor, appPath } = useAppNavigation()
 const { pagination } = useTablePagination(20)
 const table = useTemplateRef('table')
 
-/** 90 天內資料，對照舊版 UI_InitQueryDate(..., 90)。 */
-const DEFAULT_DAYS = 90
+/** 1 年內資料，對照舊版 sales-shipping.js 的 _default_date = 365。 */
+const DEFAULT_DAYS = 365
 /** 「全部」按鈕：20 年，等於不限日期。 */
 const ALL_DAYS = 365 * 20
 
