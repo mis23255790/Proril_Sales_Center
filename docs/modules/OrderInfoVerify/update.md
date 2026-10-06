@@ -1,4 +1,54 @@
 <details>
+  <summary>版號2026.10.06</summary>
+
+##### feat: 訂單列依檢核狀態上底色，表格下方加底色說明（補回 1.0）
+      對照 1.0 rowStylePO / cellStyle / footer-description，色碼照抄 css-related.js：
+        - 特規Pass（表頭任一 P 且無 N）→ 淡黃 #fceec9（優先）
+        - 需修改（COP_PoCheck.FinChk = N）→ 淡紅 #f8ccc8
+        - 未檢核（沒有檢核紀錄或 FinChk 空白）→ 灰 #dddde2
+        - 正確 → 無底色
+      訂單金額欄另外紅底：訂單金額 < 客戶金額，或 CustSumAmtChk 有值但不是 Y。
+      判斷在 app/utils/orderInfoVerify.ts（ORDER_ROW_STATUS / orderRowStatus / isOrderAmountAlert），
+      UTable 用 :meta 的 class.tr 套整列底色。
+
+      app/pages/sales-center/sales-search/order-info-verify.vue
+      app/utils/orderInfoVerify.ts
+
+##### fix: 訂單日期條件沒有生效，預設值對齊 1.0
+      前端送 yyyyMMdd，後端用 DateTime.TryParse 解析不了，訂單日期條件從搬過來就一直被忽略
+      （查詢與匯出都是）。後端改用 TryParseQueryDate（yyyyMMdd 與一般格式都收）。
+      訂單日期預設改成昨天～今天、重設也回到這個值，對照 1.0 UI_InitQueryDate(..., _default_date = 1)。
+
+      api/Controllers/SalesSearch/OrderInfoVerifyApiController.cs
+      app/pages/sales-center/sales-search/order-info-verify.vue
+
+##### fix: 品號卡片燈號誤用 ERP 結案碼，並標出哪個欄位有錯
+      品號卡片燈號與「只顯示NG」原本看 vPoDetail.finFlag，那是 V_PODetailList 的 COPTD.TD016
+      （ERP 訂單明細結案碼），不是檢核結果——明細 13 項全是 Y 也會亮紅燈。
+      改看 COP_PoDetailCheck.FinChk（1.0 卡片也是看這個）。
+      欄位直接標色，比照 1.0 get_detail_card：N 淡紅、W 淡黃，對照照抄 1.0
+      （PriceChk/PackListChk → 預交日、AmtChk → 單價/外幣金額、Link* → 前置欄位、
+      LinkPriceChk/MOQAmtChk/LinkMOQAmtChk → 前置單價）。卡片補上前置單別/單號/序號/數量/單價，
+      後端 Data.VPoDetailList 加 5 個前置欄位（50002/51002 的 V_PODetailList 都有）。
+      下方問題清單改成 N 與 W 都列（W 用黃色徽章）。
+      未改：匯出 Excel 明細頁仍依 FinFlag 上色，那是 1.0 原本的行為（OrderInfoVerifyApiController_Xls）。
+
+      app/components/sales-search/OrderCheckProductCard.vue
+      app/components/sales-search/OrderCheckDetailModal.vue
+      app/types/orderInfoVerify.ts
+      api/Data/OrderInfoVerifyEntities.cs
+      api/Data/SalesCenter/SalesCenterDbContext.cs
+
+##### fix: 特規原因套用後看起來沒寫入
+      prc_COPPassCheck 其實有寫進 COP_PassCheck，但 modal 重新載入時把特規原因清成空字串，
+      也沒有從 copPassChecks 回填。改成比照 1.0 updatePassMemo：載入時回填該項目最新一筆
+      （CustSumAmtChk/CustAmtZeroChk → 訂單金額、AvailableChk → 信用額度），
+      狀態是特規Pass 時在金額列直接顯示「原因：…」。
+
+      app/components/sales-search/OrderCheckDetailModal.vue
+</details>
+
+<details>
   <summary>版號2026.10.05.1600</summary>
 
 ##### feat: 訂單資料檢核拿掉整頁遮罩，表格等 API 回來才更新

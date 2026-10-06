@@ -132,7 +132,13 @@ export interface VPoDetail {
   外幣金額?: number | null
   台幣金額?: number | null
   預交日?: string | null
-  finFlag?: ChkValue
+  前置單別?: string | null
+  前置單號?: string | null
+  前置序號?: string | null
+  前置數量?: number | null
+  前置單價?: number | null
+  /** ERP 訂單明細結案碼（COPTD.TD016），**不是檢核結果**；檢核結果看 CopPoDetailCheck.finChk。 */
+  finFlag?: string | null
 }
 
 /** V_Product_English_All：英文品名。 */

@@ -71,6 +71,13 @@ public class VPoDetailList
     public decimal? 外幣金額 { get; set; }
     public decimal? 台幣金額 { get; set; }
     public string? 預交日 { get; set; }
+    /// <summary>前置（關聯）單據，品號卡片標示 LinkTypeChk/LinkNoChk/LinkSnoChk/LinkQtyChk/LinkPriceChk 用。</summary>
+    public string? 前置單別 { get; set; }
+    public string? 前置單號 { get; set; }
+    public string? 前置序號 { get; set; }
+    public decimal? 前置數量 { get; set; }
+    public decimal? 前置單價 { get; set; }
+    /// <summary>ERP 訂單明細結案碼（COPTD.TD016），**不是檢核結果**，檢核看 COP_PoDetailCheck.FinChk。</summary>
     public string? FinFlag { get; set; }
 }
 

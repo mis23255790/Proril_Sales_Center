@@ -1545,8 +1545,10 @@ public partial class SalesCenterDbContext : DbContext
                 .HasNoKey()
                 .ToView("V_PODetailList");
 
-            // 前置單價/前置單別/前置單號/前置序號/前置數量：測試區 50002 這個 View 多出來的
-            // 欄位（PRORIL_WEB／手寫的 Data.VPoDetailList 都沒有），EF 不映射的欄位直接忽略。
+            // 前置單別/前置單號/前置序號/前置數量/前置單價：50002、51002 的 View 都有（2026-10-06 確認），
+            // 品號卡片標示關聯檢核用。
+            entity.Property(e => e.前置數量).HasColumnType("numeric(16, 3)");
+            entity.Property(e => e.前置單價).HasColumnType("numeric(21, 6)");
             entity.Property(e => e.CopSource)
                 .HasMaxLength(7)
                 .IsUnicode(false)

@@ -264,18 +264,33 @@ public partial class OrderInfoVerifyApiController : BaseApiController
         }
 
         // 訂單日期是 yyyyMMdd 字串，用字串比較（照抄 1.0）。
-        if (!string.IsNullOrEmpty(startDate) && DateTime.TryParse(startDate, out var start))
+        // 2.0 前端送的是 yyyyMMdd（1.0 送 yyyy-MM-dd），DateTime.TryParse 解析不了 yyyyMMdd，
+        // 2026-10-06 以前日期條件因此完全沒生效，見 TryParseQueryDate。
+        // string.Compare 不能帶 StringComparison：EF Core 翻不成 SQL（會丟例外）。兩參數版本翻成
+        // SQL 的 >= / <，V_POList 定序是 Chinese_Taiwan_Stroke_BIN，yyyyMMdd 純數字比較結果跟 Ordinal 相同。
+        if (TryParseQueryDate(startDate, out var start))
         {
             var startCompact = start.ToString("yyyyMMdd");
-            vpoQuery = vpoQuery.Where(v => string.Compare(v.訂單日期, startCompact, StringComparison.Ordinal) >= 0);
+            vpoQuery = vpoQuery.Where(v => string.Compare(v.訂單日期, startCompact) >= 0);
         }
-        if (!string.IsNullOrEmpty(endDate) && DateTime.TryParse(endDate, out var end))
+        if (TryParseQueryDate(endDate, out var end))
         {
             var endCompact = end.AddDays(1).ToString("yyyyMMdd");
-            vpoQuery = vpoQuery.Where(v => string.Compare(v.訂單日期, endCompact, StringComparison.Ordinal) < 0);
+            vpoQuery = vpoQuery.Where(v => string.Compare(v.訂單日期, endCompact) < 0);
         }
 
         return await vpoQuery.ToListAsync();
+    }
+
+    /// <summary>查詢日期接受 yyyyMMdd（2.0 前端）與 yyyy-MM-dd 等一般格式（1.0）。</summary>
+    private static bool TryParseQueryDate(string? value, out DateTime date)
+    {
+        date = default;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var trimmed = value.Trim();
+        return DateTime.TryParseExact(trimmed, "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture,
+                   System.Globalization.DateTimeStyles.None, out date)
+               || DateTime.TryParse(trimmed, out date);
     }
 
     /// <summary>

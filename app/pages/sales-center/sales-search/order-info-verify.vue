@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { h, resolveComponent } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
-import type { CopCheckRule, OrderInfoVerifyGroup, OrderInfoVerifySummary } from '~/types/orderInfoVerify'
+import type { CopCheckRule, OrderInfoVerifyGroup, OrderInfoVerifySummary, VPoDetail } from '~/types/orderInfoVerify'
 import type { SalesShippingCustomer } from '~/types/salesShipping'
-import { chkBadgeColor, chkBadgeLabel, feFinChk, groupOrderInfoVerifyRows } from '~/utils/orderInfoVerify'
+import { ORDER_ROW_STATUS, feFinChk, groupOrderInfoVerifyRows, isOrderAmountAlert, orderRowStatus } from '~/utils/orderInfoVerify'
 
 definePageMeta({ title: '訂單資料檢核' })
 
@@ -23,11 +23,16 @@ const exporting = ref<'Y' | 'N' | null>(null)
 const showAmount = ref(false)
 const customers = ref<SalesShippingCustomer[]>([])
 
+/** 訂單日期預設昨天～今天，對照舊版 UI_InitQueryDate(..., _default_date = 1)。 */
+const DEFAULT_DAYS = 1
+
+const dateDaysAgo = (days: number) => toDateString(new Date(Date.now() - days * 24 * 60 * 60 * 1000))
+
 const filters = reactive({
   customerNo: '',
   orderType: '',
-  startDate: '',
-  endDate: ''
+  startDate: dateDaysAgo(DEFAULT_DAYS),
+  endDate: toDateString(new Date())
 })
 
 /**
@@ -98,6 +103,8 @@ const load = async () => {
     })
     if (seq !== loadSeq) return
     groups.value = res?.isSuccess ? groupOrderInfoVerifyRows(res.body ?? []) : []
+    // 換資料就收起展開列（列 id 是 index，不收會展開到別張訂單）
+    expanded.value = {}
     summary.value = res?.body2 ?? { ...EMPTY_SUMMARY }
     if (res && !res.isSuccess && res.message) {
       toast.add({ title: '查無資料', description: res.message, color: 'warning' })
@@ -129,8 +136,8 @@ onMounted(() => {
 const onClickReset = () => {
   filters.customerNo = ''
   filters.orderType = ''
-  filters.startDate = ''
-  filters.endDate = ''
+  filters.startDate = dateDaysAgo(DEFAULT_DAYS)
+  filters.endDate = toDateString(new Date())
   search()
 }
 
@@ -160,9 +167,7 @@ const onExport = async (confirmFlag: 'Y' | 'N') => {
       toast.add({ title: '匯出失敗', description: res?.message ?? '', color: 'error' })
       return
     }
-    const path = `/ShareRoot/${res.body}`
-    const name = res.body.split('/').pop() || 'export.xlsx'
-    window.open(`/api/download?path=${encodeURIComponent(path)}&name=${encodeURIComponent(name)}`, '_blank')
+    openExportDownload(res.body)
   } catch (err) {
     console.log('order-info-verify onExport failed -->', err)
     toast.add({ title: '匯出失敗', color: 'error' })
@@ -182,36 +187,54 @@ const selectTab = (value: 'notChecked' | 'checked') => {
 
 // ---------------------------------------------------------------- 欄位定義
 
-type ColDef = { key: keyof OrderInfoVerifyGroup, header: string, amount?: boolean, numeric?: boolean }
-
-const NUMBER_CELL = (row: OrderInfoVerifyGroup, key: keyof OrderInfoVerifyGroup) => {
-  const value = row[key] as number | null | undefined
-  return h('span', { class: 'block text-right tabular-nums' }, value == null ? '' : formatAmount(value))
+/**
+ * 欄位順序與名稱對照 1.0 Views/Mix/OrderInfoVerify.cshtml 的 table-order-notchecked/checked
+ * （兩個頁籤欄位相同）。1.0 的 FinChk/feFinChk 是除錯用的原始值欄，2.0 改成「檢核結果」燈號；
+ * 「編輯」在 1.0 是夾在目的港口與運輸方式中間，這裡照放。
+ * value 有給就用它取值（客戶金額在 copPoCheck 裡，不在訂單表頭）。
+ */
+type ColDef = {
+  id: string
+  header: string
+  value?: (row: OrderInfoVerifyGroup) => string | number | null | undefined
+  amount?: boolean
+  numeric?: boolean
+  /** 金額欄紅底（訂單金額／客戶金額），對照舊版 cellStyle。 */
+  amountAlert?: boolean
 }
 
-const TEXT_CELL = (row: OrderInfoVerifyGroup, key: keyof OrderInfoVerifyGroup) =>
-  h('span', {}, (row[key] as string | null | undefined) ?? '')
+const STATUS_COL = '__status'
+const ACTIONS_COL = '__actions'
 
-const COLS: ColDef[] = [
-  { key: 'copSource', header: 'ERP來源' },
-  { key: '單別名稱', header: '單別名稱' },
-  { key: '單別', header: '單別' },
-  { key: '單號', header: '單號' },
-  { key: '訂單日期', header: '訂單日期' },
-  { key: '客戶代號', header: '客戶代號' },
-  { key: '客戶名稱', header: '客戶名稱' },
-  { key: '部門代號', header: '部門' },
-  { key: 'packinglist備註', header: 'PackingList備註' },
-  { key: '客戶單號', header: '客戶單號' },
-  { key: '訂單金額', header: '訂單金額', numeric: true, amount: true },
-  { key: '交易條件名稱', header: '交易條件', amount: true },
-  { key: '起始港口', header: '起始港口' },
-  { key: '目的港口', header: '目的港口' },
-  { key: '運輸方式', header: '運輸方式' },
-  { key: '流程代號', header: '流程代號' },
-  { key: '業務名稱', header: '業務名稱' },
-  { key: '業務人員', header: '業務人員' }
+const COLS: (ColDef | typeof STATUS_COL | typeof ACTIONS_COL)[] = [
+  // 來源／單別名稱／單別／單號：1.0 欄位定義有，但實際畫面不顯示（依欄位設定隱藏），
+  // 單別／單號在展開列的品號明細裡看得到。
+  { id: '訂單日期', header: '訂單日期' },
+  { id: '客戶名稱', header: '客戶名稱' },
+  { id: '部門代號', header: '部門' },
+  { id: 'packinglist備註', header: 'PackingList備註' },
+  { id: '客戶單號', header: '客戶單號' },
+  { id: '訂單金額', header: '訂單金額', numeric: true, amount: true, amountAlert: true },
+  { id: 'custAmt', header: '客戶金額', value: r => r.copPoCheck?.custAmt, numeric: true, amount: true, amountAlert: true },
+  { id: '交易條件', header: '交易條件', amount: true },
+  { id: '交易條件名稱', header: '交易條件名稱', amount: true },
+  { id: '起始港口', header: '起始港口' },
+  { id: '目的港口', header: '目的港口' },
+  STATUS_COL,
+  ACTIONS_COL,
+  { id: '運輸方式', header: '運輸方式' },
+  { id: '流程代號', header: '流程代號' },
+  { id: '業務名稱', header: '業務名稱' },
+  { id: '業務人員', header: '業務人員' }
 ]
+
+const cellValue = (row: OrderInfoVerifyGroup, def: ColDef) =>
+  def.value ? def.value(row) : (row as any)[def.id] as string | number | null | undefined
+
+const NUMBER_CELL = (value: unknown) =>
+  h('span', { class: 'block text-right tabular-nums' }, value == null || value === '' ? '' : formatAmount(value as number))
+
+const TEXT_CELL = (value: unknown) => h('span', {}, (value as string | null | undefined) ?? '')
 
 const openOrderKey = ref<{ copSource: string, orderType: string, orderNo: string, customerNo: string } | null>(null)
 const detailModalOpen = ref(false)
@@ -226,8 +249,35 @@ const openDetail = (group: OrderInfoVerifyGroup) => {
   detailModalOpen.value = true
 }
 
+/** 展開列狀態（1.0 的 exp 欄：點放大鏡在列下方展開該訂單的品號明細）。 */
+const expanded = ref<Record<string, boolean>>({})
+
+/** 展開列裡的品號明細欄位，對照 1.0 get_detail_work_record_head。 */
+const DETAIL_COLS: { header: string, value: (d: VPoDetail) => unknown, numeric?: boolean, amount?: boolean }[] = [
+  { header: '單別', value: d => d.單別 },
+  { header: '單號', value: d => d.單號 },
+  { header: '序號', value: d => d.序號 },
+  { header: '品號', value: d => d.品號 },
+  { header: '品名', value: d => d.品名 },
+  { header: '規格', value: d => d.規格 },
+  { header: '幣別', value: d => d.幣別, amount: true },
+  { header: '匯率', value: d => d.匯率, numeric: true, amount: true },
+  { header: '訂單數量', value: d => d.訂單數量, numeric: true },
+  { header: '單位', value: d => d.單位 },
+  // 1.0 表頭寫「本幣單價／本幣金額」，但欄位對不到資料（一直是空的），這裡顯示實際有的外幣單價／外幣金額
+  { header: '外幣單價', value: d => d.外幣單價, numeric: true, amount: true },
+  { header: '外幣金額', value: d => d.外幣金額, numeric: true, amount: true },
+  { header: '台幣金額', value: d => d.台幣金額, numeric: true, amount: true },
+  { header: '預交日', value: d => d.預交日 },
+  // 1.0 表頭是 FinFlag，實際是 ERP 訂單明細結案碼（COPTD.TD016）
+  { header: '結案碼', value: d => d.finFlag }
+]
+
+const detailCols = computed(() => DETAIL_COLS.filter(c => !c.amount || showAmount.value))
+
 const buildColumns = (): TableColumn<OrderInfoVerifyGroup>[] => {
   const cols: TableColumn<OrderInfoVerifyGroup>[] = [
+    { id: 'expand', header: '' },
     {
       id: 'no',
       header: '#',
@@ -236,29 +286,38 @@ const buildColumns = (): TableColumn<OrderInfoVerifyGroup>[] => {
   ]
 
   for (const def of COLS) {
+    if (def === STATUS_COL) {
+      cols.push({
+        id: 'status',
+        header: '檢核結果',
+        cell: ({ row }) => h(resolveComponent('CheckLight'), { chk: feFinChk(row.original.copPoCheck) })
+      })
+      continue
+    }
+    if (def === ACTIONS_COL) {
+      cols.push({ id: 'actions', header: '編輯' })
+      continue
+    }
     if (def.amount && !showAmount.value) continue
     cols.push({
-      accessorKey: def.key,
+      id: def.id,
       header: def.header,
-      cell: ({ row }) => (def.numeric ? NUMBER_CELL(row.original, def.key) : TEXT_CELL(row.original, def.key))
+      cell: ({ row }) => (def.numeric ? NUMBER_CELL(cellValue(row.original, def)) : TEXT_CELL(cellValue(row.original, def))),
+      ...(def.amountAlert
+        ? { meta: { class: { td: (cell: any) => (isOrderAmountAlert(cell.row.original.copPoCheck) ? 'bg-[#f8ccc8]' : '') } } }
+        : {})
     })
   }
-
-  cols.push({
-    id: 'status',
-    header: '檢核結果',
-    cell: ({ row }) => {
-      const chk = feFinChk(row.original.copPoCheck)
-      return h(resolveComponent('UBadge'), { color: chkBadgeColor(chk), variant: 'subtle' }, () => chkBadgeLabel(chk))
-    }
-  })
-
-  cols.push({ id: 'actions', header: '操作' })
 
   return cols
 }
 
 const columns = computed(() => buildColumns())
+
+/** 整列底色依檢核狀態（需修改／未檢核／特規Pass／正確），對照舊版 rowStylePO。 */
+const tableMeta = {
+  class: { tr: (row: any) => ORDER_ROW_STATUS[orderRowStatus(row.original.copPoCheck)].class }
+}
 
 // ---------------------------------------------------------------- 檢核條件
 
@@ -387,10 +446,58 @@ const loadConditions = async () => {
         :data="groups"
         :columns="columns"
         :loading="loading"
+        v-model:expanded="expanded"
+        :meta="tableMeta"
         :ui="{ tr: clickableRowTr, td: 'whitespace-nowrap' }"
         @update:pagination="onPaginationUpdate"
         @select="(_e: Event, row: any) => openDetail(row.original)"
       >
+        <template #expand-cell="{ row }">
+          <div @click.stop>
+            <UButton
+              size="xs" color="success" variant="outline"
+              :icon="row.getIsExpanded() ? 'i-lucide-zoom-out' : 'i-lucide-zoom-in'"
+              :title="row.getIsExpanded() ? '收合品號明細' : '展開品號明細'"
+              @click="row.toggleExpanded()"
+            />
+          </div>
+        </template>
+        <!-- 品號明細：外層列 hover 會把底下所有 td 加底線、游標變手指，這裡強制蓋掉 -->
+        <template #expanded="{ row }">
+          <div class="cursor-default overflow-x-auto rounded-md border border-default bg-[#d3d3d3]/30 p-2" @click.stop>
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="text-left text-muted">
+                  <th class="px-2 py-1 text-right">
+                    #
+                  </th>
+                  <th v-for="col in detailCols" :key="col.header" class="px-2 py-1" :class="col.numeric ? 'text-right' : ''">
+                    {{ col.header }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(item, i) in (row.original as OrderInfoVerifyGroup).rows"
+                  :key="item.vPoDetail.序號"
+                  class="border-t border-default"
+                >
+                  <td class="px-2 py-1 text-right text-dimmed !no-underline">
+                    {{ i + 1 }}
+                  </td>
+                  <td
+                    v-for="col in detailCols"
+                    :key="col.header"
+                    class="px-2 py-1 !no-underline"
+                    :class="col.numeric ? 'text-right tabular-nums' : ''"
+                  >
+                    {{ col.numeric ? formatAmount(col.value(item.vPoDetail) as number) : (col.value(item.vPoDetail) ?? '') }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
         <template #actions-cell="{ row }">
           <div @click.stop>
             <UButton size="xs" color="primary" variant="outline" @click="openDetail(row.original)">
@@ -408,11 +515,26 @@ const loadConditions = async () => {
       <TablePaginationBar :table="table" :total="summary.totalCount" />
     </div>
 
+    <!-- 底色說明，對照舊版 footer-description：文字直接放在對應底色上 -->
+    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+      <span class="text-muted">底色說明：</span>
+      <span
+        v-for="(status, key) in ORDER_ROW_STATUS"
+        :key="key"
+        class="rounded border border-default px-2 py-0.5 text-default"
+        :class="status.class"
+      >
+        {{ status.label }}
+      </span>
+      <span class="text-muted">；訂單金額欄紅底 = 訂單金額低於客戶金額或客戶金額檢核不通過</span>
+    </div>
+
     <OrderCheckDetailModal
       v-model:open="detailModalOpen"
-      v-model:show-condition="conditionModalOpen"
       :order-key="openOrderKey"
       :show-amount="showAmount"
+      :condition-loading="conditionLoading"
+      :condition-rows="conditionRows"
       @checked="load"
     />
 

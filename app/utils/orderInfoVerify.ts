@@ -61,12 +61,43 @@ export const groupOrderInfoVerifyRows = (rows: OrderInfoVerifyRow[]): OrderInfoV
   return [...groups.values()]
 }
 
-/** 檢核狀態 → 徽章顏色，主表格與 modal 共用。 */
-export const chkBadgeColor = (chk: ChkValue): 'success' | 'warning' | 'error' | 'neutral' => {
-  if (chk === 'Y') return 'success'
-  if (chk === 'P') return 'warning'
-  if (chk === 'N') return 'error'
-  return 'neutral'
+/**
+ * 主表格整列底色，色碼照抄 1.0（wwwroot/js/common/css-related.js 的 bgcolor_*）。
+ * hover 時同色系變淡，蓋過 clickableRowTr 的 hover 底色，不然滑過去顏色就消失。
+ */
+export const ORDER_ROW_STATUS = {
+  danger: { label: '需修改', class: 'bg-[#f8ccc8] hover:bg-[#f8ccc8]/60' },
+  secondary: { label: '未檢核', class: 'bg-[#dddde2] hover:bg-[#dddde2]/60' },
+  warning: { label: '特規Pass', class: 'bg-[#fceec9] hover:bg-[#fceec9]/60' },
+  ok: { label: '正確', class: '' }
+} as const
+
+export type OrderRowStatus = keyof typeof ORDER_ROW_STATUS
+
+/**
+ * 訂單列的底色狀態，以舊版 rowStylePO 為基礎：
+ * 表頭任一 NG → 需修改；表頭有特規Pass → 特規Pass；COP_PoCheck.FinChk = N（含明細檢核）→ 需修改；
+ * 沒有檢核紀錄或 FinChk 是空的 → 未檢核；其他 → 正確。
+ * 與 1.0 的差異：1.0 只看 FinChk，表頭 NG 但 FinChk = Y 的單會顯示白色，跟 modal 的 NG 對不上。
+ */
+export const orderRowStatus = (check?: CopPoCheck | null): OrderRowStatus => {
+  const header = feFinChk(check)
+  // 表頭任一 NG（例如未做已付款確認 PaidChk = N）就是需修改：prc_COPOrderChk 算出的 FinChk
+  // 不一定納入這些項目，實際有 PaidChk = N 但 FinChk = Y 的資料，只看 FinChk 會顯示成白色。
+  if (header === 'N') return 'danger'
+  if (header === 'P') return 'warning'
+  if (check?.finChk === 'N') return 'danger'
+  if (!check?.finChk) return 'secondary'
+  return 'ok'
+}
+
+/**
+ * 訂單金額欄紅底，對照舊版 cellStyle：訂單金額小於客戶金額，或客戶金額檢核有結果但不是 Y。
+ */
+export const isOrderAmountAlert = (check?: CopPoCheck | null) => {
+  if (!check) return false
+  const amountLow = check.sumAmt != null && check.custAmt != null && check.sumAmt < check.custAmt
+  return amountLow || (check.custSumAmtChk != null && check.custSumAmtChk !== 'Y')
 }
 
 /** 檢核狀態 → 顯示文字。 */
