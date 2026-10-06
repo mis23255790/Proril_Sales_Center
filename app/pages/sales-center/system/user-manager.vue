@@ -9,11 +9,14 @@
  * 1.0 的「管理人員」開關改成指派角色（RBAC）：系統管理員就是 superAdmin 角色，
  * 只有 superAdmin 自己能指派／移除（後端 SetUserRoles 也擋）。
  * 「全體使用者」角色所有人自動擁有，不出現在選單裡。
+ *
+ * 抽屜下方列出這個人的有效權限樹（唯讀）：目前選單上勾的角色（含還沒存檔的變更）∪ 全體使用者，
+ * 有 superAdmin 就是全部。跟後端 PermissionService 的算法一致，角色權限用 GetRole 逐一取回快取。
  */
 import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableColumn } from '@nuxt/ui'
 import ConfirmDialog from '~/components/common/ConfirmDialog.vue'
-import type { RoleListItem, UserListItem, UserSetting } from '~/types/system'
+import type { PermissionTreeNode, RoleListItem, UserListItem, UserSetting } from '~/types/system'
 
 useSeoMeta({ title: '人員管理 · 系統管理 · PRORIL 業務中心' })
 
@@ -120,13 +123,121 @@ const loadRoles = async () => {
     console.log('load role list failed -->', err)
     roles.value = []
   }
+  // 角色清單重抓（例如權限管理改過）就把快取的角色權限一起丟掉
+  rolePermissionKeys.value = new Map()
 }
+
+// ------------------------------------------------------------------ 有效權限樹
+
+/** 啟用中的權限樹（停用節點不算有效權限，不列）。 */
+const permissionTree = ref<PermissionTreeNode[]>([])
+
+const loadPermissionTree = async () => {
+  try {
+    const res = await api.getPermissions(false)
+    permissionTree.value = buildPermissionTree(res?.isSuccess ? (res.body ?? []) : [])
+  } catch (err) {
+    console.log('load permission tree failed -->', err)
+    permissionTree.value = []
+  }
+}
+
+/** roleId → 該角色的 PermissionKey，GetRole 取回後快取。 */
+const rolePermissionKeys = ref(new Map<number, string[]>())
+const permissionLoading = ref(false)
+
+/** 會影響有效權限的角色：選單上勾的 + 全體使用者（isDefault）。 */
+const effectiveRoleIds = computed(() => [
+  ...new Set([...form.roleIds, ...roles.value.filter(r => r.isDefault).map(r => r.id)])
+])
+
+const hasSuperAdmin = computed(() =>
+  form.roleIds.some(id => roles.value.find(r => r.id === id)?.isSuperAdmin))
+
+watch(effectiveRoleIds, async (ids) => {
+  const missing = ids.filter(id => !rolePermissionKeys.value.has(id))
+  if (!missing.length) return
+  permissionLoading.value = true
+  try {
+    const results = await Promise.all(missing.map(id => api.getRole(id)))
+    const next = new Map(rolePermissionKeys.value)
+    results.forEach((res, i) => next.set(missing[i]!, res?.isSuccess ? (res.body?.permissionKeys ?? []) : []))
+    rolePermissionKeys.value = next
+  } catch (err) {
+    console.log('load role permissions failed -->', err)
+  } finally {
+    permissionLoading.value = false
+  }
+})
+
+/** 有效權限（樹上的節點 key）。 */
+const effectiveSelected = computed(() => {
+  if (hasSuperAdmin.value) return allCheckableKeys(permissionTree.value)
+  const keys = effectiveRoleIds.value.flatMap(id => rolePermissionKeys.value.get(id) ?? [])
+  return selectedKeysFromPermissionKeys(permissionTree.value, keys)
+})
+
+/**
+ * 每個權限節點是哪些角色給的（節點 key → 角色名稱），樹上接在名稱後面顯示。
+ * superAdmin 全放行：每個節點都標 superAdmin 角色，其他角色照實際勾選一起列。
+ * 「全體使用者」不標（人人都有，標了只是雜訊），它給的權限照樣算在有效權限裡。
+ */
+const permissionSources = computed(() => {
+  const sources = new Map<string, string[]>()
+  const add = (key: string, name: string) => {
+    const list = sources.get(key)
+    if (!list) sources.set(key, [name])
+    else if (!list.includes(name)) list.push(name)
+  }
+  const ordered = [...effectiveRoleIds.value]
+    .map(id => roles.value.find(r => r.id === id))
+    .filter((r): r is RoleListItem => !!r && !r.isDefault)
+    .sort((a, b) => a.sort - b.sort)
+  for (const role of ordered) {
+    const keys = role.isSuperAdmin
+      ? allCheckableKeys(permissionTree.value)
+      : selectedKeysFromPermissionKeys(permissionTree.value, rolePermissionKeys.value.get(role.id) ?? [])
+    for (const key of keys) add(key, role.roleName)
+  }
+  return sources
+})
+
+/** 預設只列有權限的分支；打開「顯示全部」才列整棵樹（沒權限的畫成空框）。 */
+const showAllPermissions = ref(false)
+const permissionNodes = computed(() =>
+  showAllPermissions.value ? permissionTree.value : pruneTree(permissionTree.value, effectiveSelected.value))
+
+const permissionExpanded = ref(new Set<string>())
+/** 列出來的分支預設全部展開；使用者自己收合的節點，換人或改角色才重算。 */
+watch(permissionNodes, (nodes) => {
+  permissionExpanded.value = new Set([...flattenTree(nodes).values()].filter(n => n.children.length).map(n => n.key))
+}, { immediate: true })
+
+const togglePermissionExpand = (key: string) => {
+  const next = new Set(permissionExpanded.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  permissionExpanded.value = next
+}
+
+/** 頁面數／細項數，標題旁顯示。 */
+const permissionCounts = computed(() => {
+  const nodes = flattenTree(permissionTree.value)
+  let pages = 0
+  let actions = 0
+  for (const key of effectiveSelected.value) {
+    const type = nodes.get(key)?.nodeType
+    if (type === 'PAGE') pages++
+    else if (type === 'ACTION') actions++
+  }
+  return { pages, actions }
+})
 
 onMounted(async () => {
   loading.value = true
   try {
     await loadUserFunctions()
-    await Promise.all([loadUsers(), loadRoles()])
+    await Promise.all([loadUsers(), loadRoles(), loadPermissionTree()])
   } finally {
     loading.value = false
   }
@@ -390,7 +501,7 @@ const drawerOpen = computed({
     <USlideover
       v-model:open="drawerOpen"
       :dismissible="!saving"
-      :ui="{ content: 'sm:max-w-lg' }"
+      :ui="{ content: 'sm:max-w-xl' }"
     >
       <template #title>
         <span class="flex flex-wrap items-center gap-2">
@@ -432,6 +543,38 @@ const drawerOpen = computed({
               </UBadge>
             </div>
           </UFormField>
+
+          <!-- 有效權限樹（唯讀）：選單上的角色（含未存檔變更）∪ 全體使用者 -->
+          <div>
+            <div class="mb-2 flex flex-wrap items-center gap-2">
+              <p class="text-sm font-medium text-highlighted">
+                有效權限
+              </p>
+              <span v-if="hasSuperAdmin" class="text-xs text-muted">系統管理員，全部放行</span>
+              <span v-else class="text-xs text-muted">
+                頁面 {{ permissionCounts.pages }}・細項 {{ permissionCounts.actions }}
+              </span>
+              <USwitch v-model="showAllPermissions" size="xs" label="顯示全部" class="ml-auto" />
+            </div>
+            <div class="rounded-lg border border-default p-3" :class="{ 'opacity-60': permissionLoading }">
+              <PermissionTree
+                v-if="permissionNodes.length"
+                :nodes="permissionNodes"
+                :selected="effectiveSelected"
+                :expanded="permissionExpanded"
+                :sources="permissionSources"
+                readonly
+                @toggle-expand="togglePermissionExpand"
+              />
+              <p v-else class="py-4 text-center text-sm text-muted">
+                {{ permissionLoading ? '讀取中…' : '沒有任何權限' }}
+              </p>
+            </div>
+            <p class="mt-1 text-xs text-muted">
+              依上方角色即時計算，改了角色還沒存檔也會反映；含所有人自動擁有的「全體使用者」。
+              名稱後面的標籤是給這個權限的角色（全體使用者不標）。
+            </p>
+          </div>
         </div>
       </template>
 

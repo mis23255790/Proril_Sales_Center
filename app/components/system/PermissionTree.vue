@@ -12,6 +12,9 @@
  * 停用節點（node.disabled，自己或祖先 aStatus = 'N'）照樣列出、標「停用」，checkbox disabled，
  * 原本的勾選照樣顯示；子孫也一併是 disabled（後端算的是「連同祖先」的有效狀態）。
  *
+ * readonly：只顯示、不能勾（人員管理抽屜看某人的有效權限用），勾選畫成圖示，不會整片變灰。
+ * sources：節點 key → 來源（例如是哪些角色給的），readonly 時接在名稱後面顯示成小標籤。
+ *
  * 元件自己遞迴呼叫自己（Nuxt 的 components 自動匯入支援自我參照）。
  */
 import type { PermissionTreeNode } from '~/types/system'
@@ -26,6 +29,8 @@ const props = defineProps<{
   disabled?: boolean
   /** 父節點已停用：子孫一樣是 disabled，但「停用」標籤只標在最上面那一層，不要整串都標。 */
   parentDisabled?: boolean
+  readonly?: boolean
+  sources?: Map<string, string[]>
 }>()
 
 const emit = defineEmits<{
@@ -55,8 +60,25 @@ const depth = computed(() => props.depth ?? 0)
         </button>
         <span v-else class="size-5 shrink-0" />
 
+        <span v-if="node.checkable && readonly" class="flex items-center gap-1.5 text-sm">
+          <UIcon
+            :name="selected.has(node.key) ? 'i-lucide-square-check' : 'i-lucide-square'"
+            class="size-4 shrink-0"
+            :class="selected.has(node.key) ? 'text-primary' : 'text-dimmed'"
+          />
+          <span :class="selected.has(node.key) ? 'text-default' : 'text-dimmed'">{{ node.label }}</span>
+          <UBadge
+            v-for="source in sources?.get(node.key) ?? []"
+            :key="source"
+            color="neutral"
+            variant="soft"
+            size="sm"
+          >
+            {{ source }}
+          </UBadge>
+        </span>
         <UCheckbox
-          v-if="node.checkable"
+          v-else-if="node.checkable"
           :model-value="selected.has(node.key)"
           :disabled="disabled || node.disabled"
           :label="node.label"
@@ -84,6 +106,8 @@ const depth = computed(() => props.depth ?? 0)
         :depth="depth + 1"
         :disabled="disabled"
         :parent-disabled="node.disabled"
+        :readonly="readonly"
+        :sources="sources"
         @toggle-select="emit('toggle-select', $event)"
         @toggle-expand="emit('toggle-expand', $event)"
       />

@@ -117,6 +117,17 @@ export const collectSelection = (nodes: PermissionTreeNode[], selected: Set<stri
   return [...withAncestors(nodes, active)].map(key => byKey.get(key)!.permissionKey!)
 }
 
+/** 樹上所有可勾的節點（頁面、細項）key，superAdmin 全放行時用。 */
+export const allCheckableKeys = (nodes: PermissionTreeNode[]) =>
+  new Set([...flattenTree(nodes).values()].filter(n => n.checkable).map(n => n.key))
+
+/** 只留下有勾的節點與通往它們的分支（模組／分組），沒有任何勾選的整枝拿掉。 */
+export const pruneTree = (nodes: PermissionTreeNode[], selected: Set<string>): PermissionTreeNode[] =>
+  nodes.flatMap((node) => {
+    const children = pruneTree(node.children, selected)
+    return selected.has(node.key) || children.length ? [{ ...node, children }] : []
+  })
+
 /** 勾到的節點的所有祖先，載入後自動展開用。 */
 export const expandedKeysFor = (nodes: PermissionTreeNode[], selected: Set<string>) => {
   const parents = buildParentMap(nodes)
