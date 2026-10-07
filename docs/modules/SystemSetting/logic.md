@@ -464,6 +464,8 @@ key（`module.function`）；列多個 key 時**任一個**有就放行；Action
     每個頁面帶 `accessible`）：淡化、加鎖頭 icon、不能點，讓使用者知道有這個功能、只是還沒開通。
     只 disable 頁面：Nuxt UI `NavigationMenu` 在 vertical 模式會把 disabled 節點的展開一起鎖住，
     模組／分組若 disable 就看不到底下的頁面。模組底下一個能進的頁面都沒有時拿掉模組連結（只展開）。
+  - **例外（2026-10-07 起）：系統管理模組（`system`）一個能進的頁面都沒有時，側欄整個不顯示**，
+    不列出 disabled 項目。清單在 `useAppNavigation.ts` 的 `HIDDEN_WHEN_NO_ACCESS_MODULES`（MODULE 節點的 PermissionKey）。
   - **首頁卡片、模組首頁仍依權限過濾**（`modules`）：分組底下一項都看不到就不顯示分組，
     模組底下一個分組都沒有就不顯示模組。
 - 停用（`aStatus = 'N'`）的節點與它底下的子樹後端就不會回（側欄呼叫 `GetRBACPermission`

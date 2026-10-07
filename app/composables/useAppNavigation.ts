@@ -26,6 +26,9 @@ export type AppNavModule = {
   }[]
 }
 
+/** 沒有任何可進頁面時，側欄整個模組不顯示（而不是 disable 列出），值是 MODULE 節點的 PermissionKey。 */
+const HIDDEN_WHEN_NO_ACCESS_MODULES = ['system']
+
 /**
  * 站台的根層級。
  *
@@ -191,6 +194,8 @@ export const useAppNavigation = () => {
    * 讓使用者知道有哪些功能、只是還沒開通。載入中回空陣列（同 modules，避免閃動）。
    * aStatus = 'N' 的節點後端本來就不回，那是「功能停用」不是「沒權限」，照樣不出現。
    * 沒有任何頁面的分組與模組照樣拿掉（那是資料還沒建好，不是權限問題）。
+   * 例外：HIDDEN_WHEN_NO_ACCESS_MODULES 裡的模組（系統管理）一個能進的頁面都沒有時整個不顯示，
+   * 一般使用者不需要知道有這些管理功能。
    */
   const sidebarModules = computed<(AppNavModule & { accessible: boolean })[]>(() => {
     if (isLoadingUserFunctions.value) return []
@@ -205,6 +210,7 @@ export const useAppNavigation = () => {
         return { ...mod, groups, accessible: groups.some(g => g.items.some(i => i.accessible)) }
       })
       .filter(mod => mod.groups.length > 0)
+      .filter(mod => mod.accessible || !HIDDEN_WHEN_NO_ACCESS_MODULES.includes(mod.permissionKey))
   })
 
   /**

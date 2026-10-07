@@ -95,6 +95,7 @@ const navbarTitle = computed(() => {
  * 模組／分組若 disable 就看不到底下的頁面了。模組底下一個能進的頁面都沒有時拿掉連結，
  * 點模組名稱只展開、不進模組首頁（那頁依權限過濾後會是空的）。
  * 模組與分組一律預設展開（2026-10-06 起），不再只展開目前所在的模組。
+ * 系統管理模組沒有任何權限時整個不顯示（2026-10-07 起，見 useAppNavigation 的 HIDDEN_WHEN_NO_ACCESS_MODULES）。
  */
 const items = computed<NavigationMenuItem[][]>(() => [
   [
