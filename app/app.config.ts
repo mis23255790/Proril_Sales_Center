@@ -6,10 +6,11 @@ export default defineAppConfig({
     },
     table: {
       slots: {
+        // 表頭內距縮小：Nuxt UI 預設 px-4 py-3.5，全站改 px-2 py-2。
         // 中文表頭在欄位被擠窄時會一字一行（例如「客戶名稱」直排成四行）。
-        // 表頭最少保留 2 個字寬（2em）+ 左右 padding（px-4 = 2rem），一行至少 2 字；
+        // 表頭最少保留 2 個字寬（2em）+ 左右 padding（px-2 = 1rem），一行至少 2 字；
         // 沒有文字的表頭（展開鈕、勾選框欄）不套用。
-        th: 'min-w-[calc(2em+2rem)] empty:min-w-0'
+        th: 'px-2 py-2 min-w-[calc(2em+1rem)] empty:min-w-0'
       }
     }
   }

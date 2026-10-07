@@ -623,7 +623,7 @@ const openGroupDetail = (row: CopSalesOrderRow) =>
         :data="pageRows"
         :columns="activeColumns"
         :loading="loading"
-        :ui="{ tr: isGroupTab ? clickableRowTr : '', th: 'px-2 py-2 whitespace-nowrap', td: 'whitespace-nowrap' }"
+        :ui="{ tr: isGroupTab ? clickableRowTr : '', th: 'whitespace-nowrap', td: 'whitespace-nowrap' }"
         @update:pagination="onPaginationUpdate"
         @select="(_e: Event, row: any) => isGroupTab && openGroupDetail(row.original)"
       >
