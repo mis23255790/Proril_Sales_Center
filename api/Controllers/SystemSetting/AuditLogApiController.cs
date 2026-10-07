@@ -29,6 +29,7 @@ public class AuditLogApiController(SalesCenterDbContext scDb, JwtHelper jwtHelpe
     /// <summary>
     /// 查詢稽核紀錄，新到舊，後端分頁。
     /// <paramref name="startDate"/>／<paramref name="endDate"/> 是台灣日期 yyyyMMdd（含迄日整天），不給就不限。
+    /// <paramref name="account"/> 比對修改者（Account）或對象（TargetId），任一相同即符合。
     /// <paramref name="keyword"/> 比對 TargetId 與 Detail（JSON 內容，例如角色名稱、權限 key）。
     /// <paramref name="pageSize"/> &lt;= 0 代表不分頁。Body2 = { totalCount }。
     /// </summary>
@@ -52,7 +53,8 @@ public class AuditLogApiController(SalesCenterDbContext scDb, JwtHelper jwtHelpe
         if (!string.IsNullOrWhiteSpace(account))
         {
             var trimmed = account.Trim();
-            query = query.Where(a => a.Account == trimmed);
+            // 帳號代表「修改者或對象」：操作者是他，或被異動的對象（TargetId，例如人員管理的帳號）是他
+            query = query.Where(a => a.Account == trimmed || a.TargetId == trimmed);
         }
         if (!string.IsNullOrWhiteSpace(action))
         {

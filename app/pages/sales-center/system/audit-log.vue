@@ -250,7 +250,7 @@ const currentJson = computed(() => {
             </div>
           </UFormField>
 
-          <UFormField label="帳號" size="sm">
+          <UFormField label="帳號" size="sm" hint="修改者或對象">
             <USelectMenu
               v-model="accountValue"
               :items="accountOptions"

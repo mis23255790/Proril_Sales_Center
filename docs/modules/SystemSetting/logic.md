@@ -670,7 +670,7 @@ key（`module.function`）；列多個 key 時**任一個**有就放行；Action
 PAGE `system.auditLog`（`/sales-center/system/audit-log`），後端 `Controllers/SystemSetting/AuditLogApiController.cs`
 （整支掛 `[RequirePermission]`，唯讀）。要看得到，得在權限管理把「稽核紀錄」勾進角色（superAdmin 全放行）。
 
-- 條件：日期起迄（台灣日期，預設最近 7 天）、帳號、動作、功能（稽核表裡出現過的 Target）、
+- 條件：日期起迄（台灣日期，預設最近 7 天）、帳號（修改者或對象：`Account` 或 `TargetId` 任一相同即符合）、動作、功能（稽核表裡出現過的 Target）、
   關鍵字（比對 `TargetId` 與 `Detail` JSON）。後端分頁、新到舊。
 - 時間：後端把 UTC 轉成台灣時間字串再回傳，日期條件也是先換算成 UTC 範圍再查。
 - 「內容」欄與明細視窗把 `Detail` JSON 整理成文字（`app/utils/auditLog.ts` 的 `auditDetailLines`）：
