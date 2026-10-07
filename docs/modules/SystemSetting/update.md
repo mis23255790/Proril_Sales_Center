@@ -1,4 +1,17 @@
 <details>
+  <summary>版號2026.10.07</summary>
+
+##### refactor: 刪除新庫已停用的表
+      資料庫：database/prod-migration-2026-10-07/drop-retired-tables.sql 刪除 Proril_Sales_Center 的
+        M_Function_bak_FunctionNo／M_Permission_bak_FunctionNo／M_PermissionGroup_bak_FunctionNo／
+        H_FileLink_bak_FunctionNo（FunctionNoFormatMigration.sql 的備份）與 M_PermissionGroup（角色制後不再使用）。
+        測試區 50002、正式區 51002 都已執行（2026-10-07）。1.0 PRORIL_WEB 的 M_PermissionGroup 不動。
+      後端：SalesCenterDbContext 拿掉上述表的對映與實體類別；scaffold-sales-center.ps1 排除清單同步。
+      database：M_PermissionGroup 移出 TABLES.txt，刪除 Tables/M_PermissionGroup.sql。
+
+</details>
+
+<details>
   <summary>版號2026.10.06</summary>
 
 ##### feat: 稽核紀錄查詢頁面

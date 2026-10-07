@@ -116,7 +116,7 @@
 > `api/Controllers/Shared/MainApiController.User.cs` / `.SystemSetting.cs`，
 > 改打 `SalesCenterDbContext` 讀寫。2026-09-23 權限再改成角色制，
 > 讀寫的是 `RBAC_Role`／`RBAC_RolePermission`／`RBAC_RoleUser`；
-> `M_Permission`／`M_PermissionGroup` 只剩備份，**應用層不讀不寫**，`M_User.IsAdmin` 也不再被讀。
+> `M_Permission` 只剩備份，**應用層不讀不寫**（`M_PermissionGroup` 2026-10-07 已從新庫刪除，見 `database/prod-migration-2026-10-07/drop-retired-tables.sql`），`M_User.IsAdmin` 也不再被讀。
 > **代價是 1.0 的人員管理／權限管理必須停用**——兩邊各改各的一定分岔。
 > 還沒搬的是「登入失敗自動鎖定」（要連 `H_Logins` 一起搬，屬登入流程），
 > 所以 1.0 鎖的是舊庫、2.0 讀的是新庫，鎖定狀態不互通；2.0 補了
@@ -131,7 +131,7 @@
 > 一併改讀 `SalesCenterDbContext`）、`CRM_CustomerMemo`（客戶情報，只有
 > `CustomQueryApiController.Memo.cs`）、`H_FileLink`（只有 `UploadApiController` 內的
 > `AddFileLog`）、權限控管（`M_User` + 角色制 3 張 `RBAC_Role`／`RBAC_RolePermission`／
-> `RBAC_RoleUser`；`M_Permission`／`M_PermissionGroup` 已降為備份表）。
+> `RBAC_RoleUser`；`M_Permission` 已降為備份表，`M_PermissionGroup` 已刪除）。
 > 訂單資料檢核（`COP_PoCheck`/`COP_PoDetailCheck`/`COP_PassCheck`/`COP_AvailableAmt`/
 > `COP_ProductCheck` + `COP_CheckRule`/`COP_DepData` + 7 View / 5 SP / 1 函式）
 > `api/` 已改打新庫（`OrderInfoVerifyApiController` 用 `scDb` 讀 View、執行

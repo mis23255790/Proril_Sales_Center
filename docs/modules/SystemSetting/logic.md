@@ -34,9 +34,9 @@
 | `RBAC_RolePermission` | 角色有哪些 PermissionKey，唯一鍵 `(RoleID, PermissionKey)`，FK 到 `RBAC_Role` 與 `RBAC_Permission` | `Proril_Sales_Center`（讀寫，2.0 新表） |
 | `RBAC_RoleUser` | 帳號掛哪些角色，唯一鍵 `(Account, RoleID)` | `Proril_Sales_Center`（讀寫，2.0 新表） |
 | `M_System` | 系統別。**2026-09-24 起不再組權限樹與側欄**，只剩 topbar 環境圖示（`GetMSystemWNo`，2026-10-07 起讀 SystemNo 0 的 `ImagePath`，正式區／測試區各自存不同圖檔）在讀 | `Proril_Sales_Center`（唯讀，**只有 3 列**） |
-| `M_Function` | 功能。**2026-09-24 起權限樹與側欄都不再讀它**，`api/` 已拿掉對映（`SalesCenterDbContext` 沒有 `MFunctions`，`scaffold-sales-center.ps1` 也排除它與 `M_Function_bak_FunctionNo`）。**2.0 新增功能不用寫它** | `Proril_Sales_Center`（不再使用，**只有 9 列**，`0000103` 已設 `aStatus = 'N'`） |
+| `M_Function` | 功能。**2026-09-24 起權限樹與側欄都不再讀它**，`api/` 已拿掉對映（`SalesCenterDbContext` 沒有 `MFunctions`，`scaffold-sales-center.ps1` 也排除它與 `M_Function_bak_FunctionNo`；該備份表 2026-10-07 起以 `database/prod-migration-2026-10-07/drop-retired-tables.sql` 刪除，同批也刪了 `M_Permission_bak_FunctionNo`／`M_PermissionGroup_bak_FunctionNo`／`H_FileLink_bak_FunctionNo` 與 `M_PermissionGroup`，`SalesCenterDbContext` 一併拿掉對映）。**2.0 新增功能不用寫它** | `Proril_Sales_Center`（不再使用，**只有 9 列**，`0000103` 已設 `aStatus = 'N'`） |
 | `M_Permission` | 1.0 的個人權限。**只剩備份用途，`api/` 不讀不寫** | `Proril_Sales_Center`（備份） |
-| `M_PermissionGroup` | 1.0 的部門預設功能範本。**只剩備份用途，`api/` 不讀不寫** | `Proril_Sales_Center`（備份） |
+| `M_PermissionGroup` | 1.0 的部門預設功能範本。角色制後不再使用，**2026-10-07 已從 `Proril_Sales_Center` 刪除**（`database/prod-migration-2026-10-07/drop-retired-tables.sql`），`SalesCenterDbContext` 對映、`TABLES.txt`、`Tables/M_PermissionGroup.sql` 一併拿掉 | 已刪除（1.0 `PRORIL_WEB` 那張仍在用，不動） |
 | `M_PermissionLinkType` | 1.0 的細項主檔。**權限樹已不再用它**，`RBAC_Permission` 也不再對回它 | `Proril_Sales_Center`（不再使用） |
 | `M_Department` | 1.0 的部門／群組主檔。**權限已不再用它**（原本是群組範本的下拉來源） | `PRORIL_WEB`（權限相關無讀取） |
 
@@ -393,7 +393,7 @@ PAGE 也可以直接掛在 MODULE 底下（沒有分組）。原本最上層的 
 - 群組下拉的 `GetDepartmentList`，以及已經不組樹的 `GetPermissionLinkType` / `GetMPermissionLinkType`。
 
 部門範本在角色制底下沒有對應概念：一個角色本身就是一組可重複套用的權限。
-`M_PermissionGroup` 的資料**沒有轉成角色**（見「資料轉換」），留在表裡當備份。
+`M_PermissionGroup` 的資料**沒有轉成角色**（見「資料轉換」），原本留在表裡當備份，2026-10-07 已連表刪除。
 
 ## 後端功能把關（`RequirePermissionAttribute`）
 
@@ -613,7 +613,7 @@ key（`module.function`）；列多個 key 時**任一個**有就放行；Action
 角色權限從 36 筆變成 72 筆；驗證改成把舊的 `xxx.view` 換算成新 key、只比 PAGE / ACTION 節點，
 對稱差仍是 0 筆。
 
-`M_Permission` / `M_PermissionGroup` **不刪、不改**，留作備份，`api/` 之後不再讀寫它們。
+`M_Permission` / `M_PermissionGroup` **不刪、不改**，留作備份，`api/` 之後不再讀寫它們。（`M_PermissionGroup` 2026-10-07 已刪除，見 `database/prod-migration-2026-10-07/drop-retired-tables.sql`。）
 
 ## 上線注意事項
 

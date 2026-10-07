@@ -66,17 +66,9 @@ public partial class SalesCenterDbContext : DbContext
 
     public virtual DbSet<HFileLink> HFileLinks { get; set; }
 
-    public virtual DbSet<HFileLinkBakFunctionNo> HFileLinkBakFunctionNos { get; set; }
-
     public virtual DbSet<MDepartment> MDepartments { get; set; }
 
     public virtual DbSet<MPermission> MPermissions { get; set; }
-
-    public virtual DbSet<MPermissionBakFunctionNo> MPermissionBakFunctionNos { get; set; }
-
-    public virtual DbSet<MPermissionGroup> MPermissionGroups { get; set; }
-
-    public virtual DbSet<MPermissionGroupBakFunctionNo> MPermissionGroupBakFunctionNos { get; set; }
 
     public virtual DbSet<MPermissionLinkType> MPermissionLinkTypes { get; set; }
 
@@ -986,30 +978,6 @@ public partial class SalesCenterDbContext : DbContext
                 .IsUnicode(false);
         });
 
-        modelBuilder.Entity<HFileLinkBakFunctionNo>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToTable("H_FileLink_bak_FunctionNo");
-
-            entity.Property(e => e.FilePath)
-                .HasMaxLength(100)
-                .IsUnicode(false);
-            entity.Property(e => e.FileType)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.Id)
-                .ValueGeneratedOnAdd()
-                .HasColumnName("ID");
-            entity.Property(e => e.LinkNo)
-                .HasMaxLength(40)
-                .IsUnicode(false);
-            entity.Property(e => e.UpdateTime).HasColumnType("datetime");
-            entity.Property(e => e.UpdateUser)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-        });
-
         modelBuilder.Entity<MDepartment>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__M_Depart__3214EC2799095914");
@@ -1059,87 +1027,6 @@ public partial class SalesCenterDbContext : DbContext
             entity.Property(e => e.PermissionKey)
                 .HasMaxLength(100)
                 .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<MPermissionBakFunctionNo>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToTable("M_Permission_bak_FunctionNo");
-
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-            entity.Property(e => e.Creator)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.Id)
-                .ValueGeneratedOnAdd()
-                .HasColumnName("ID");
-            entity.Property(e => e.LinkNumber)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.ModiTime).HasColumnType("datetime");
-            entity.Property(e => e.Modifier)
-                .HasMaxLength(40)
-                .IsUnicode(false);
-            entity.Property(e => e.PermissionLinkTypeId).HasColumnName("PermissionLinkTypeID");
-        });
-
-        modelBuilder.Entity<MPermissionGroup>(entity =>
-        {
-            entity.ToTable("M_PermissionGroup");
-
-            entity.Property(e => e.Id).HasColumnName("ID");
-            entity.Property(e => e.AStatus)
-                .HasMaxLength(1)
-                .IsUnicode(false)
-                .HasColumnName("aStatus");
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-            entity.Property(e => e.Creator)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.FunctionNo)
-                .HasMaxLength(8)
-                .IsUnicode(false);
-            entity.Property(e => e.GroupDesc).HasMaxLength(50);
-            entity.Property(e => e.GroupNo)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.ModiTime).HasColumnType("datetime");
-            entity.Property(e => e.Modifier)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.TypeDesc).HasMaxLength(50);
-            entity.Property(e => e.PermissionKey)
-                .HasMaxLength(100)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<MPermissionGroupBakFunctionNo>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToTable("M_PermissionGroup_bak_FunctionNo");
-
-            entity.Property(e => e.AStatus)
-                .HasMaxLength(1)
-                .IsUnicode(false)
-                .HasColumnName("aStatus");
-            entity.Property(e => e.CreateTime).HasColumnType("datetime");
-            entity.Property(e => e.Creator)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.GroupDesc).HasMaxLength(50);
-            entity.Property(e => e.GroupNo)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.Id)
-                .ValueGeneratedOnAdd()
-                .HasColumnName("ID");
-            entity.Property(e => e.ModiTime).HasColumnType("datetime");
-            entity.Property(e => e.Modifier)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.TypeDesc).HasMaxLength(50);
         });
 
         modelBuilder.Entity<MPermissionLinkType>(entity =>

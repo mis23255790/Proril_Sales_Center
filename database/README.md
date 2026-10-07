@@ -33,7 +33,7 @@
 共 22 張。
 
 權限控管那 7 張要分三種看（見 `PortingNotes.md`「權限控管搬遷」段落）：
-- **已切連線、`api/` 會寫**：`M_User`、`M_Permission`、`M_PermissionGroup`
+- **已切連線、`api/` 會寫**：`M_User`、`M_Permission`（`M_PermissionGroup` 2026-10-07 已從新庫刪除、移出白名單）
 - **已切連線、`api/` 唯讀，而且新庫只保留部分資料列**：`M_System`、`M_Function`、
   `M_PermissionLinkType`。只收 2.0 真的有頁面的 3 個系統別 + 8 個功能（及其 4 列細項），
   由 `PermissionMasterSeed.sql` / `FunctionNoFormatMigration.sql` 維護，

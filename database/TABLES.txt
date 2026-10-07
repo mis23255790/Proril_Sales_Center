@@ -37,7 +37,8 @@ H_FileLink
 # 這三張表在 api/ 已改打 SalesCenterDbContext 讀寫，見 PortingNotes.md「權限控管搬遷」。
 M_User
 M_Permission
-M_PermissionGroup
+# M_PermissionGroup：2026-10-07 已從 Proril_Sales_Center 刪除（角色制後不再使用），
+# 移出白名單，copy-snapshot-data.ps1 不再搬它。1.0 PRORIL_WEB 那張不受影響。
 
 # 功能主檔。api/ 已切到 Proril_Sales_Center 讀（權限樹第一、二層 + 側欄 + topbar 環境圖示），
 # 但**資料只保留 2.0 真的有頁面的那幾列**（3 個系統別 + 8 個功能），不是整份複製——

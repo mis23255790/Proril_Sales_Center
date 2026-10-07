@@ -79,11 +79,13 @@ try {
 
     # 刻意不對映的表：2.0 已不讀，對映留著只會讓人以為還要維護它。
     # M_Function 在 2026-09-24 權限樹改由 RBAC_Permission 驅動後就沒有人讀，連同它的備份表一起排除。
-    $retiredTables = @('M_Function', 'M_Function_bak_FunctionNo')
+    # _bak_FunctionNo 備份表與 M_PermissionGroup 2026-10-07 已刪（prod-migration-2026-10-07），還沒刪的環境也不要對映回來。
+    $retiredTables = @('M_Function', 'M_Function_bak_FunctionNo', 'M_Permission_bak_FunctionNo',
+        'M_PermissionGroup_bak_FunctionNo', 'H_FileLink_bak_FunctionNo', 'M_PermissionGroup')
     $allTables = $allTables | Where-Object { $retiredTables -notcontains $_ }
     Write-Host "不對映（已廢棄）: $($retiredTables -join ', ')" -ForegroundColor DarkGray
 
-    $authTables = @('M_User', 'M_Permission', 'M_PermissionGroup')
+    $authTables = @('M_User', 'M_Permission')
     $targetTables = if ($ExcludeAuthTables) {
         $allTables | Where-Object { $authTables -notcontains $_ }
     }
@@ -98,7 +100,7 @@ try {
         }
     }
     else {
-        Write-Host "M_User/M_Permission/M_PermissionGroup 會被納入 SalesCenterDbContext（2026 權限控管搬遷的預設）。" -ForegroundColor Cyan
+        Write-Host "M_User/M_Permission 會被納入 SalesCenterDbContext（2026 權限控管搬遷的預設）。" -ForegroundColor Cyan
         Write-Host "前提是 1.0 站台的人員管理／權限管理已經停用，否則兩邊帳號權限會分岔。" -ForegroundColor Cyan
     }
 

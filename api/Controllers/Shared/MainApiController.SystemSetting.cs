@@ -17,7 +17,7 @@ namespace Proril.SalesIssue.Api.Controllers.Shared;
 ///
 /// 權限樹是 RBAC_Permission 單一表自我參照（MODULE → GROUP → PAGE → ACTION，ParentKey 指父節點），
 /// 側欄與權限管理的樹都從它長；勾選結果寫進角色。M_System 不再用來組樹，M_Function 已不對映，
-/// M_Permission / M_PermissionGroup 是備份表，應用層不讀不寫，見 database/RbacObjectsMigration.sql。
+/// M_Permission 是備份表，應用層不讀不寫，見 database/RbacObjectsMigration.sql；M_PermissionGroup 2026-10-07 已刪除。
 /// 節點停用（自己或祖先 aStatus = 'N'）：側欄與權限判斷當作失效；權限管理的樹照樣列出但 disabled，
 /// 角色原本勾的權限列保留（SaveRole 不會刪），節點重新啟用就恢復。
 ///
