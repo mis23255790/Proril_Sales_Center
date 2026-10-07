@@ -128,9 +128,11 @@ const items = computed<NavigationMenuItem[][]>(() => [
       :max-size="26"
       :default-size="18"
       :collapsed-size="4"
+      :ui="{ header: 'h-10 px-2' }"
     >
       <template #header="{ collapsed: isCollapsed }">
-        <div class="flex w-full justify-center">
+        <!-- header 跟右側 UDashboardNavbar 同高（h-10），LOGO 在這裡縮成 h-8；登入頁的 AppLogo 不受影響 -->
+        <div class="flex w-full justify-center [&_img]:h-8 [&_img]:w-auto">
           <AppLogo :collapsed="isCollapsed" />
         </div>
       </template>
@@ -176,20 +178,20 @@ const items = computed<NavigationMenuItem[][]>(() => [
       </template>
     </UDashboardSidebar>
 
-    <UDashboardPanel :ui="{ body: 'bg-white dark:bg-white min-h-0 p-4 sm:p-4' }">
+    <UDashboardPanel :ui="{ body: 'bg-white dark:bg-white min-h-0 p-3 sm:p-3' }">
       <template #header>
-        <UDashboardNavbar :title="navbarTitle" :ui="{ root: 'h-12 bg-white dark:bg-white' }">
+        <UDashboardNavbar :title="navbarTitle" :ui="{ root: 'h-10 px-3 sm:px-3 bg-white dark:bg-white' }">
           <template #leading>
             <UDashboardSidebarCollapse />
           </template>
 
           <template #right>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
               <img
                 v-if="systemImageUrl"
                 :src="systemImageUrl"
-                width="30"
-                height="30"
+                width="24"
+                height="24"
                 class="opacity-50"
                 alt=""
               >
@@ -198,6 +200,7 @@ const items = computed<NavigationMenuItem[][]>(() => [
                 <UButton
                   color="neutral"
                   variant="ghost"
+                  size="sm"
                   trailing-icon="i-lucide-chevron-down"
                   class="text-sm text-gray-600 dark:text-gray-300"
                 >
