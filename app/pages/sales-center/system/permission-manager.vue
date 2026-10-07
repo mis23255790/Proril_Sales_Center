@@ -3,7 +3,7 @@
  * 權限管理（角色制，RBAC）。取代 1.0 系統設定 / 權限管理的「逐人勾權限」。
  *
  * 角色清單點一列，從右邊滑出編輯抽屜：
- *   - 基本資料：代碼、名稱、說明
+ *   - 基本資料：代碼、名稱（2026-10-07 起畫面不顯示「說明」；form.description 仍照載入值回存，DB 既有內容不會被清掉）
  *   - 權限：樹上勾這個角色可用的功能與細項（存到 RBAC_RolePermission）
  *   - 成員：哪些帳號掛這個角色（存到 RBAC_RoleUser）
  * 一個人的有效權限 = 他所有角色的聯集 ∪ everyone，不做個人例外。
@@ -387,9 +387,6 @@ const drawerOpen = computed({
             </UFormField>
             <UFormField label="角色名稱" required>
               <ClearInput v-model="form.roleName" class="w-full" placeholder="例如 業務助理" />
-            </UFormField>
-            <UFormField label="說明" class="sm:col-span-2">
-              <ClearInput v-model="form.description" class="w-full" />
             </UFormField>
           </div>
 
