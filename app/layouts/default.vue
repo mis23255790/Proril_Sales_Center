@@ -54,7 +54,7 @@ const systemImageUrl = computed(() => {
 })
 onMounted(async () => {
   try {
-    const res = await getSystemByNo(WORK_PROCESS_SYSTEM_NO)
+    const res = await getSystemByNo(ENV_ICON_SYSTEM_NO)
     systemImagePath.value = res?.body?.[0]?.imagePath || null
   } catch (err) {
     console.log('load system image failed -->', err)

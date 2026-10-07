@@ -33,7 +33,7 @@
 | `RBAC_Role` | 角色：代碼、名稱、說明、`IsSystem` / `IsSuperAdmin` / `IsDefault` 旗標 | `Proril_Sales_Center`（讀寫，2.0 新表） |
 | `RBAC_RolePermission` | 角色有哪些 PermissionKey，唯一鍵 `(RoleID, PermissionKey)`，FK 到 `RBAC_Role` 與 `RBAC_Permission` | `Proril_Sales_Center`（讀寫，2.0 新表） |
 | `RBAC_RoleUser` | 帳號掛哪些角色，唯一鍵 `(Account, RoleID)` | `Proril_Sales_Center`（讀寫，2.0 新表） |
-| `M_System` | 系統別。**2026-09-24 起不再組權限樹與側欄**，只剩 topbar 環境圖示（`GetMSystemWNo`）在讀 | `Proril_Sales_Center`（唯讀，**只有 3 列**） |
+| `M_System` | 系統別。**2026-09-24 起不再組權限樹與側欄**，只剩 topbar 環境圖示（`GetMSystemWNo`，2026-10-07 起讀 SystemNo 0 的 `ImagePath`，正式區／測試區各自存不同圖檔）在讀 | `Proril_Sales_Center`（唯讀，**只有 3 列**） |
 | `M_Function` | 功能。**2026-09-24 起權限樹與側欄都不再讀它**，`api/` 已拿掉對映（`SalesCenterDbContext` 沒有 `MFunctions`，`scaffold-sales-center.ps1` 也排除它與 `M_Function_bak_FunctionNo`）。**2.0 新增功能不用寫它** | `Proril_Sales_Center`（不再使用，**只有 9 列**，`0000103` 已設 `aStatus = 'N'`） |
 | `M_Permission` | 1.0 的個人權限。**只剩備份用途，`api/` 不讀不寫** | `Proril_Sales_Center`（備份） |
 | `M_PermissionGroup` | 1.0 的部門預設功能範本。**只剩備份用途，`api/` 不讀不寫** | `Proril_Sales_Center`（備份） |
