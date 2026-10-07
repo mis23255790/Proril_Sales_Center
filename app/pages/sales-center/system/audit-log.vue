@@ -160,7 +160,6 @@ onMounted(async () => {
 const detailText = (row: AuditLogRow) => auditDetailLines(row.action, row.detail, permissionLabel).join('；')
 
 const columns: TableColumn<AuditLogRow>[] = [
-  { accessorKey: 'logTime', header: '時間' },
   {
     id: 'account',
     header: '帳號',
@@ -185,6 +184,7 @@ const columns: TableColumn<AuditLogRow>[] = [
     meta: { class: { td: 'max-w-md' } },
     cell: ({ row }) => h('span', { class: 'block truncate', title: detailText(row.original) }, detailText(row.original))
   },
+  { accessorKey: 'logTime', header: '時間' },
   { accessorKey: 'clientIp', header: 'IP' }
 ]
 
