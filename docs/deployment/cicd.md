@@ -291,7 +291,9 @@ Log volume（`proril-sales-center-{dev,prod}-logs`）不是 external，compose �
 | 看執行紀錄 | https://github.com/mis23255790/Proril_Sales_Center/actions |
 | 看容器 log | `docker logs --tail=100 proril_sales_center_dev_api` |
 | 確認 env 有注入 | `docker exec proril_sales_center_dev_api printenv ConnectionStrings__SalesCenter` |
-| 確認 runner 看得到 secrets | `docker exec proril-sales-center-runner ls /secrets/dev` |
+| 找 runner 容器名 | `docker ps --filter "name=proril-sales-center-runner" --format "{{.Names}}"`（沒設 container_name，預期是 `github-runner-proril-sales-center-runner-1`） |
+| 確認 runner 看得到 secrets | `docker exec github-runner-proril-sales-center-runner-1 ls /secrets/dev` |
+| 看 checkout 下來的程式碼 | `docker exec github-runner-proril-sales-center-runner-1 ls /runner-data/proril-sales-center/Proril_Sales_Center/Proril_Sales_Center` |
 | 看磁碟用量 | `docker system df` |
 | 清 build cache（workflow 沒清，會累積） | `docker builder prune -f --filter until=168h` |
 
