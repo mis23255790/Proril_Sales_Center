@@ -20,12 +20,7 @@ export default defineNuxtConfig({
     enabled: true
   },
 
-  // 分頁圖示用 LOGO 的橘色斜紋（public/favicon.svg），取代 Nuxt 預設的 favicon.ico
-  app: {
-    head: {
-      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]
-    }
-  },
+  // 分頁圖示在 app.vue 依 runtimeConfig.public.favicon 設定（測試區可換圖），這裡不寫死
 
   css: ['~/assets/css/main.css'],
 
@@ -52,6 +47,8 @@ export default defineNuxtConfig({
       blockRobots: process.env.NUXT_PUBLIC_BLOCK_ROBOTS === 'true',
       devToken: process.env.NUXT_PUBLIC_DEV_TOKEN || '',
       showWatermark: process.env.NUXT_PUBLIC_SHOW_WATERMARK === 'true',
+      // 分頁圖示（public/ 下的路徑）。預設 LOGO 橘色斜紋；測試區設 /favicon-test.jpg 跟正式區區分
+      favicon: process.env.NUXT_PUBLIC_FAVICON || '/favicon.svg',
 
       // PRORIL 通行證 SSO，見 https://oauth.proril.com/docs
       oauthClientId: process.env.NUXT_PUBLIC_OAUTH_CLIENT_ID || '',
