@@ -53,14 +53,12 @@ const effectiveCustomerNo = computed(() =>
 const effectiveErpCustomerNo = computed(() =>
   (customer.value?.erpcustomerNo ?? '').trim() || queryErpCustomerNo.value)
 
-/** 頂部導覽列顯示客戶名稱，見下方 usePageHeading。 */
+/** 頁面上方顯示的客戶編號＋簡稱；頂部導覽列維持頁名「客戶相關資訊」（definePageMeta）。 */
 const displayTitle = computed(() => {
   const name = customer.value?.shortName || erpCustomer.value?.ma002 || ''
   const no = effectiveCustomerNo.value || effectiveErpCustomerNo.value || '（未指定客戶）'
   return name ? `${no}\u3000${name}` : no
 })
-
-usePageHeading(displayTitle)
 
 const creditCurrency = computed(() => credits.value[0]?.幣別 ?? '')
 
@@ -310,11 +308,16 @@ const openIssue = (row: CustomerWorkProcessRow) => {
 
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/customer'), '客戶相關資訊')" class="mb-4" />
 
-    <!-- 客戶名稱顯示在頂部導覽列（usePageHeading），這裡留全名與返回按鈕 -->
+    <!-- 客戶編號＋簡稱、全名與返回按鈕 -->
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <p class="text-sm text-muted">
-        {{ customer?.longName || erpCustomer?.ma003 || '\u3000' }}
-      </p>
+      <div class="min-w-0">
+        <p class="truncate font-semibold text-highlighted">
+          {{ displayTitle }}
+        </p>
+        <p class="truncate text-sm text-muted">
+          {{ customer?.longName || erpCustomer?.ma003 || '\u3000' }}
+        </p>
+      </div>
       <UButton
         icon="i-lucide-arrow-left"
         color="neutral"
