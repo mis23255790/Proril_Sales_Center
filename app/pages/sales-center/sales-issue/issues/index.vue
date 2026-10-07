@@ -8,6 +8,9 @@ definePageMeta({ title: '議題維護' })
 
 useSeoMeta({ title: '議題維護 · PRORIL 業務中心' })
 
+/** 查詢條件區塊展開／收合（見 useFiltersOpen） */
+const filtersOpen = useFiltersOpen('sales-issue')
+
 const api = useSalesIssueApi()
 const toast = useToast()
 const overlay = useOverlay()
@@ -257,10 +260,13 @@ const removeIssue = async (row: SalesIssueRow) => {
     <!-- 查詢條件 -->
     <div class="mb-4 rounded-lg border border-default bg-elevated/40 p-4">
       <!-- 操作列放在查詢區塊最上方（欄位已排滿整列，沒有空位跟欄位同一行） -->
-      <div class="mb-3 flex items-center justify-between gap-2">
-        <p class="text-xs text-muted">
-          所有查詢條件都會重新向後端查詢；三個狀態頁籤的筆數也是後端算好的。
-        </p>
+      <div class="flex items-center justify-between gap-2" :class="{ 'mb-3': filtersOpen }">
+        <div class="flex items-center gap-2">
+          <FilterToggleButton v-model="filtersOpen" />
+          <p class="text-xs text-muted">
+            所有查詢條件都會重新向後端查詢；三個狀態頁籤的筆數也是後端算好的。
+          </p>
+        </div>
         <div class="flex items-center gap-2">
           <UButton
             v-if="activeFilterCount > 0"
@@ -278,7 +284,7 @@ const removeIssue = async (row: SalesIssueRow) => {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div v-show="filtersOpen" class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UFormField label="類別" size="sm">
           <USelectMenu
             v-model="categorySelectValue"

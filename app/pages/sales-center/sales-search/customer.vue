@@ -7,6 +7,9 @@ definePageMeta({ title: '客戶檢索' })
 
 useSeoMeta({ title: '客戶檢索 · PRORIL 業務中心' })
 
+/** 查詢條件區塊展開／收合（見 useFiltersOpen） */
+const filtersOpen = useFiltersOpen('customer')
+
 const api = useCustomerApi()
 const toast = useToast()
 const { breadcrumbFor, appPath } = useAppNavigation()
@@ -327,7 +330,8 @@ const onSave = async () => {
     <!-- 查詢條件 -->
     <!-- 重設／查詢跟欄位同一行（靠右、對齊輸入框），不另外佔一列；畫面窄時才換行 -->
     <div class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-default bg-elevated/40 p-4">
-      <div class="grid min-w-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <FilterToggleButton v-model="filtersOpen" />
+      <div v-show="filtersOpen" class="grid min-w-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UFormField label="內網客戶代碼" size="sm">
           <USelectMenu
             v-model="customerNoSelectValue"

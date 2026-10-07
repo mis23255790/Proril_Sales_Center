@@ -15,6 +15,9 @@ definePageMeta({ title: '未完成訂單檢索' })
 
 useSeoMeta({ title: '未完成訂單檢索 · PRORIL 業務中心' })
 
+/** 查詢條件區塊展開／收合（見 useFiltersOpen） */
+const filtersOpen = useFiltersOpen('unfinished-orders')
+
 const api = useSalesOrderUnfinishApi()
 const { checkPermission } = usePermission()
 const toast = useToast()
@@ -522,14 +525,17 @@ const openGroupDetail = (row: UnfinOrderRow) =>
     <!-- 查詢條件 -->
     <div class="mb-4 rounded-lg border border-default bg-elevated/40 px-3 py-2.5">
       <!-- 操作列放在查詢區塊最上方（欄位已排滿整列，沒有空位跟欄位同一行） -->
-      <div class="mb-2 flex items-center justify-between gap-2">
-        <p v-if="showAmount" class="text-sm">
-          總金額 NT
-          <span class="font-semibold text-highlighted">{{ formatAmount(summary.totalAmount) || '0' }}</span>
-        </p>
-        <p v-else class="text-xs text-muted">
-          無金額欄位檢視權限
-        </p>
+      <div class="flex items-center justify-between gap-2" :class="{ 'mb-2': filtersOpen }">
+        <div class="flex items-center gap-2">
+          <FilterToggleButton v-model="filtersOpen" />
+          <p v-if="showAmount" class="text-sm">
+            總金額 NT
+            <span class="font-semibold text-highlighted">{{ formatAmount(summary.totalAmount) || '0' }}</span>
+          </p>
+          <p v-else class="text-xs text-muted">
+            無金額欄位檢視權限
+          </p>
+        </div>
         <div class="flex items-center gap-2">
           <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
             重設
@@ -543,7 +549,7 @@ const openGroupDetail = (row: UnfinOrderRow) =>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-x-3 gap-y-1.5 md:grid-cols-2 xl:grid-cols-5">
+      <div v-show="filtersOpen" class="grid grid-cols-1 gap-x-3 gap-y-1.5 md:grid-cols-2 xl:grid-cols-5">
         <UFormField label="客戶別" size="xs" :ui="FIELD_UI">
           <USelectMenu
             v-model="customerNoSelectValue"

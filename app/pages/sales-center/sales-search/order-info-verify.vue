@@ -9,6 +9,9 @@ definePageMeta({ title: '訂單資料檢核' })
 
 useSeoMeta({ title: '訂單資料檢核 · PRORIL 業務中心' })
 
+/** 查詢條件區塊展開／收合（見 useFiltersOpen） */
+const filtersOpen = useFiltersOpen('order-info-verify')
+
 const api = useOrderInfoVerifyApi()
 const { checkPermission } = usePermission()
 const toast = useToast()
@@ -351,16 +354,19 @@ const loadConditions = async () => {
     <!-- 查詢條件 -->
     <div class="mb-4 rounded-lg border border-default bg-elevated/40 p-4">
       <!-- 操作列放在查詢區塊最上方（欄位已排滿整列，沒有空位跟欄位同一行） -->
-      <div class="mb-3 flex items-center justify-end gap-2">
-        <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
-          重設
-        </UButton>
-        <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
-          查詢
-        </UButton>
+      <div class="flex items-center justify-between gap-2" :class="{ 'mb-3': filtersOpen }">
+        <FilterToggleButton v-model="filtersOpen" />
+        <div class="flex items-center gap-2">
+          <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
+            重設
+          </UButton>
+          <UButton icon="i-lucide-search" size="sm" :loading="loading" @click="search">
+            查詢
+          </UButton>
+        </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div v-show="filtersOpen" class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <UFormField label="訂單單別" size="sm">
           <ClearInput v-model="filters.orderType" placeholder="訂單單別" class="w-full" @keyup.enter="search" />
         </UFormField>

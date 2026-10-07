@@ -12,6 +12,9 @@ import type { UserListItem } from '~/types/system'
 
 useSeoMeta({ title: '稽核紀錄 · 系統管理 · PRORIL 業務中心' })
 
+/** 查詢條件區塊展開／收合（見 useFiltersOpen） */
+const filtersOpen = useFiltersOpen('audit-log')
+
 const PAGE_KEY = PERMISSION_KEYS.system.auditLog
 
 const api = useAuditLogApi()
@@ -227,10 +230,13 @@ const currentJson = computed(() => {
       <!-- 查詢條件 -->
       <div class="mb-4 rounded-lg border border-default bg-elevated/40 p-4">
         <!-- 操作列放在查詢區塊最上方，比照其他查詢畫面 -->
-        <div class="mb-3 flex items-center justify-between gap-2">
-          <p class="text-xs text-muted">
-            保留一年；時間為台灣時間。
-          </p>
+        <div class="flex items-center justify-between gap-2" :class="{ 'mb-3': filtersOpen }">
+          <div class="flex items-center gap-2">
+            <FilterToggleButton v-model="filtersOpen" />
+            <p class="text-xs text-muted">
+              保留一年；時間為台灣時間。
+            </p>
+          </div>
           <div class="flex items-center gap-2">
             <UButton icon="i-lucide-rotate-cw" color="neutral" variant="outline" size="sm" @click="onClickReset">
               重設
@@ -241,7 +247,7 @@ const currentJson = computed(() => {
           </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div v-show="filtersOpen" class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
           <UFormField label="日期（起~迄）" size="sm" class="md:col-span-2">
             <div class="flex items-center gap-2">
               <UInput v-model="filters.startDate" type="date" class="w-full" />

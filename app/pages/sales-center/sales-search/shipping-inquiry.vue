@@ -33,6 +33,9 @@ const loading = ref(false)
 // 不整頁遮罩，改用整頁 wait cursor 提示載入中。
 useWaitCursor(loading)
 const exporting = ref(false)
+
+/** 查詢條件區塊展開／收合（見 useFiltersOpen） */
+const filtersOpen = useFiltersOpen('shipping-inquiry')
 const showAmount = ref(false)
 const customers = ref<SalesShippingCustomer[]>([])
 
@@ -502,16 +505,19 @@ const openGroupDetail = (row: CopSalesOrderRow) =>
     <UBreadcrumb v-if="false" :items="breadcrumbFor(appPath('sales-search/shipping-inquiry'))" class="mb-4" />
 
     <!-- 查詢條件 -->
-    <div class="mb-4 rounded-lg border border-default bg-elevated/40 p-4">
+    <div class="mb-3 rounded-lg border border-default bg-elevated/40 p-3">
       <!-- 操作列放在查詢區塊最上方（欄位已排滿整列，沒有空位跟欄位同一行） -->
-      <div class="mb-3 flex items-center justify-between gap-2">
-        <p v-if="showAmount" class="text-sm">
-          總金額 NT
-          <span class="font-semibold text-highlighted">{{ formatAmount(summary.totalAmount) || '0' }}</span>
-        </p>
-        <p v-else class="text-xs text-muted">
-          無金額欄位檢視權限
-        </p>
+      <div class="flex items-center justify-between gap-2" :class="{ 'mb-2': filtersOpen }">
+        <div class="flex items-center gap-2">
+          <FilterToggleButton v-model="filtersOpen" />
+          <p v-if="showAmount" class="text-sm">
+            總金額 NT
+            <span class="font-semibold text-highlighted">{{ formatAmount(summary.totalAmount) || '0' }}</span>
+          </p>
+          <p v-else class="text-xs text-muted">
+            無金額欄位檢視權限
+          </p>
+        </div>
         <div class="flex items-center gap-2">
           <UButton icon="i-lucide-list-x" color="neutral" variant="outline" size="sm" @click="onClickAll">
             全部
@@ -528,8 +534,8 @@ const openGroupDetail = (row: CopSalesOrderRow) =>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <UFormField label="客戶別" size="sm">
+      <div v-show="filtersOpen" class="grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-2 xl:grid-cols-5">
+        <UFormField :ui="{ container: 'mt-0.5' }" label="客戶別" size="sm">
           <USelectMenu
             v-model="customerNoSelectValue"
             :items="customerOptions"
@@ -540,49 +546,49 @@ const openGroupDetail = (row: CopSalesOrderRow) =>
           />
         </UFormField>
 
-        <UFormField label="期間（起）" size="sm">
+        <UFormField :ui="{ container: 'mt-0.5' }" label="期間（起）" size="sm">
           <UInput v-model="filters.startDate" type="date" class="w-full" />
         </UFormField>
 
-        <UFormField label="期間（迄）" size="sm">
+        <UFormField :ui="{ container: 'mt-0.5' }" label="期間（迄）" size="sm">
           <UInput v-model="filters.endDate" type="date" class="w-full" />
         </UFormField>
 
-        <UFormField label="品號種類" size="sm">
+        <UFormField :ui="{ container: 'mt-0.5' }" label="品號種類" size="sm">
           <div class="flex h-full items-center gap-4">
             <UCheckbox v-model="filters.show5x" label="成品(5開頭)" />
             <UCheckbox v-model="filters.showX" label="零件(x開頭)" />
           </div>
         </UFormField>
 
-        <UFormField label="計畫批號" size="sm">
+        <UFormField :ui="{ container: 'mt-0.5' }" label="計畫批號" size="sm">
           <ClearInput v-model="filters.planNum" placeholder="計畫批號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="品號" size="sm">
+        <UFormField :ui="{ container: 'mt-0.5' }" label="品號" size="sm">
           <ClearInput v-model="filters.productNo" placeholder="品號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="品名" size="sm">
+        <UFormField :ui="{ container: 'mt-0.5' }" label="品名" size="sm">
           <ClearInput v-model="filters.productName" placeholder="品名" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="規格" size="sm">
+        <UFormField :ui="{ container: 'mt-0.5' }" label="規格" size="sm">
           <ClearInput v-model="filters.productSpec" placeholder="規格" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="序號" size="sm">
+        <UFormField :ui="{ container: 'mt-0.5' }" label="序號" size="sm">
           <ClearInput v-model="filters.serialNo" placeholder="銘版序號" class="w-full" @keyup.enter="search" />
         </UFormField>
 
-        <UFormField label="訂單單號" size="sm">
+        <UFormField :ui="{ container: 'mt-0.5' }" label="訂單單號" size="sm">
           <ClearInput v-model="filters.orderNo" placeholder="訂單單號" class="w-full" @keyup.enter="search" />
         </UFormField>
       </div>
     </div>
 
     <!-- 頁籤 -->
-    <div class="mb-3 flex flex-wrap gap-2">
+    <div class="mb-2 flex flex-wrap gap-2">
       <UButton
         v-for="tab in tabItems"
         :key="tab.value"
@@ -617,7 +623,7 @@ const openGroupDetail = (row: CopSalesOrderRow) =>
         :data="pageRows"
         :columns="activeColumns"
         :loading="loading"
-        :ui="{ tr: isGroupTab ? clickableRowTr : '', td: 'whitespace-nowrap' }"
+        :ui="{ tr: isGroupTab ? clickableRowTr : '', th: 'px-2 py-2 whitespace-nowrap', td: 'whitespace-nowrap' }"
         @update:pagination="onPaginationUpdate"
         @select="(_e: Event, row: any) => isGroupTab && openGroupDetail(row.original)"
       >
